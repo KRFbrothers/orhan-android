@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -59,6 +60,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import ai.orhan.feature.profile.UserProfile
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -226,6 +229,7 @@ fun HomeScreen(
     onCreateAgent: () -> Unit = {},
     onEditProfile: () -> Unit = {},
     isDark: Boolean = isSystemInDarkTheme(),
+    profile: UserProfile = UserProfile(),
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
 
@@ -262,6 +266,7 @@ fun HomeScreen(
                     onOpenSettings = onOpenSettings,
                     onOpenAppearance = onOpenAppearance,
                     onEditProfile = onEditProfile,
+                    profile = profile,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -614,6 +619,7 @@ private fun ProfileTab(
     onOpenSettings: () -> Unit = {},
     onOpenAppearance: () -> Unit = {},
     onEditProfile: () -> Unit = {},
+    profile: UserProfile = UserProfile(),
     modifier: Modifier = Modifier,
 ) {
     val colors = OrhanTheme.colors
@@ -633,23 +639,24 @@ private fun ProfileTab(
                     .background(colors.brandSoft),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = "FK",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = colors.onBrandSoft,
+                Image(
+                    painter = painterResource(profile.safeAvatarResId),
+                    contentDescription = profile.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Fareed Khan",
+                    text = profile.name,
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "fareed.khan@gmail.com",
+                    text = profile.email,
                     style = OrhanTextStyles.snippet,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

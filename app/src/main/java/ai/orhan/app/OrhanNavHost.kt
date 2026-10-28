@@ -16,6 +16,8 @@ import ai.orhan.data.auth.AuthRepository
 import ai.orhan.design.screens.ChatScreen
 import ai.orhan.feature.agents.CreateAgentScreen
 import ai.orhan.feature.profile.EditProfileScreen
+import ai.orhan.feature.profile.UserProfile
+import ai.orhan.feature.profile.profilePreferences
 import ai.orhan.feature.auth.SignInScreen
 import ai.orhan.feature.auth.SignInViewModel
 import ai.orhan.feature.chat.ChatViewModel
@@ -52,12 +54,15 @@ fun OrhanNavHost(isDark: Boolean) {
     val navController = rememberNavController()
     val context = LocalContext.current.applicationContext
     val preferences = remember(context) { context.themePreferences() }
+    val profilePreferences = remember(context) { context.profilePreferences() }
+    val profile by profilePreferences.profile.collectAsStateWithLifecycle(initialValue = UserProfile())
     val scope = rememberCoroutineScope()
 
     NavHost(navController = navController, startDestination = AppRoutes.HOME) {
         composable(AppRoutes.HOME) {
             HomeScreen(
                 isDark = isDark,
+                profile = profile,
                 onOpenChat = { navController.navigate(AppRoutes.chat(it.title)) },
                 onOpenSettings = {
                     navController.navigate(SettingsRoutes.SETTINGS) { launchSingleTop = true }
