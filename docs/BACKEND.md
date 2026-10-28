@@ -30,10 +30,15 @@ Roles are `user` / `model`. The app sends the last 20 turns. Streaming (`"stream
 - `feature/chat/ChatViewModel.kt`: `StateFlow<ChatUiState>` (messages, loading, error).
 - `OrhanNavHost` passes the ViewModel state into `ChatScreen`; Send calls `ChatViewModel.send`.
 
-## Auth (interim)
-Orhan has no Supabase sign-in UI yet. For development, put a valid Supabase access token
-in `DUA_DEV_JWT` (debug builds only; release builds always get an empty value). Next step:
-add Supabase Auth sign-in and pass the session token via `ChatRepository(tokenProvider = …)`.
+## Auth (Supabase email/password)
+- `data/auth/AuthRepository.kt`: Supabase GoTrue REST (`/auth/v1/token?grant_type=password|refresh_token`,
+  `/auth/v1/logout`) with `SUPABASE_URL` + `SUPABASE_ANON_KEY` only. Session stored in app-private DataStore
+  (`orhan_auth`); access token auto-refreshes when <60 s from expiry. No new dependencies.
+- Opening a chat while signed out shows `feature/auth/SignInScreen`. After sign-in the session JWT is sent as
+  `Authorization: Bearer …` to the Dua engine. A 401 from the engine clears the session (sign in again).
+- Use the same Supabase project and owner account as Dua (`DUA_ALLOWED_EMAIL` on the backend); Email provider
+  must be enabled and the account's email confirmed. No sign-up UI (owner-only app).
+- `DUA_DEV_JWT` is still honored as a debug-only fallback when no session exists; leave it empty to use sign-in.
 
 ## `local.properties` template (never commit — it is in `.gitignore`)
 ```properties
@@ -42,9 +47,9 @@ DUA_ENGINE_URL=https://dua-ai-engine-228305912525.us-central1.run.app
 DUA_API_URL=https://dua-api-228305912525.us-central1.run.app
 # Optional: only if the engine enforces the app token
 DUA_APP_TOKEN=
-# For upcoming Supabase sign-in (anon key is public-safe but keep it out of git)
+# Supabase sign-in: same project as Dua (anon/publishable key is public-safe but keep it out of git)
 SUPABASE_URL=https://<project-ref>.supabase.co
 SUPABASE_ANON_KEY=
-# Debug only: a Supabase user access token (expires ~1h)
+# Optional, debug only: fallback access token when not signed in (leave empty)
 DUA_DEV_JWT=
 ```

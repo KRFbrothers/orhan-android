@@ -1,6 +1,9 @@
 package ai.orhan.feature.chat
 
+import ai.orhan.BuildConfig
+import ai.orhan.data.auth.AuthRepository
 import ai.orhan.data.chat.ChatRepository
+import android.app.Application
 import ai.orhan.data.chat.ChatTurn
 import ai.orhan.design.screens.ChatMessage
 import ai.orhan.design.screens.ChatRole
@@ -21,6 +24,16 @@ data class ChatUiState(
 class ChatViewModel(
     private val repository: ChatRepository = ChatRepository(),
 ) : ViewModel() {
+    /** Uses the signed-in Supabase session; falls back to DUA_DEV_JWT (debug only) when signed out. */
+    constructor(app: Application) : this(
+        AuthRepository.get(app).let { auth ->
+            ChatRepository(
+                tokenProvider = { auth.accessToken() ?: BuildConfig.DUA_DEV_JWT.ifBlank { null } },
+                onUnauthorized = { auth.clear() },
+            )
+        },
+    )
+
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
