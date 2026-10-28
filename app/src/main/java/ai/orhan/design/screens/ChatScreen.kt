@@ -177,25 +177,34 @@ fun ChatScreen(
     agentName: String,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
+    messagesOverride: List<ChatMessage>? = null,
+    loading: Boolean = false,
+    error: String? = null,
+    onSendMessage: ((String) -> Unit)? = null,
 ) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
 
-    var messages by rememberSaveable(stateSaver = ChatThreadSaver) {
+    var localMessages by rememberSaveable(stateSaver = ChatThreadSaver) {
         mutableStateOf(initialThread())
     }
+    val messages = messagesOverride ?: localMessages
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
 
     fun send() {
         val text = input.trim()
         if (text.isEmpty()) return
-        messages = messages + ChatMessage(
-            id = (messages.lastOrNull()?.id ?: 0L) + 1L,
-            role = ChatRole.User,
-            text = text,
-            time = "now",
-        )
+        if (onSendMessage != null) {
+            onSendMessage(text)
+        } else {
+            localMessages = localMessages + ChatMessage(
+                id = (localMessages.lastOrNull()?.id ?: 0L) + 1L,
+                role = ChatRole.User,
+                text = text,
+                time = "now",
+            )
+        }
         input = ""
     }
 
@@ -243,8 +252,20 @@ fun ChatScreen(
                 MessageBubble(message = message)
             }
 
-            item(key = "typing") {
-                TypingIndicator()
+            if (error != null) {
+                item(key = "error") {
+                    Text(
+                        text = error,
+                        style = OrhanTextStyles.meta,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+
+            if (loading || messagesOverride == null) {
+                item(key = "typing") {
+                    TypingIndicator()
+                }
             }
         }
 
