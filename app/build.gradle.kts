@@ -1,3 +1,12 @@
+import java.util.Properties
+
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun localProp(key: String, default: String = ""): String =
+    (localProps.getProperty(key) ?: default).replace("\\", "\\\\").replace("\"", "\\\"")
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -12,14 +21,29 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField("String", "DUA_ENGINE_URL", "\"${localProp("DUA_ENGINE_URL", "https://dua-ai-engine-228305912525.us-central1.run.app")}\"")
+        buildConfigField("String", "DUA_API_URL", "\"${localProp("DUA_API_URL", "https://dua-api-228305912525.us-central1.run.app")}\"")
+        buildConfigField("String", "DUA_APP_TOKEN", "\"${localProp("DUA_APP_TOKEN")}\"")
+        buildConfigField("String", "SUPABASE_URL", "\"${localProp("SUPABASE_URL")}\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProp("SUPABASE_ANON_KEY")}\"")
     }
-    buildTypes { release { isMinifyEnabled = false } }
+    buildTypes {
+        release { isMinifyEnabled = false }
+        // Dev-only bearer token; never baked into release builds.
+        debug { buildConfigField("String", "DUA_DEV_JWT", "\"${localProp("DUA_DEV_JWT")}\"") }
+    }
+    defaultConfig {
+        buildConfigField("String", "DUA_DEV_JWT", "\"\"")
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 }
 dependencies {
     implementation(platform(libs.compose.bom))

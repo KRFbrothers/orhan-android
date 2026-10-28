@@ -11,6 +11,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import ai.orhan.design.screens.ChatScreen
+import ai.orhan.feature.chat.ChatViewModel
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.orhan.design.screens.HomeScreen
 import ai.orhan.design.theme.ThemeMode
 import ai.orhan.design.theme.themePreferences
@@ -59,9 +63,15 @@ fun OrhanNavHost(isDark: Boolean) {
             AppRoutes.CHAT,
             arguments = listOf(navArgument("title") { type = NavType.StringType }),
         ) { entry ->
+            val chatViewModel: ChatViewModel = viewModel()
+            val chat by chatViewModel.state.collectAsStateWithLifecycle()
             ChatScreen(
                 agentName = entry.arguments?.getString("title").orEmpty(),
                 onBack = { navController.popBackStack() },
+                messagesOverride = chat.messages,
+                loading = chat.loading,
+                error = chat.error,
+                onSendMessage = chatViewModel::send,
             )
         }
         composable(SettingsRoutes.SETTINGS) {
