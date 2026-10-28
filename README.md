@@ -11,6 +11,7 @@ Minimal Jetpack Compose + Material 3 app (`ai.orhan`) wired from
 ## Open / build
 Android Studio -> Open -> pick this folder (JDK 17+). Or `./gradlew :app:assembleDebug`.
 Debug APK without a local build: GitHub -> Actions -> **Build debug APK** -> Run workflow, then download the `Orhan-debug-APK` artifact.
+The same APK is also published to GitHub Releases under the `debug-apk-latest` tag (always the newest debug build).
 
 ## Fonts
 - Lato 400/700/900 in `res/font/lato_*.ttf` — official TTFs from google/fonts `ofl/lato` (OFL, `licenses/Lato-OFL.txt`).
