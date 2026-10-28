@@ -19,6 +19,8 @@ data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val loading: Boolean = false,
     val error: String? = null,
+    /** True while a reply is in flight (typing indicator or streaming bubble). */
+    val busy: Boolean = false,
 )
 
 class ChatViewModel(
@@ -39,20 +41,38 @@ class ChatViewModel(
 
     fun send(raw: String) {
         val text = raw.trim()
-        if (text.isEmpty() || _state.value.loading) return
+        if (text.isEmpty() || _state.value.busy) return
         val user = ChatMessage(nextId(), ChatRole.User, text, "now")
-        _state.update { it.copy(messages = it.messages + user, loading = true, error = null) }
+        _state.update { it.copy(messages = it.messages + user, loading = true, busy = true, error = null) }
         val turns = _state.value.messages.map {
             ChatTurn(if (it.role == ChatRole.User) "user" else "model", it.text)
         }
+        val replyId = nextId()
         viewModelScope.launch {
-            repository.send(turns)
-                .onSuccess { reply ->
-                    _state.update {
-                        it.copy(messages = it.messages + ChatMessage(nextId(), ChatRole.Agent, reply, "now"), loading = false)
+            var streamed = false
+            val result = repository.stream(turns) { delta ->
+                streamed = true
+                _state.update { s ->
+                    val existing = s.messages.lastOrNull()?.takeIf { it.id == replyId }
+                    val msgs = if (existing == null) {
+                        s.messages + ChatMessage(replyId, ChatRole.Agent, delta, "now")
+                    } else {
+                        s.messages.dropLast(1) + existing.copy(text = existing.text + delta)
                     }
+                    // First delta replaces the typing indicator with the live bubble.
+                    s.copy(messages = msgs, loading = false)
                 }
-                .onFailure { e -> _state.update { it.copy(loading = false, error = e.message ?: "Request failed") } }
+            }.recoverCatching { e ->
+                // Fall back to non-streaming only if nothing was shown yet and the error isn't fatal (auth).
+                if (streamed || e is ChatRepository.FatalChatException) throw e
+                repository.send(turns).getOrThrow().also { reply ->
+                    _state.update { it.copy(messages = it.messages + ChatMessage(replyId, ChatRole.Agent, reply, "now")) }
+                }
+            }
+            result.onSuccess { _state.update { it.copy(loading = false, busy = false) } }
+                .onFailure { e ->
+                    _state.update { it.copy(loading = false, busy = false, error = e.message ?: "Request failed") }
+                }
         }
     }
 
