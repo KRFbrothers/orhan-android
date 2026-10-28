@@ -224,6 +224,7 @@ fun HomeScreen(
     onToggleTheme: () -> Unit = {},
     onOpenAppearance: () -> Unit = onOpenSettings,
     onCreateAgent: () -> Unit = {},
+    onEditProfile: () -> Unit = {},
     isDark: Boolean = isSystemInDarkTheme(),
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
@@ -260,6 +261,7 @@ fun HomeScreen(
                 OrhanTab.Profile -> ProfileTab(
                     onOpenSettings = onOpenSettings,
                     onOpenAppearance = onOpenAppearance,
+                    onEditProfile = onEditProfile,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -611,6 +613,7 @@ private fun NewChatFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
 private fun ProfileTab(
     onOpenSettings: () -> Unit = {},
     onOpenAppearance: () -> Unit = {},
+    onEditProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = OrhanTheme.colors
@@ -663,7 +666,7 @@ private fun ProfileTab(
 
         OrhanCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(4.dp)) {
-                ProfileRow("Personal information", "Name, email, avatar")
+                ProfileRow("Edit profile", "Name, email, avatar", onClick = onEditProfile)
                 ProfileRow("Privacy & security", "Passcode, blocked users")
                 ProfileRow("Subscription", "Pro \u00b7 renews 12 Nov")
                 ProfileRow("Appearance", "Theme: System, Light or Dark", onClick = onOpenAppearance)

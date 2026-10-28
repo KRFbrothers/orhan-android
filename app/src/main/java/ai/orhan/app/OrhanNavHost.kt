@@ -15,6 +15,7 @@ import ai.orhan.BuildConfig
 import ai.orhan.data.auth.AuthRepository
 import ai.orhan.design.screens.ChatScreen
 import ai.orhan.feature.agents.CreateAgentScreen
+import ai.orhan.feature.profile.EditProfileScreen
 import ai.orhan.feature.auth.SignInScreen
 import ai.orhan.feature.auth.SignInViewModel
 import ai.orhan.feature.chat.ChatViewModel
@@ -37,6 +38,7 @@ import kotlinx.coroutines.launch
 object AppRoutes {
     const val HOME = "home"
     const val CREATE_AGENT = "create_agent"
+    const val EDIT_PROFILE = "edit_profile"
     const val CHAT = "chat/{title}"
     fun chat(title: String) = "chat/${Uri.encode(title)}"
 }
@@ -64,12 +66,18 @@ fun OrhanNavHost(isDark: Boolean) {
                 onCreateAgent = {
                     navController.navigate(AppRoutes.CREATE_AGENT) { launchSingleTop = true }
                 },
+                onEditProfile = {
+                    navController.navigate(AppRoutes.EDIT_PROFILE) { launchSingleTop = true }
+                },
                 onToggleTheme = {
                     scope.launch {
                         preferences.setThemeMode(if (isDark) ThemeMode.Light else ThemeMode.Dark)
                     }
                 },
             )
+        }
+        composable(AppRoutes.EDIT_PROFILE) {
+            EditProfileScreen(onBack = { navController.popBackStack() })
         }
         composable(AppRoutes.CREATE_AGENT) {
             CreateAgentScreen(
