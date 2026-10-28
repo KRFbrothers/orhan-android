@@ -95,9 +95,24 @@ fun OrhanNavHost(isDark: Boolean) {
             )
         }
         composable(SettingsRoutes.SETTINGS) {
+            val auth = remember(context) { AuthRepository.get(context) }
+            val session by auth.session.collectAsStateWithLifecycle(initialValue = null)
             SettingsScreen(
                 onBack = { navController.popBackStack() },
                 onOpenAppearance = { navController.openAppearance() },
+                signedInEmail = session?.email,
+                // Only offered while a session exists; clears it via AuthRepository.signOut().
+                onSignOut = if (session != null) {
+                    {
+                        scope.launch {
+                            auth.signOut()
+                            navController.navigate(AppRoutes.HOME) {
+                                popUpTo(AppRoutes.HOME) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+                    }
+                } else null,
             )
         }
         composable(SettingsRoutes.APPEARANCE) {
