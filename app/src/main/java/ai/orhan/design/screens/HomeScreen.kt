@@ -63,6 +63,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import ai.orhan.R
+import ai.orhan.feature.agents.AgentsScreen
+import ai.orhan.feature.discover.DiscoverScreen
 import ai.orhan.design.theme.OrhanTextStyles
 import ai.orhan.design.theme.OrhanTheme
 import ai.orhan.design.theme.ThemeMode
@@ -169,37 +171,6 @@ private val SampleChats = listOf(
     ),
 )
 
-private val SampleAgents = listOf(
-    OrhanAgent(
-        name = "Webpage Developer",
-        role = "Web",
-        blurb = "Builds and publishes landing pages, docs and dashboards from a single prompt.",
-        status = "Working",
-        working = true,
-    ),
-    OrhanAgent(
-        name = "Slides Assistant",
-        role = "Slides",
-        blurb = "Turns a chat into a branded deck \u2014 outline, design and export in minutes.",
-        status = "Working",
-        working = true,
-    ),
-    OrhanAgent(
-        name = "Market Research",
-        role = "Research",
-        blurb = "Researches competitors with cited sources and keeps the brief up to date.",
-        status = "Idle",
-        working = false,
-    ),
-    OrhanAgent(
-        name = "Accounting Assistant",
-        role = "Finance",
-        blurb = "Reconciles invoices and flags anything that needs a human decision.",
-        status = "Idle",
-        working = false,
-    ),
-)
-
 private val ChatFilters = listOf("All", "Unread", "Groups", "Recent")
 
 /** Bottom-navigation destinations, in the order the design uses them. */
@@ -252,6 +223,7 @@ fun HomeScreen(
     onOpenSettings: () -> Unit = {},
     onToggleTheme: () -> Unit = {},
     onOpenAppearance: () -> Unit = onOpenSettings,
+    onCreateAgent: () -> Unit = {},
     isDark: Boolean = isSystemInDarkTheme(),
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
@@ -275,8 +247,16 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
 
-                OrhanTab.Agents -> AgentsTab(modifier = Modifier.fillMaxSize())
-                OrhanTab.Discover -> DiscoverTab(modifier = Modifier.fillMaxSize())
+                OrhanTab.Agents -> AgentsScreen(
+                    onOpenAgent = { onOpenChat(OrhanChat(it.name, it.blurb, "", isAgent = true)) },
+                    onCreateAgent = onCreateAgent,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                OrhanTab.Discover -> DiscoverScreen(
+                    onStartFeatured = { onOpenChat(OrhanChat("Webpage Developer", "", "", isAgent = true)) },
+                    onAddAgent = { onOpenChat(OrhanChat(it.name, it.subtitle, "", isAgent = true)) },
+                    modifier = Modifier.fillMaxSize(),
+                )
                 OrhanTab.Profile -> ProfileTab(
                     onOpenSettings = onOpenSettings,
                     onOpenAppearance = onOpenAppearance,
@@ -624,224 +604,6 @@ private fun NewChatFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
         )
     }
 }
-
-/* ------------------------------- Agents tab ------------------------------ */
-
-@Composable
-private fun AgentsTab(modifier: Modifier = Modifier) {
-    val colors = OrhanTheme.colors
-    val shapes = OrhanTheme.shapes
-
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item(key = "agents-head") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "Your agents",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "4 active",
-                    style = OrhanTextStyles.meta,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        items(items = SampleAgents, key = { it.name }) { agent ->
-            OrhanCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(shapes.avatarHeader)
-                                .background(colors.brandSoft),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = initialsOf(agent.name),
-                                style = OrhanTextStyles.rowTitle,
-                                color = colors.onBrandSoft,
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = agent.name,
-                                style = OrhanTextStyles.rowTitle,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (agent.working) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .clip(CircleShape)
-                                            .background(colors.logoMint),
-                                    )
-                                    Spacer(modifier = Modifier.width(5.dp))
-                                }
-                                Text(
-                                    text = agent.status,
-                                    style = OrhanTextStyles.meta,
-                                    color = if (agent.working) colors.onBrandSoft
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        Text(
-                            text = agent.role,
-                            style = OrhanTextStyles.eyebrow,
-                            color = colors.onBrandSoft,
-                            modifier = Modifier
-                                .clip(shapes.pill)
-                                .background(colors.brandSoft)
-                                .padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = agent.blurb,
-                        style = OrhanTextStyles.snippet,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-
-        item(key = "new-agent") {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 56.dp)
-                    .clip(shapes.card)
-                    .border(1.dp, MaterialTheme.colorScheme.outline, shapes.card)
-                    .clickable { }
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Add,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Create a new agent",
-                    style = OrhanTextStyles.rowTitle,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-    }
-}
-
-/* ------------------------------ Discover tab ----------------------------- */
-
-@Composable
-private fun DiscoverTab(modifier: Modifier = Modifier) {
-    val colors = OrhanTheme.colors
-    val shapes = OrhanTheme.shapes
-
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item(key = "featured") {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(shapes.card)
-                    .background(colors.primaryGradient)
-                    .padding(18.dp),
-            ) {
-                Text(
-                    text = "FEATURED AGENT",
-                    style = OrhanTextStyles.eyebrow,
-                    color = colors.onGradient,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Prompt a full landing page and get a published link in under two minutes.",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = colors.onGradient,
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                Box(
-                    modifier = Modifier
-                        .heightIn(min = 48.dp)
-                        .clip(shapes.pill)
-                        .background(colors.onGradient)
-                        .clickable { }
-                        .padding(horizontal = 18.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "Start a chat",
-                        style = OrhanTextStyles.button,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-        }
-
-        item(key = "trending-head") {
-            Text(
-                text = "Trending in community",
-                style = OrhanTextStyles.kicker,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-        }
-
-        items(items = TrendingAgents, key = { it.first }) { row ->
-            OrhanCard(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier
-                        .heightIn(min = 60.dp)
-                        .padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = row.first,
-                            style = OrhanTextStyles.rowTitle,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = row.second,
-                            style = OrhanTextStyles.meta,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.Rounded.Star,
-                        contentDescription = null,
-                        tint = colors.logoMint,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-        }
-    }
-}
-
-private val TrendingAgents = listOf(
-    "Deck in 5 prompts" to "Productivity \u00b7 2.1k users",
-    "Cited briefs" to "Research \u00b7 1.4k users",
-    "Invoice triage" to "Finance \u00b7 980 users",
-    "Design Critic" to "Design \u00b7 760 users",
-)
 
 /* ------------------------------- Profile tab ----------------------------- */
 
