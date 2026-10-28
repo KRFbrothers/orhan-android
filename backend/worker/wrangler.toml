@@ -1,0 +1,5 @@
+name = "orhan-api"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+[vars]
+MODEL = "meta-llama/llama-3.3-70b-instruct:free"
