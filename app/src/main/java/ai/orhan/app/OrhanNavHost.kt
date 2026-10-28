@@ -14,6 +14,7 @@ import androidx.navigation.navArgument
 import ai.orhan.BuildConfig
 import ai.orhan.data.auth.AuthRepository
 import ai.orhan.design.screens.ChatScreen
+import ai.orhan.feature.agents.CreateAgentScreen
 import ai.orhan.feature.auth.SignInScreen
 import ai.orhan.feature.auth.SignInViewModel
 import ai.orhan.feature.chat.ChatViewModel
@@ -35,6 +36,7 @@ import kotlinx.coroutines.launch
 /** Top-level routes. Settings routes live in [SettingsRoutes]. */
 object AppRoutes {
     const val HOME = "home"
+    const val CREATE_AGENT = "create_agent"
     const val CHAT = "chat/{title}"
     fun chat(title: String) = "chat/${Uri.encode(title)}"
 }
@@ -59,9 +61,22 @@ fun OrhanNavHost(isDark: Boolean) {
                     navController.navigate(SettingsRoutes.SETTINGS) { launchSingleTop = true }
                 },
                 onOpenAppearance = { navController.openAppearance() },
+                onCreateAgent = {
+                    navController.navigate(AppRoutes.CREATE_AGENT) { launchSingleTop = true }
+                },
                 onToggleTheme = {
                     scope.launch {
                         preferences.setThemeMode(if (isDark) ThemeMode.Light else ThemeMode.Dark)
+                    }
+                },
+            )
+        }
+        composable(AppRoutes.CREATE_AGENT) {
+            CreateAgentScreen(
+                onBack = { navController.popBackStack() },
+                onCreated = { name, _ ->
+                    navController.navigate(AppRoutes.chat(name)) {
+                        popUpTo(AppRoutes.CREATE_AGENT) { inclusive = true }
                     }
                 },
             )
