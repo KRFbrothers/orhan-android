@@ -251,6 +251,7 @@ fun HomeScreen(
     onOpenChat: (OrhanChat) -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onToggleTheme: () -> Unit = {},
+    onOpenAppearance: () -> Unit = onOpenSettings,
     isDark: Boolean = isSystemInDarkTheme(),
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
@@ -276,7 +277,11 @@ fun HomeScreen(
 
                 OrhanTab.Agents -> AgentsTab(modifier = Modifier.fillMaxSize())
                 OrhanTab.Discover -> DiscoverTab(modifier = Modifier.fillMaxSize())
-                OrhanTab.Profile -> ProfileTab(modifier = Modifier.fillMaxSize())
+                OrhanTab.Profile -> ProfileTab(
+                    onOpenSettings = onOpenSettings,
+                    onOpenAppearance = onOpenAppearance,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
 
             if (tab == OrhanTab.Chats) {
@@ -841,7 +846,11 @@ private val TrendingAgents = listOf(
 /* ------------------------------- Profile tab ----------------------------- */
 
 @Composable
-private fun ProfileTab(modifier: Modifier = Modifier) {
+private fun ProfileTab(
+    onOpenSettings: () -> Unit = {},
+    onOpenAppearance: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
 
@@ -895,19 +904,20 @@ private fun ProfileTab(modifier: Modifier = Modifier) {
                 ProfileRow("Personal information", "Name, email, avatar")
                 ProfileRow("Privacy & security", "Passcode, blocked users")
                 ProfileRow("Subscription", "Pro \u00b7 renews 12 Nov")
-                ProfileRow("All settings", "")
+                ProfileRow("Appearance", "Theme: System, Light or Dark", onClick = onOpenAppearance)
+                ProfileRow("All settings", "", onClick = onOpenSettings)
             }
         }
     }
 }
 
 @Composable
-private fun ProfileRow(title: String, subtitle: String) {
+private fun ProfileRow(title: String, subtitle: String, onClick: () -> Unit = {}) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clickable { }
+            .clickable(onClick = onClick)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
