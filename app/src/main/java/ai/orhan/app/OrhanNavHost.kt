@@ -28,6 +28,8 @@ import ai.orhan.feature.settings.SettingsScreen
 import ai.orhan.feature.settings.appearanceViewModel
 import ai.orhan.feature.settings.appearance.AppearanceScreen
 import ai.orhan.feature.settings.openAppearance
+import ai.orhan.feature.settings.openSettingsPage
+import ai.orhan.feature.settings.settingsDetailPages
 import kotlinx.coroutines.launch
 
 /** Top-level routes. Settings routes live in [SettingsRoutes]. */
@@ -99,7 +101,12 @@ fun OrhanNavHost(isDark: Boolean) {
             val session by auth.session.collectAsStateWithLifecycle(initialValue = null)
             SettingsScreen(
                 onBack = { navController.popBackStack() },
-                onOpenAppearance = { navController.openAppearance() },
+onOpenAppearance = { navController.openAppearance() },
+                onOpenNotifications = { navController.openSettingsPage(SettingsRoutes.NOTIFICATIONS) },
+                onOpenPrivacy = { navController.openSettingsPage(SettingsRoutes.PRIVACY) },
+                onOpenStorage = { navController.openSettingsPage(SettingsRoutes.STORAGE) },
+                onOpenLanguage = { navController.openSettingsPage(SettingsRoutes.LANGUAGE) },
+                onOpenAbout = { navController.openSettingsPage(SettingsRoutes.ABOUT) },
                 signedInEmail = session?.email,
                 // Only offered while a session exists; clears it via AuthRepository.signOut().
                 onSignOut = if (session != null) {
@@ -121,5 +128,6 @@ fun OrhanNavHost(isDark: Boolean) {
                 onBack = { navController.popBackStack() },
             )
         }
+        settingsDetailPages(navController)
     }
 }
