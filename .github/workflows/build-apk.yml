@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -44,3 +44,19 @@ jobs:
           path: Orhan-debug.apk
           retention-days: 14
           if-no-files-found: error
+
+      - name: Publish to GitHub Release (debug-apk-latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: debug-apk-latest
+        run: |
+          NOTES="Latest debug APK from run #${{ github.run_number }} (commit ${{ github.sha }})."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            git tag -f "$TAG" "${{ github.sha }}"
+            git push -f origin "refs/tags/$TAG"
+            gh release edit "$TAG" --title "Debug APK (latest)" --notes "$NOTES" --prerelease
+            gh release upload "$TAG" Orhan-debug.apk --clobber
+          else
+            gh release create "$TAG" Orhan-debug.apk --target "${{ github.sha }}" \
+              --title "Debug APK (latest)" --notes "$NOTES" --prerelease
+          fi
