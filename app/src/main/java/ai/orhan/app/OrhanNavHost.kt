@@ -1,5 +1,6 @@
 package ai.orhan.app
 
+import android.app.Application
 import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -10,7 +11,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import ai.orhan.BuildConfig
+import ai.orhan.data.auth.AuthRepository
 import ai.orhan.design.screens.ChatScreen
+import ai.orhan.feature.auth.SignInScreen
+import ai.orhan.feature.auth.SignInViewModel
 import ai.orhan.feature.chat.ChatViewModel
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -63,7 +68,22 @@ fun OrhanNavHost(isDark: Boolean) {
             AppRoutes.CHAT,
             arguments = listOf(navArgument("title") { type = NavType.StringType }),
         ) { entry ->
-            val chatViewModel: ChatViewModel = viewModel()
+            val auth = remember(context) { AuthRepository.get(context) }
+            val session by auth.session.collectAsStateWithLifecycle(initialValue = null)
+            val hasDevJwt = BuildConfig.DUA_DEV_JWT.isNotBlank()
+            if (session == null && !hasDevJwt) {
+                val signIn: SignInViewModel = viewModel()
+                val signInState by signIn.state.collectAsStateWithLifecycle()
+                SignInScreen(
+                    loading = signInState.loading,
+                    error = signInState.error,
+                    configured = signIn.isConfigured,
+                    onSignIn = signIn::signIn,
+                    onBack = { navController.popBackStack() },
+                )
+                return@composable
+            }
+            val chatViewModel: ChatViewModel = viewModel { ChatViewModel(context as Application) }
             val chat by chatViewModel.state.collectAsStateWithLifecycle()
             ChatScreen(
                 agentName = entry.arguments?.getString("title").orEmpty(),

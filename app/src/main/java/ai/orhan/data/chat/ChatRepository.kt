@@ -19,7 +19,10 @@ data class ChatTurn(val role: String, val text: String)
 class ChatRepository(
     private val baseUrl: String = BuildConfig.DUA_ENGINE_URL,
     private val appToken: String = BuildConfig.DUA_APP_TOKEN,
-    private val tokenProvider: () -> String? = { BuildConfig.DUA_DEV_JWT.ifBlank { null } },
+    /** Supplies the Supabase user JWT (signed-in session, or DUA_DEV_JWT fallback in debug). */
+    private val tokenProvider: suspend () -> String? = { BuildConfig.DUA_DEV_JWT.ifBlank { null } },
+    /** Called when the engine rejects the token (HTTP 401), e.g. to clear the session. */
+    private val onUnauthorized: suspend () -> Unit = {},
 ) {
     suspend fun send(turns: List<ChatTurn>): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
@@ -46,6 +49,10 @@ class ChatRepository(
                 val raw = (if (code in 200..299) conn.inputStream else conn.errorStream)
                     ?.bufferedReader()?.use { it.readText() }.orEmpty()
                 val json = runCatching { JSONObject(raw) }.getOrNull()
+                if (code == 401) {
+                    onUnauthorized()
+                    error("Session expired — please sign in again")
+                }
                 if (code !in 200..299) error(json?.optString("error")?.ifBlank { null } ?: "HTTP $code")
                 json?.optString("text")?.ifBlank { null } ?: error("Empty reply")
             } finally {
