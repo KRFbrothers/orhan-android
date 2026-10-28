@@ -25,6 +25,8 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.orhan.design.screens.HomeScreen
+import ai.orhan.design.screens.OrhanChat
+import ai.orhan.data.history.recentChats
 import ai.orhan.design.theme.ThemeMode
 import ai.orhan.design.theme.themePreferences
 import ai.orhan.feature.settings.SettingsRoutes
@@ -57,13 +59,21 @@ fun OrhanNavHost(isDark: Boolean) {
     val profilePreferences = remember(context) { context.profilePreferences() }
     val profile by profilePreferences.profile.collectAsStateWithLifecycle(initialValue = UserProfile())
     val scope = rememberCoroutineScope()
+    val recentRepo = remember(context) { context.recentChats() }
+    val recent by recentRepo.recent.collectAsStateWithLifecycle(initialValue = emptyList())
 
     NavHost(navController = navController, startDestination = AppRoutes.HOME) {
         composable(AppRoutes.HOME) {
             HomeScreen(
                 isDark = isDark,
                 profile = profile,
-                onOpenChat = { navController.navigate(AppRoutes.chat(it.title)) },
+                recentChats = recent.map {
+                    OrhanChat(it.title, "Recent chat", relativeTime(it.openedAt), isAgent = true)
+                },
+                onOpenChat = {
+                    scope.launch { recentRepo.recordOpened(it.title) }
+                    navController.navigate(AppRoutes.chat(it.title))
+                },
                 onOpenSettings = {
                     navController.navigate(SettingsRoutes.SETTINGS) { launchSingleTop = true }
                 },
@@ -157,5 +167,16 @@ onOpenAppearance = { navController.openAppearance() },
             )
         }
         settingsDetailPages(navController)
+    }
+}
+
+/** Compact "now / 5m / 3h / 2d" label for a chat-list row. */
+internal fun relativeTime(then: Long, now: Long = System.currentTimeMillis()): String {
+    val m = ((now - then).coerceAtLeast(0)) / 60_000
+    return when {
+        m < 1 -> "now"
+        m < 60 -> "${m}m"
+        m < 1440 -> "${m / 60}h"
+        else -> "${m / 1440}d"
     }
 }

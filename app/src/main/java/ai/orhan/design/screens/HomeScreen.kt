@@ -230,6 +230,8 @@ fun HomeScreen(
     onEditProfile: () -> Unit = {},
     isDark: Boolean = isSystemInDarkTheme(),
     profile: UserProfile = UserProfile(),
+    /** Recently opened chats (local history), newest first; shown above the samples. */
+    recentChats: List<OrhanChat> = emptyList(),
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
 
@@ -249,6 +251,7 @@ fun HomeScreen(
             when (tab) {
                 OrhanTab.Chats -> ChatsTab(
                     onOpenChat = onOpenChat,
+                    recentChats = recentChats,
                     modifier = Modifier.fillMaxSize(),
                 )
 
@@ -345,8 +348,11 @@ private fun HomeTopBar(
 @Composable
 private fun ChatsTab(
     onOpenChat: (OrhanChat) -> Unit,
+    recentChats: List<OrhanChat> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
+    val recentTitles = recentChats.map { it.title }.toSet()
+    val chats = recentChats + SampleChats.filterNot { it.title in recentTitles }
     var filter by rememberSaveable { mutableStateOf(0) }
 
     LazyColumn(
@@ -417,7 +423,7 @@ private fun ChatsTab(
             }
         }
 
-        items(items = SampleChats, key = { it.title }) { chat ->
+        items(items = chats, key = { it.title }) { chat ->
             ChatRowItem(chat = chat, onClick = { onOpenChat(chat) })
         }
     }
