@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DarkMode
@@ -59,6 +60,8 @@ fun SettingsScreen(
     onOpenStorage: () -> Unit = {},
     onOpenLanguage: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
+    signedInEmail: String? = null,
+    onSignOut: (() -> Unit)? = null,
 ) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
@@ -156,8 +159,47 @@ fun SettingsScreen(
                     onClick = onOpenAbout,
                 )
             }
+
+            if (onSignOut != null) {
+                Text(
+                    text = "ACCOUNT",
+                    style = OrhanTextStyles.kicker,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, top = 24.dp, bottom = 8.dp),
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(shapes.card)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .border(1.dp, colors.hairline, shapes.card),
+                ) {
+                    SignOutRow(email = signedInEmail, onClick = onSignOut)
+                }
+            }
         }
     }
+}
+
+/** Destructive "Sign out" row; tinted with the error colour, no chevron. */
+@Composable
+private fun SignOutRow(email: String?, onClick: () -> Unit) {
+    ListItem(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onClick),
+        colors = ListItemDefaults.colors(
+            containerColor = Color.Transparent,
+            headlineColor = MaterialTheme.colorScheme.error,
+            supportingColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            leadingIconColor = MaterialTheme.colorScheme.error,
+        ),
+        headlineContent = { Text("Sign out", style = OrhanTextStyles.rowTitle) },
+        supportingContent = email?.let { { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis) } },
+        leadingContent = {
+            Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = null, modifier = Modifier.size(20.dp))
+        },
+    )
 }
 
 /**
@@ -260,7 +302,7 @@ private fun SettingsRow(
 @Preview(name = "Settings — light", showBackground = true)
 @Composable
 private fun SettingsLightPreview() {
-    OrhanTheme(darkTheme = false) { SettingsScreen() }
+    OrhanTheme(darkTheme = false) { SettingsScreen(signedInEmail = "you@example.com", onSignOut = {}) }
 }
 
 @Preview(name = "Settings — dark", showBackground = true)
