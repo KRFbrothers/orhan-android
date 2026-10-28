@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -11,6 +12,11 @@ import androidx.navigation.compose.rememberNavController
 import ai.orhan.design.theme.themePreferences
 import ai.orhan.feature.settings.appearance.AppearanceScreen
 import ai.orhan.feature.settings.appearance.AppearanceViewModel
+import ai.orhan.feature.settings.detail.AboutScreen
+import ai.orhan.feature.settings.detail.LanguageScreen
+import ai.orhan.feature.settings.detail.NotificationsScreen
+import ai.orhan.feature.settings.detail.PrivacyScreen
+import ai.orhan.feature.settings.detail.StorageScreen
 
 /* ============================================================================
  *  Settings → Appearance navigation hook
@@ -29,6 +35,26 @@ import ai.orhan.feature.settings.appearance.AppearanceViewModel
 object SettingsRoutes {
     const val SETTINGS = "settings"
     const val APPEARANCE = "settings/appearance"
+    const val NOTIFICATIONS = "settings/notifications"
+    const val PRIVACY = "settings/privacy"
+    const val STORAGE = "settings/storage"
+    const val LANGUAGE = "settings/language"
+    const val ABOUT = "settings/about"
+}
+
+/** Navigate to any Settings sub-route without stacking duplicates. */
+fun NavHostController.openSettingsPage(route: String) {
+    navigate(route) { launchSingleTop = true }
+}
+
+/** Registers the five Settings detail pages (Notifications … About). */
+fun NavGraphBuilder.settingsDetailPages(navController: NavHostController) {
+    val back: () -> Unit = { navController.popBackStack() }
+    composable(SettingsRoutes.NOTIFICATIONS) { NotificationsScreen(onBack = back) }
+    composable(SettingsRoutes.PRIVACY) { PrivacyScreen(onBack = back) }
+    composable(SettingsRoutes.STORAGE) { StorageScreen(onBack = back) }
+    composable(SettingsRoutes.LANGUAGE) { LanguageScreen(onBack = back) }
+    composable(SettingsRoutes.ABOUT) { AboutScreen(onBack = back) }
 }
 
 /** Navigate from the Settings list to Appearance. */
@@ -70,6 +96,11 @@ fun SettingsNavHost(
             SettingsScreen(
                 onBack = onBackFromSettings,
                 onOpenAppearance = { navController.openAppearance() },
+                onOpenNotifications = { navController.openSettingsPage(SettingsRoutes.NOTIFICATIONS) },
+                onOpenPrivacy = { navController.openSettingsPage(SettingsRoutes.PRIVACY) },
+                onOpenStorage = { navController.openSettingsPage(SettingsRoutes.STORAGE) },
+                onOpenLanguage = { navController.openSettingsPage(SettingsRoutes.LANGUAGE) },
+                onOpenAbout = { navController.openSettingsPage(SettingsRoutes.ABOUT) },
             )
         }
 
@@ -79,5 +110,6 @@ fun SettingsNavHost(
                 onBack = { navController.popBackStack() },
             )
         }
+        settingsDetailPages(navController)
     }
 }
