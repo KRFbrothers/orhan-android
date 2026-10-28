@@ -20,7 +20,16 @@ Headers:
   "messages": [ {"role":"user","text":"hi"}, {"role":"model","text":"..."} ] }
 → 200 { "text": "..." }      | 4xx/5xx { "error": "..." }
 ```
-Roles are `user` / `model`. The app sends the last 20 turns. Streaming (`"stream": true`, SSE) is a follow-up.
+Roles are `user` / `model`. The app sends the last 20 turns.
+
+## Streaming (`"stream": true`, SSE) — default
+The app first sends `"stream": true` with `Accept: text/event-stream`. The engine replies with SSE frames
+`event: <type>\ndata: <json>\n\n`; the app uses `text` (`{"type":"text","delta":"..."}`), `error`
+(`{"message":"..."}`) and `done`, and ignores others (`thinking`, `progress`, `sources`, `notice`, `usage`).
+Each delta is appended to the agent bubble live (the typing indicator is replaced by the bubble on the first delta).
+**Fallback:** if the stream fails before any text arrives (non-2xx, non-SSE content type, network/parse error,
+`error` event), the app retries once with `"stream": false`. A 401 is not retried (session cleared). If the
+stream breaks after text was shown, the partial reply is kept and an error is displayed.
 
 ## Android wiring
 - `AndroidManifest.xml`: `INTERNET` permission.
