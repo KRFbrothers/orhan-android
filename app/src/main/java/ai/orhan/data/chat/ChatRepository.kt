@@ -2,6 +2,8 @@ package ai.orhan.data.chat
 
 import ai.orhan.BuildConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -26,7 +28,7 @@ data class ChatAttachment(val name: String, val mimeType: String, val base64: St
 }
 
 /**
- * Talks to the Dua AI engine: POST {DUA_ENGINE_URL}/api/chat (non-streaming).
+ * Talks to the Dua AI engine: POST {DUA_ENGINE_URL}/api/chat (streaming via [stream]; [send] is the non-stream fallback).
  * Request:  {"stream":false,"mode":"agent","messages":[{"role":"user|model","text":"..."}]}
  * Response: {"text":"..."} or {"error":"..."}
  *
@@ -82,6 +84,8 @@ class ChatRepository(
         withContext(Dispatchers.IO) {
             runCatching {
                 val conn = open("text/event-stream")
+                // Blocking SSE reads ignore coroutine cancel; disconnect on cancel so Stop is immediate.
+                val watcher = launch { try { awaitCancellation() } finally { conn.disconnect() } }
                 try {
                     conn.outputStream.use { it.write(body(turns, true).toString().toByteArray()) }
                     val code = conn.responseCode
@@ -119,6 +123,7 @@ class ChatRepository(
                     if (out.isEmpty()) error("Empty reply")
                     out.toString()
                 } finally {
+                    watcher.cancel()
                     conn.disconnect()
                 }
             }
