@@ -95,6 +95,14 @@ class ChatViewModel(
 
     private var personalMemory: String = ""
 
+    /** Display name of the user's chosen reply language, or null to mirror the user's language. */
+    private var replyLanguage: String? = null
+
+    /** Sets the saved app language agents should reply in (null = follow the user). Idempotent. */
+    fun setReplyLanguage(name: String?) {
+        replyLanguage = name?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
     /** Sets the user's personal memory sent as hidden context. Idempotent; safe on every recomposition. */
     fun setPersonalMemory(text: String) {
         personalMemory = text.trim()
@@ -108,7 +116,8 @@ class ChatViewModel(
             "Never say you are Dua AI or Dua. Do not volunteer vendor names like Gemini, Google or OpenAI, and never invent model names. " +
             "If asked who you are, say you are ${if (custom) "$agent, an agent in Orhan" else "Orhan, your personal AI assistant"}. " +
             "If asked which model you use (e.g. 'kya model hai?'), answer honestly: 'Main Argon 4 model par chalta hoon.' / 'I run on the Argon 4 model.' Always say just 'Argon 4'. " +
-            "Reply in the user's language (Hinglish if they use Hinglish)."
+            "Reply in the user's language (Hinglish if they use Hinglish)." +
+            (replyLanguage?.let { " The user's chosen app language is $it: reply in $it unless they explicitly ask for another language." } ?: "")
     }
 
     /** Prepends hidden user/model preface turns (engine only supports those roles); never shown in UI. */
