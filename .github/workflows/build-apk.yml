@@ -83,9 +83,9 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             git tag -f "$TAG" "${{ github.sha }}"
             git push -f origin "refs/tags/$TAG"
-            gh release edit "$TAG" --title "Debug APK v0.1.${{ github.run_number }} (latest)" --notes "$NOTES" --prerelease
+            gh release edit "$TAG" --title "Debug APK v0.1.${{ github.run_number }} (latest)" --notes "$NOTES" --prerelease=false --latest
             gh release upload "$TAG" Orhan-debug.apk --clobber
           else
             gh release create "$TAG" Orhan-debug.apk --target "${{ github.sha }}" \
-              --title "Debug APK v0.1.${{ github.run_number }} (latest)" --notes "$NOTES" --prerelease
+              --title "Debug APK v0.1.${{ github.run_number }} (latest)" --notes "$NOTES" --prerelease=false --latest
           fi
