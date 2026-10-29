@@ -1,6 +1,8 @@
 package ai.orhan.design.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -238,6 +240,12 @@ fun HomeScreen(
     onOpenMemory: () -> Unit = {},
     onOpenArtifacts: () -> Unit = {},
     artifactCount: Int = 0,
+    /** Agent behaviour knobs (reply style, preview) live in Chat preferences. */
+    onOpenChatPreferences: () -> Unit = onOpenSettings,
+    /** Null when no session exists; Profile then hides the Sign out row. */
+    onSignOut: (() -> Unit)? = null,
+    /** Opens a settings sub-page by route (notifications, language, privacy, about). */
+    onOpenSettingsPage: (String) -> Unit = { onOpenSettings() },
     isDark: Boolean = isSystemInDarkTheme(),
     profile: UserProfile = UserProfile(),
     /** Recently opened chats (local history), newest first; shown above the samples. */
@@ -306,7 +314,13 @@ fun HomeScreen(
                     onEditProfile = onEditProfile,
                     onOpenMemory = onOpenMemory,
                     onOpenArtifacts = onOpenArtifacts,
+                    onOpenChatPreferences = onOpenChatPreferences,
+                    onOpenAgents = { tab = OrhanTab.Agents },
+                    onSignOut = onSignOut,
+                    onOpenSettingsPage = onOpenSettingsPage,
+                    onOpenDiscover = { tab = OrhanTab.Discover },
                     artifactCount = artifactCount,
+                    agentCount = agents.size,
                     profile = profile,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -765,75 +779,125 @@ private fun ProfileTab(
     onEditProfile: () -> Unit = {},
     onOpenMemory: () -> Unit = {},
     onOpenArtifacts: () -> Unit = {},
+    onOpenChatPreferences: () -> Unit = {},
+    onOpenAgents: () -> Unit = {},
+    onSignOut: (() -> Unit)? = null,
+    onOpenSettingsPage: (String) -> Unit = {},
+    onOpenDiscover: () -> Unit = {},
     artifactCount: Int = 0,
+    agentCount: Int = 0,
+    appVersion: String = ai.orhan.BuildConfig.VERSION_NAME,
     profile: UserProfile = UserProfile(),
     modifier: Modifier = Modifier,
 ) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
 
+    // Profile = "main kaun hoon + Orhan mujhe kaise samajhta hai + settings".
+    // No social bits (handle, member-since, fake stat chips) — Orhan is an agent app.
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(shapes.avatarProfile)
-                    .background(colors.brandSoft),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(
-                    painter = painterResource(profile.safeAvatarResId),
-                    contentDescription = profile.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = profile.name,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = profile.email,
-                    style = OrhanTextStyles.snippet,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatTile(value = "128", label = "CHATS", modifier = Modifier.weight(1f))
-            StatTile(value = "4", label = "AGENTS", modifier = Modifier.weight(1f))
-            StatTile(value = artifactCount.toString(), label = "ARTIFACTS", modifier = Modifier.weight(1f), onClick = onOpenArtifacts)
-        }
-
+        // 1) Account card: avatar + name + email (tap to edit), then honest account rows.
         OrhanCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(4.dp)) {
-                ProfileRow("Edit profile", "Name, email, avatar", onClick = onEditProfile)
-                ProfileRow("Memory", "Context, notes & to-dos", onClick = onOpenMemory)
-                ProfileRow("Artifacts", "Saved replies", onClick = onOpenArtifacts)
-                ProfileRow("Privacy & security", "Passcode, blocked users")
-                ProfileRow("Subscription", "Pro \u00b7 renews 12 Nov")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onEditProfile)
+                        .padding(12.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(colors.brandSoft),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(
+                            painter = painterResource(profile.safeAvatarResId),
+                            contentDescription = profile.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(profile.name, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(profile.email, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = "Edit profile", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                ProfileRow("Memory", "What Orhan remembers about you", onClick = onOpenMemory)
+                ProfileRow("Artifacts", if (artifactCount > 0) "$artifactCount saved" else "Saved replies", onClick = onOpenArtifacts)
+            }
+        }
+
+        // 2) Apps: no connectors yet, so point at Discover (playbooks) honestly.
+        OrhanCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(4.dp)) {
+                ProfileRow("Connected apps", "Coming soon \u00b7 explore playbooks in Discover", onClick = onOpenDiscover)
+            }
+        }
+
+        // 3) Bot: how Orhan behaves for you.
+        ProfileSectionLabel("Bot")
+        OrhanCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(4.dp)) {
+                ProfileRow("Agent defaults", "Reply style & preview before sending", onClick = onOpenChatPreferences)
+                ProfileRow("Your agents", if (agentCount > 0) "$agentCount agents" else "Create or manage agents", onClick = onOpenAgents)
+                ProfileRow("About me for Orhan", "Role, language, context \u2014 add it in Memory for now", onClick = onOpenMemory)
+                ProfileRow("Privacy & permissions", "What Orhan stores and can do", onClick = { onOpenSettingsPage("settings/privacy") })
+            }
+        }
+
+        // 4) Preferences.
+        ProfileSectionLabel("Preferences")
+        OrhanCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(4.dp)) {
+                ProfileRow("Notifications", "", onClick = { onOpenSettingsPage("settings/notifications") })
                 ProfileRow("Appearance", "Theme: System, Light or Dark", onClick = onOpenAppearance)
+                ProfileRow("Language", "", onClick = { onOpenSettingsPage("settings/language") })
                 ProfileRow("All settings", "", onClick = onOpenSettings)
             }
         }
+
+        // 5) Help + sign out.
+        OrhanCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(4.dp)) {
+                ProfileRow("About Orhan", "Version, licences", onClick = { onOpenSettingsPage("settings/about") })
+                if (onSignOut != null) {
+                    ProfileRow("Sign out", profile.email, danger = true, onClick = onSignOut)
+                }
+            }
+        }
+
+        Text(
+            text = "Orhan AI \u00b7 v$appVersion",
+            style = OrhanTextStyles.meta,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp),
+        )
     }
 }
 
 @Composable
-private fun ProfileRow(title: String, subtitle: String, onClick: () -> Unit = {}) {
+private fun ProfileSectionLabel(text: String) {
+    Text(
+        text = text.uppercase(),
+        style = OrhanTextStyles.kicker,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+    )
+}
+
+@Composable
+private fun ProfileRow(title: String, subtitle: String, danger: Boolean = false, onClick: () -> Unit = {}) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -846,7 +910,7 @@ private fun ProfileRow(title: String, subtitle: String, onClick: () -> Unit = {}
             Text(
                 text = title,
                 style = OrhanTextStyles.rowTitle,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
             )
             if (subtitle.isNotEmpty()) {
                 Text(
@@ -860,38 +924,6 @@ private fun ProfileRow(title: String, subtitle: String, onClick: () -> Unit = {}
             imageVector = Icons.Rounded.KeyboardArrowRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun StatTile(
-    value: String,
-    label: String,
-    modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null,
-) {
-    val colors = OrhanTheme.colors
-    val shapes = OrhanTheme.shapes
-
-    Column(
-        modifier = modifier
-            .clip(shapes.statTile)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, colors.hairline, shapes.statTile)
-            .padding(vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = value,
-            style = OrhanTextStyles.statNumber,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = label,
-            style = OrhanTextStyles.kicker,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

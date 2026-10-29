@@ -1415,60 +1415,71 @@ footer b{color:var(--page-ink)}
                 </div>
                 <h2 class="pname" id="profileName">Fareed Khan</h2>
                 <div class="pmail" id="profileEmail">fareed.khan@gmail.com</div>
-                <div class="prow">
-                  <span class="protag">Orhan Pro</span>
-                  <span class="psince">Member since Mar 2024</span>
-                </div>
                 <button class="pedit" type="button" data-go="editprofile">
                   <svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg>Edit profile
                 </button>
               </div>
 
-              <div class="stats">
-                <div class="stat"><b>128</b><span>Chats</span></div>
-                <div class="stat"><b>4</b><span>Agents</span></div>
-                <div class="stat"><b>37</b><span>Artifacts</span></div>
-              </div>
-
-              <div class="seclabel"><span>Quick actions</span></div>
-              <div class="quick">
-                <button class="q" type="button" data-go="agents">
-                  <svg class="ic" aria-hidden="true"><use href="#i-userplus"/></svg>
-                  <span>Add an agent</span>
-                  <small>4 active</small>
-                </button>
-                <button class="q" type="button" data-go="appearance">
-                  <svg class="ic" aria-hidden="true"><use href="#i-palette"/></svg>
-                  <span>Appearance</span>
-                  <small id="qaTheme">Night mode</small>
-                </button>
-                <button class="q" type="button" data-go="storage">
-                  <svg class="ic" aria-hidden="true"><use href="#i-db"/></svg>
-                  <span>Storage</span>
-                  <small>On this device</small>
-                </button>
-                <button class="q" type="button" data-go="notifications">
-                  <svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg>
-                  <span>Notifications</span>
-                  <small>5 of 7 on</small>
-                </button>
-              </div>
-
-              <div class="seclabel"><span>Account</span></div>
               <div class="group">
-                <button class="srow" type="button" data-go="editprofile">
+                <button class="srow" type="button" data-toast="Opens Memory screen in the app">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-db"/></svg></span>
+                  <span class="slabel"><span class="t">Memory</span><span class="s">What Orhan remembers about you</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-toast="Artifacts">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg></span>
+                  <span class="slabel"><span class="t">Artifacts</span><span class="s">Saved replies</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+
+              <div class="group">
+                <button class="srow" type="button" data-go="discover">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span>
+                  <span class="slabel"><span class="t">Connected apps</span><span class="s">Coming soon · explore playbooks in Discover</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>Bot</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-go="chatprefs">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-settings"/></svg></span>
+                  <span class="slabel"><span class="t">Agent defaults</span><span class="s">Reply style &amp; preview before sending</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-go="agents">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span>
+                  <span class="slabel"><span class="t">Your agents</span><span class="s">Create or manage agents</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-toast="Opens Memory screen in the app">
                   <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
-                  <span class="slabel"><span class="t">Personal information</span><span class="s">Name, email, avatar</span></span>
+                  <span class="slabel"><span class="t">About me for Orhan</span><span class="s">Role, language, context — add it in Memory for now</span></span>
                   <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
                 </button>
                 <button class="srow" type="button" data-go="privacy">
                   <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span>
-                  <span class="slabel"><span class="t">Privacy &amp; security</span><span class="s">Passcode, blocked users</span></span>
+                  <span class="slabel"><span class="t">Privacy &amp; permissions</span><span class="s">What Orhan stores and can do</span></span>
                   <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
                 </button>
-                <button class="srow" type="button" data-toast="Orhan Free · on this device 2026">
-                  <span class="sic tint"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg></span>
-                  <span class="slabel"><span class="t">Subscription</span><span class="s">Free · on this device</span></span>
+              </div>
+
+              <div class="seclabel"><span>Preferences</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-go="notifications">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg></span>
+                  <span class="slabel"><span class="t">Notifications</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-go="appearance">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-palette"/></svg></span>
+                  <span class="slabel"><span class="t">Appearance</span><span class="s">Theme: System, Light or Dark</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-go="language">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-settings"/></svg></span>
+                  <span class="slabel"><span class="t">Language</span></span>
                   <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
                 </button>
                 <button class="srow" type="button" data-go="settings">
@@ -1478,9 +1489,18 @@ footer b{color:var(--page-ink)}
                 </button>
               </div>
 
+              <div class="group">
+                <button class="srow" type="button" data-go="about">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg></span>
+                  <span class="slabel"><span class="t">About Orhan</span><span class="s">Version, licences</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+
               <button class="btn btn-outline btnblock" type="button" data-sheet="1">
                 <svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg>Sign out
               </button>
+              <div class="caption" style="text-align:center;opacity:.6">Orhan AI · v0.1.0</div>
               <div style="height:10px"></div>
             </div>
 

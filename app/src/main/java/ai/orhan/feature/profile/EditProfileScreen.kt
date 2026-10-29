@@ -131,7 +131,7 @@ fun EditProfileScreen(onBack: () -> Unit, onSaved: () -> Unit = onBack) {
             onValueChange = { name = it; if (it.isNotBlank()) nameError = false },
             singleLine = true,
             isError = nameError,
-            supportingText = { Text(if (nameError) "Name is required" else "Shown to people and agents you chat with.") },
+            supportingText = { Text(if (nameError) "Name is required" else "Orhan uses this name when it talks to you.") },
             modifier = Modifier.fillMaxWidth(),
         )
         SectionLabel("Email")
@@ -143,14 +143,7 @@ fun EditProfileScreen(onBack: () -> Unit, onSaved: () -> Unit = onBack) {
             supportingText = { Text("Used for sign-in and receipts. We'll send a code to confirm a change.") },
             modifier = Modifier.fillMaxWidth(),
         )
-        SectionLabel("Orhan ID")
-        OutlinedTextField(
-            value = handle,
-            onValueChange = { handle = it },
-            singleLine = true,
-            supportingText = { Text("Your handle is unique — 30 days between changes.") },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        // Public handle removed: Orhan is an agent app, not a social network. Stored value is kept as-is.
         SectionLabel("About you")
         OutlinedTextField(
             value = bio,
