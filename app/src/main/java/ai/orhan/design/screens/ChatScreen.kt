@@ -36,7 +36,9 @@ import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -181,6 +183,10 @@ fun ChatScreen(
     loading: Boolean = false,
     error: String? = null,
     onSendMessage: ((String) -> Unit)? = null,
+    sendWithEnter: Boolean = true,
+    showTypingIndicator: Boolean = true,
+    showActivityCards: Boolean = true,
+    previewBeforeSending: Boolean = false,
 ) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
@@ -192,9 +198,9 @@ fun ChatScreen(
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    fun send() {
-        val text = input.trim()
-        if (text.isEmpty()) return
+    var pendingPreview by rememberSaveable { mutableStateOf<String?>(null) }
+
+    fun deliver(text: String) {
         if (onSendMessage != null) {
             onSendMessage(text)
         } else {
@@ -206,6 +212,29 @@ fun ChatScreen(
             )
         }
         input = ""
+    }
+
+    fun send() {
+        val text = input.trim()
+        if (text.isEmpty()) return
+        if (previewBeforeSending) pendingPreview = text else deliver(text)
+    }
+
+    pendingPreview?.let { draft ->
+        AlertDialog(
+            onDismissRequest = { pendingPreview = null },
+            title = { Text("Send this message?") },
+            text = { Text(draft) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingPreview = null
+                    deliver(draft)
+                }) { Text("Send") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingPreview = null }) { Text("Cancel") }
+            },
+        )
     }
 
     // LazyColumn index 0 is the "Today" divider, so messages occupy
@@ -249,7 +278,7 @@ fun ChatScreen(
             }
 
             items(items = messages, key = { it.id }) { message ->
-                MessageBubble(message = message)
+                MessageBubble(message = message, showActivityCards = showActivityCards)
             }
 
             if (error != null) {
@@ -262,7 +291,7 @@ fun ChatScreen(
                 }
             }
 
-            if (loading || messagesOverride == null) {
+            if (showTypingIndicator && (loading || messagesOverride == null)) {
                 item(key = "typing") {
                     TypingIndicator()
                 }
@@ -274,6 +303,7 @@ fun ChatScreen(
             onValueChange = { input = it },
             onSend = { send() },
             agentName = agentName,
+            sendWithEnter = sendWithEnter,
         )
     }
 }
@@ -353,7 +383,7 @@ private fun ChatTopBar(agentName: String, onBack: () -> Unit) {
 /* ------------------------------- messages -------------------------------- */
 
 @Composable
-private fun MessageBubble(message: ChatMessage) {
+private fun MessageBubble(message: ChatMessage, showActivityCards: Boolean = true) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
     val isUser = message.role == ChatRole.User
@@ -401,7 +431,7 @@ private fun MessageBubble(message: ChatMessage) {
                 )
             }
 
-            message.artifact?.let { artifact ->
+            if (showActivityCards) message.artifact?.let { artifact ->
                 Spacer(modifier = Modifier.height(6.dp))
                 ArtifactCard(artifact = artifact)
             }
@@ -561,6 +591,7 @@ private fun Composer(
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
     agentName: String,
+    sendWithEnter: Boolean = true,
 ) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
@@ -618,8 +649,14 @@ private fun Composer(
                             ),
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                             maxLines = 5,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                            keyboardActions = KeyboardActions(onSend = { onSend() }),
+                            keyboardOptions = KeyboardOptions(
+                                imeAction = if (sendWithEnter) ImeAction.Send else ImeAction.Default,
+                            ),
+                            keyboardActions = if (sendWithEnter) {
+                                KeyboardActions(onSend = { onSend() })
+                            } else {
+                                KeyboardActions.Default
+                            },
                         )
                     }
                 }

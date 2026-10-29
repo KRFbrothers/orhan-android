@@ -18,6 +18,8 @@ import ai.orhan.feature.agents.CreateAgentScreen
 import ai.orhan.feature.profile.EditProfileScreen
 import ai.orhan.feature.profile.UserProfile
 import ai.orhan.feature.profile.profilePreferences
+import ai.orhan.feature.settings.detail.ChatPrefs
+import ai.orhan.feature.settings.detail.chatPreferences
 import ai.orhan.feature.auth.SignInScreen
 import ai.orhan.feature.auth.SignInViewModel
 import ai.orhan.feature.chat.ChatViewModel
@@ -125,6 +127,8 @@ fun OrhanNavHost(isDark: Boolean) {
             }
             val chatViewModel: ChatViewModel = viewModel { ChatViewModel(context as Application) }
             val chat by chatViewModel.state.collectAsStateWithLifecycle()
+            val chatPrefsRepo = remember(context) { context.chatPreferences() }
+            val chatPrefs by chatPrefsRepo.prefs.collectAsStateWithLifecycle(initialValue = ChatPrefs())
             ChatScreen(
                 agentName = entry.arguments?.getString("title").orEmpty(),
                 onBack = { navController.popBackStack() },
@@ -132,6 +136,10 @@ fun OrhanNavHost(isDark: Boolean) {
                 loading = chat.loading,
                 error = chat.error,
                 onSendMessage = chatViewModel::send,
+                sendWithEnter = chatPrefs.sendWithEnter,
+                showTypingIndicator = chatPrefs.typingIndicators,
+                showActivityCards = chatPrefs.agentActivityCards,
+                previewBeforeSending = chatPrefs.previewBeforeSending,
             )
         }
         composable(SettingsRoutes.SETTINGS) {
