@@ -1,5 +1,6 @@
 package ai.orhan.design.screens
 
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -514,11 +515,13 @@ private fun MessageBubble(
                     )
                     .padding(horizontal = 14.dp, vertical = 11.dp),
             ) {
-                Text(
-                    text = message.text,
-                    style = OrhanTextStyles.bubble,
-                    color = if (isUser) colors.userBubbleInk else colors.agentBubbleInk,
-                )
+                SelectionContainer {
+                    Text(
+                        text = message.text,
+                        style = OrhanTextStyles.bubble,
+                        color = if (isUser) colors.userBubbleInk else colors.agentBubbleInk,
+                    )
+                }
             }
 
             if (showActivityCards) message.artifact?.let { artifact ->
