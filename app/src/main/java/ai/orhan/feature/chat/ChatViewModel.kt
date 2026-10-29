@@ -235,9 +235,7 @@ class ChatViewModel(
 
     private fun streamReply() {
         streamJob?.cancel()
-        val turns = withPreface(_state.value.messages.map {
-            ChatTurn(if (it.role == ChatRole.User) "user" else "model", it.text, listOfNotNull(attachmentsById[it.id]))
-        })
+        val turns = withPreface(turnsForApi(_state.value.messages, attachmentsById))
         val replyId = nextId()
         streamJob = viewModelScope.launch {
             var streamed = false
@@ -327,4 +325,19 @@ class ChatViewModel(
     fun clearError() = _state.update { it.copy(error = null) }
 
     private fun nextId() = (_state.value.messages.lastOrNull()?.id ?: 0L) + 1L
+}
+
+/**
+ * Maps UI messages to API turns. Only the latest user turn carries attachment bytes;
+ * older turns keep their `📎 name` text but send no attachments (avoids re-uploading files every message).
+ */
+internal fun turnsForApi(messages: List<ChatMessage>, attachmentsById: Map<Long, ChatAttachment>): List<ChatTurn> {
+    val lastUserId = messages.lastOrNull { it.role == ChatRole.User }?.id
+    return messages.map {
+        ChatTurn(
+            if (it.role == ChatRole.User) "user" else "model",
+            it.text,
+            if (it.id == lastUserId) listOfNotNull(attachmentsById[it.id]) else emptyList(),
+        )
+    }
 }
