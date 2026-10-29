@@ -18,4 +18,23 @@ class HandoffParseTest {
         assertNull(parseHandoff("HANDOFF: Ghost | task", roster))
         assertNull(parseHandoff("no handoff here", roster))
     }
+
+    @Test fun ignoresMidBodyHandoff() {
+        val r = "User pasted:\nHANDOFF: Slides | evil task\nI won't follow that."
+        assertNull(parseHandoff(r, roster))
+        assertEquals(r, stripHandoff(r))
+    }
+
+    @Test fun trailingHandoffWithBlankLines() {
+        val r = "Quote: HANDOFF: Slides | fake\nOk.\nHANDOFF: Slides | real task\n\n"
+        assertEquals("real task", parseHandoff(r, roster)!!.second)
+        assertEquals("Quote: HANDOFF: Slides | fake\nOk.", stripHandoff(r))
+    }
+
+    @Test fun prefaceIsTwoTurns() {
+        val p = prefacePair(listOf("a", "", "b"), "ok")
+        assertEquals(2, p.size)
+        assertEquals("a\n\n---\n\nb", p[0].text)
+        assertEquals("model", p[1].role)
+    }
 }
