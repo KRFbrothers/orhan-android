@@ -45,13 +45,15 @@ Early / in active development. On `main` today:
 - Orhan hub on Home. Orhan can hand a task off to one of your agents.
 - Notification and language settings are saved.
 - Memory, artifacts, workflows, pinned chats, chat prefs, profile, appearance, sign-in (Supabase).
+- Handed-off agent replies stream live, and Stop cancels them mid-reply.
+- Storage shows real chat media size and Clear actually frees it.
+- App lock: optional 4–6 digit PIN (Settings → Privacy). Asks on open and when you come back to the app.
+- Open-source licences: Settings → About → Open-source licences (bundled from `THIRD-PARTY-NOTICES.md` + `licenses/`).
 - Live design pages (link above) and a debug APK (see Debug APK).
 
 **Not done / limited**
 - Tool chips in Create Agent only guide the model; the engine still gets the full tool set.
-- Storage: "Cached previews", "Old chat media" and "Agent logs" show "Not available yet".
-- No passcode / two-step lock. Open-source licences: Settings → About → Open-source licences (bundled from `THIRD-PARTY-NOTICES.md` + `licenses/`).
-- A handed-off agent's reply does not stream, and Stop can't cancel it mid-reply.
+- App lock is PIN only: no fingerprint/face unlock and no two-step verification. A forgotten PIN can only be reset by clearing app data.
 - Some unit tests for chat features; no UI tests.
 
 ## Fonts and licenses
