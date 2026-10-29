@@ -21,14 +21,13 @@ fun ChatPreferencesScreen(onBack: () -> Unit) {
         SectionLabel("Composer")
         GroupCard(listOf(
             { SwitchRow("Send with Enter", "Off means Enter adds a new line", prefs.sendWithEnter, { v -> set { it.copy(sendWithEnter = v) } }) },
-            { SwitchRow("Hold to record voice", "Mic button records instead of dictating", prefs.holdToRecord, { v -> set { it.copy(holdToRecord = v) } }) },
             { SwitchRow("Preview before sending", "Confirm links and files first", prefs.previewBeforeSending, { v -> set { it.copy(previewBeforeSending = v) } }) },
         ))
         SectionLabel("Thread")
         GroupCard(listOf(
             { SwitchRow("Typing indicators", "Show when an agent is responding", prefs.typingIndicators, { v -> set { it.copy(typingIndicators = v) } }) },
-            { SwitchRow("Auto-play media", "GIFs and video previews in chat", prefs.autoPlayMedia, { v -> set { it.copy(autoPlayMedia = v) } }) },
             { SwitchRow("Agent activity cards", "Inline artifact previews in replies", prefs.agentActivityCards, { v -> set { it.copy(agentActivityCards = v) } }) },
         ))
+        // holdToRecord and autoPlayMedia stay in the serializer. Chat does not record or auto-play, so they are not shown.
     }
 }

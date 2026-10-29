@@ -21,7 +21,10 @@ import ai.orhan.feature.settings.appearance.AppearanceScreen
 import ai.orhan.feature.settings.appearance.AppearanceViewModel
 import ai.orhan.feature.settings.detail.AboutScreen
 import ai.orhan.feature.settings.detail.ChatPreferencesScreen
+import ai.orhan.feature.settings.detail.LanguagePrefs
 import ai.orhan.feature.settings.detail.LanguageScreen
+import ai.orhan.feature.settings.detail.languageName
+import ai.orhan.feature.settings.detail.settingsDetailPreferences
 import ai.orhan.feature.settings.detail.LicensesScreen
 import ai.orhan.feature.settings.detail.NotificationsScreen
 import ai.orhan.feature.settings.detail.PrivacyScreen
@@ -139,8 +142,12 @@ fun SettingsNavHost(
         startDestination = SettingsRoutes.SETTINGS,
     ) {
         composable(SettingsRoutes.SETTINGS) {
+            val context = LocalContext.current
+            val languageRepo = remember(context) { context.applicationContext.settingsDetailPreferences() }
+            val languagePrefs by languageRepo.language.collectAsStateWithLifecycle(initialValue = LanguagePrefs())
             SettingsScreen(
                 onBack = onBackFromSettings,
+                languageSubtitle = languageName(languagePrefs.code),
                 onOpenAppearance = { navController.openAppearance() },
                 onOpenNotifications = { navController.openSettingsPage(SettingsRoutes.NOTIFICATIONS) },
                 onOpenPrivacy = { navController.openSettingsPage(SettingsRoutes.PRIVACY) },

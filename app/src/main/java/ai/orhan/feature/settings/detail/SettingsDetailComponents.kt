@@ -49,25 +49,39 @@ internal fun SettingsDetailScaffold(
     title: String,
     onBack: () -> Unit,
     snackbarHostState: SnackbarHostState? = null,
+    /** False when this page is a home tab and the parent already shows navigation. */
+    showBack: Boolean = true,
+    /** False when a parent already consumed the status-bar inset. */
+    applyStatusBarPadding: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = if (applyStatusBarPadding) {
+            androidx.compose.material3.ScaffoldDefaults.contentWindowInsets
+        } else {
+            WindowInsets(0, 0, 0, 0)
+        },
         snackbarHost = { snackbarHostState?.let { SnackbarHost(it) } },
     ) { inner ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
-                .windowInsetsPadding(WindowInsets.statusBars)
+                .then(
+                    if (applyStatusBarPadding) Modifier.windowInsetsPadding(WindowInsets.statusBars)
+                    else Modifier,
+                )
                 .padding(bottom = inner.calculateBottomPadding()),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Rounded.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onBackground)
+                if (showBack) {
+                    IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Rounded.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onBackground)
+                    }
                 }
                 Text(
                     text = title,
@@ -75,7 +89,7 @@ internal fun SettingsDetailScaffold(
                     color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 4.dp),
+                    modifier = Modifier.padding(start = if (showBack) 4.dp else 16.dp),
                 )
             }
             Column(

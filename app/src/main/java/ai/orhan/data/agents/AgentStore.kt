@@ -8,6 +8,7 @@ import androidx.datastore.dataStore
 import ai.orhan.R
 import ai.orhan.feature.agents.InstalledAgent
 import ai.orhan.feature.agents.SampleInstalledAgents
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import java.io.DataInputStream
@@ -97,6 +98,56 @@ val Context.agentsDataStore: DataStore<List<SavedAgent>> by dataStore(
 fun List<SavedAgent>.upserted(agent: SavedAgent): List<SavedAgent> =
     listOf(agent) + filterNot { it.name.equals(agent.name, ignoreCase = true) }
 
+sealed class AgentWrite {
+    data class Ok(val agents: List<SavedAgent>) : AgentWrite()
+    data class Rejected(val message: String) : AgentWrite()
+}
+
+/**
+ * One list transformation for create, edit, and rename.
+ * A rename removes [previousName] and inserts [raw] together, so a rejected write leaves the list untouched.
+ * Repeating a successful write is a no-op.
+ */
+fun List<SavedAgent>.replacing(raw: SavedAgent, previousName: String?): AgentWrite {
+    val agent = raw.capped()
+    if (agent.name.isBlank()) return AgentWrite.Rejected("Name is required")
+
+    val previous = previousName?.takeIf { it.isNotBlank() }?.let { key ->
+        firstOrNull { it.name.equals(key, ignoreCase = true) }
+    }
+    val occupant = firstOrNull { it.name.equals(agent.name, ignoreCase = true) }
+    if (occupant != null && occupant != previous && occupant != agent) {
+        return AgentWrite.Rejected("An agent with this name already exists")
+    }
+
+    val oldRowRemains = previous != null && previous != occupant
+    if (occupant == agent && !oldRowRemains) return AgentWrite.Ok(this)
+
+    val kept = filterNot { existing ->
+        existing == previous || existing.name.equals(agent.name, ignoreCase = true)
+    }
+    return AgentWrite.Ok(listOf(agent) + kept)
+}
+
+sealed class AgentSaveResult {
+    data class Saved(val agent: SavedAgent) : AgentSaveResult()
+    data class Rejected(val message: String) : AgentSaveResult()
+    data class Failed(val message: String) : AgentSaveResult()
+}
+
+sealed class AgentSaveNav {
+    data class OpenChat(val name: String) : AgentSaveNav()
+    data object Close : AgentSaveNav()
+    data class Stay(val message: String) : AgentSaveNav()
+}
+
+/** Create opens the new chat. Edit closes. A rejected or failed save stays on the draft. */
+fun navigationAfterAgentSave(creating: Boolean, result: AgentSaveResult): AgentSaveNav = when (result) {
+    is AgentSaveResult.Saved -> if (creating) AgentSaveNav.OpenChat(result.agent.name) else AgentSaveNav.Close
+    is AgentSaveResult.Rejected -> AgentSaveNav.Stay(result.message)
+    is AgentSaveResult.Failed -> AgentSaveNav.Stay(result.message)
+}
+
 fun SavedAgent.toInstalledAgent(): InstalledAgent = InstalledAgent(
     name = name,
     blurb = blurb,
@@ -120,6 +171,39 @@ class AgentStore(private val dataStore: DataStore<List<SavedAgent>>) {
         val a = agent.capped()
         if (a.name.isBlank()) return
         dataStore.updateData { it.upserted(a) }
+    }
+
+    /**
+     * Create, edit, or rename in one DataStore transaction.
+     * [previousName] is the stored name being replaced. Null means create.
+     * On rejection or a write failure the stored list is left as it was.
+     */
+    suspend fun replace(previousName: String?, agent: SavedAgent): AgentSaveResult {
+        val capped = agent.capped()
+        val written = try {
+            dataStore.updateData { current ->
+                when (val result = current.replacing(capped, previousName)) {
+                    is AgentWrite.Ok -> result.agents
+                    is AgentWrite.Rejected -> current
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return AgentSaveResult.Failed("Couldn't save this agent. Your previous agent is unchanged.")
+        }
+        return when (val result = written.replacing(capped, previousName)) {
+            is AgentWrite.Ok -> {
+                val stored = written.firstOrNull { it == capped }
+                    ?: written.firstOrNull { it.name.equals(capped.name, ignoreCase = true) && it.blurb == capped.blurb && it.instructions == capped.instructions }
+                if (stored == null) {
+                    AgentSaveResult.Failed("Couldn't save this agent. Your previous agent is unchanged.")
+                } else {
+                    AgentSaveResult.Saved(stored)
+                }
+            }
+            is AgentWrite.Rejected -> AgentSaveResult.Rejected(result.message)
+        }
     }
 
     suspend fun delete(name: String) {

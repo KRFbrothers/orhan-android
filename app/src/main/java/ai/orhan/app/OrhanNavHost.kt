@@ -37,11 +37,12 @@ import ai.orhan.design.screens.HomeScreen
 import ai.orhan.design.screens.OrhanChat
 import ai.orhan.data.history.recentChats
 import ai.orhan.data.history.pinnedChats
+import ai.orhan.data.agents.AgentSaveNav
 import ai.orhan.data.agents.SavedAgent
-import ai.orhan.data.agents.capped
 import ai.orhan.data.agents.agentStore
 import ai.orhan.data.agents.mergeWithSamples
 import ai.orhan.data.agents.canonicalAgentTitle
+import ai.orhan.data.agents.navigationAfterAgentSave
 import ai.orhan.data.agents.toInstalledAgent
 import ai.orhan.design.theme.ThemeMode
 import ai.orhan.design.theme.themePreferences
@@ -52,7 +53,14 @@ import ai.orhan.feature.settings.appearance.AppearanceScreen
 import ai.orhan.feature.settings.openAppearance
 import ai.orhan.feature.settings.openSettingsPage
 import ai.orhan.feature.settings.settingsDetailPages
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.time.temporal.ChronoUnit
+import java.util.Locale
 import ai.orhan.data.artifacts.artifactStore
 import ai.orhan.feature.artifacts.ArtifactsScreen
 import ai.orhan.data.workflows.workflowStore
@@ -61,7 +69,10 @@ import ai.orhan.feature.workflows.WorkflowEditorScreen
 /** Top-level routes. Settings routes live in [SettingsRoutes]. */
 object AppRoutes {
     const val HOME = "home"
-    const val CREATE_AGENT = "create_agent"
+    /** Optional `name` opens the same screen in edit mode for a saved agent. */
+    const val CREATE_AGENT = "create_agent?name={name}"
+    fun createAgent(name: String? = null): String =
+        if (name.isNullOrBlank()) "create_agent" else "create_agent?name=${Uri.encode(name)}"
     const val EDIT_PROFILE = "edit_profile"
     const val MEMORY = "memory"
     const val ARTIFACTS = "artifacts"
@@ -134,7 +145,10 @@ fun OrhanNavHost(isDark: Boolean) {
                 },
                 onOpenAppearance = { navController.openAppearance() },
                 onCreateAgent = {
-                    navController.navigate(AppRoutes.CREATE_AGENT) { launchSingleTop = true }
+                    navController.navigate(AppRoutes.createAgent()) { launchSingleTop = true }
+                },
+                onEditAgent = { agent ->
+                    navController.navigate(AppRoutes.createAgent(agent.name)) { launchSingleTop = true }
                 },
                 onEditProfile = {
                     navController.navigate(AppRoutes.EDIT_PROFILE) { launchSingleTop = true }
@@ -145,6 +159,9 @@ fun OrhanNavHost(isDark: Boolean) {
                 onOpenArtifacts = {
                     navController.navigate(AppRoutes.ARTIFACTS) { launchSingleTop = true }
                 },
+                artifacts = artifacts,
+                onUpsertArtifact = { item -> scope.launch { artifactStore.upsert(item) } },
+                onDeleteArtifact = { id -> scope.launch { artifactStore.delete(id) } },
                 artifactCount = artifacts.size,
                 onOpenChatPreferences = { navController.openSettingsPage(SettingsRoutes.CHAT_PREFERENCES) },
                 onOpenSettingsPage = { route -> navController.openSettingsPage(route) },
@@ -215,23 +232,51 @@ fun OrhanNavHost(isDark: Boolean) {
                 },
             )
         }
-        composable(AppRoutes.CREATE_AGENT) {
+        composable(
+            AppRoutes.CREATE_AGENT,
+            arguments = listOf(
+                navArgument("name") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { entry ->
+            val editName = entry.arguments?.getString("name")
+            val existing = editName?.let { n -> savedAgents.firstOrNull { it.name.equals(n, ignoreCase = true) } }
+            if (editName != null && existing == null) {
+                // DataStore's first frame is empty. Pop only after the store has been read.
+                LaunchedEffect(editName) {
+                    val loaded = agentStore.agents.first()
+                    val found = loaded.any { it.name.equals(editName, ignoreCase = true) }
+                    if (!found) navController.popBackStack()
+                }
+                return@composable
+            }
             CreateAgentScreen(
                 onBack = { navController.popBackStack() },
+                existing = existing,
+                takenNames = savedAgents.map { it.name }.toSet(),
                 onCreated = { name, blurb, instructions, tools ->
-                    scope.launch {
-                        val saved = SavedAgent(
-                                name = name,
-                                blurb = blurb,
-                                instructions = instructions,
-                                tools = tools,
-                                createdAt = System.currentTimeMillis(),
-                            ).capped()
-                        agentStore.upsert(saved)
-                        navController.navigate(AppRoutes.chat(saved.name)) {
+                    val previous = existing
+                    val result = agentStore.replace(
+                        previousName = previous?.name,
+                        agent = SavedAgent(
+                            name = name,
+                            blurb = blurb,
+                            instructions = instructions,
+                            tools = tools,
+                            createdAt = previous?.createdAt ?: System.currentTimeMillis(),
+                        ),
+                    )
+                    when (val nav = navigationAfterAgentSave(previous == null, result)) {
+                        is AgentSaveNav.OpenChat -> navController.navigate(AppRoutes.chat(canon(nav.name))) {
                             popUpTo(AppRoutes.CREATE_AGENT) { inclusive = true }
                         }
+                        AgentSaveNav.Close -> navController.popBackStack()
+                        is AgentSaveNav.Stay -> Unit
                     }
+                    result
                 },
             )
         }
@@ -298,15 +343,18 @@ fun OrhanNavHost(isDark: Boolean) {
         composable(SettingsRoutes.SETTINGS) {
             val auth = remember(context) { AuthRepository.get(context) }
             val session by auth.session.collectAsStateWithLifecycle(initialValue = null)
+            val languageRepo = remember(context) { context.settingsDetailPreferences() }
+            val languagePrefs by languageRepo.language.collectAsStateWithLifecycle(initialValue = LanguagePrefs())
             SettingsScreen(
                 onBack = { navController.popBackStack() },
-onOpenAppearance = { navController.openAppearance() },
+                onOpenAppearance = { navController.openAppearance() },
                 onOpenNotifications = { navController.openSettingsPage(SettingsRoutes.NOTIFICATIONS) },
                 onOpenPrivacy = { navController.openSettingsPage(SettingsRoutes.PRIVACY) },
                 onOpenChatPreferences = { navController.openSettingsPage(SettingsRoutes.CHAT_PREFERENCES) },
                 onOpenStorage = { navController.openSettingsPage(SettingsRoutes.STORAGE) },
                 onOpenLanguage = { navController.openSettingsPage(SettingsRoutes.LANGUAGE) },
                 onOpenAbout = { navController.openSettingsPage(SettingsRoutes.ABOUT) },
+                languageSubtitle = languageName(languagePrefs.code),
                 signedInEmail = session?.email,
                 // Only offered while a session exists; clears it via AuthRepository.signOut().
                 onSignOut = if (session != null) {
@@ -332,14 +380,19 @@ onOpenAppearance = { navController.openAppearance() },
     }
 }
 
-/** Compact "now / 5m / 3h / 2d" label for a chat-list row. */
+/**
+ * Chat-list date. Within the last six days this is a short weekday ("Tue");
+ * older rows use a numeric month/day/year ("10/21/26").
+ */
 internal fun relativeTime(then: Long, now: Long = System.currentTimeMillis()): String {
-    val m = ((now - then).coerceAtLeast(0)) / 60_000
-    return when {
-        m < 1 -> "now"
-        m < 60 -> "${m}m"
-        m < 1440 -> "${m / 60}h"
-        else -> "${m / 1440}d"
+    val zone = ZoneId.systemDefault()
+    val opened = Instant.ofEpochMilli(then).atZone(zone).toLocalDate()
+    val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val days = ChronoUnit.DAYS.between(opened, today)
+    return if (days in 0..6) {
+        opened.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+    } else {
+        DateTimeFormatter.ofPattern("M/d/yy", Locale.US).format(opened)
     }
 }
 

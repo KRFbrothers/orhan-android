@@ -1,5 +1,6 @@
 package ai.orhan.design.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -7,6 +8,20 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.ui.semantics.Role
+import ai.orhan.data.artifacts.Artifact
+import ai.orhan.feature.artifacts.ArtifactsScreen
+import ai.orhan.feature.memory.MemoryScreen
+import ai.orhan.feature.search.LocalSearchScreen
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.remember
@@ -27,7 +42,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,21 +49,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Chat
-import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.LightMode
-import androidx.compose.material.icons.rounded.Menu
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SmartToy
-import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -60,8 +66,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
@@ -128,12 +132,13 @@ data class OrhanAgent(
 )
 
 
-/** Bottom-navigation destinations, in the order the design uses them. */
+/** Bottom-navigation destinations. Profile opens from the header avatar. */
 enum class OrhanTab(val label: String, val icon: ImageVector) {
     Chats("Chats", Icons.Rounded.Chat),
     Agents("Agents", Icons.Rounded.SmartToy),
     Discover("Discover", Icons.Rounded.Explore),
-    Profile("Profile", Icons.Rounded.Person),
+    Memory("Memory", Icons.Rounded.Psychology),
+    Artifacts("Artifacts", Icons.Rounded.Layers),
 }
 
 /* -------------------------------- helpers -------------------------------- */
@@ -166,10 +171,10 @@ internal fun OrhanCard(
 /**
  * Home / Chats.
  *
- * @param onOpenChat fires when a row or the FAB is tapped; the host switches to
- *   [ChatScreen] and passes the title through.
- * @param onOpenSettings fires from the overflow menu.
+ * @param onOpenChat fires when a row is tapped, or when header + opens the existing Orhan chat.
+ * @param onOpenSettings fires from Profile.
  * @param onToggleTheme flips [ThemeMode] between Light and Dark at the app root.
+ *   The header no longer shows the toggle; Appearance still owns it.
  */
 @Composable
 fun HomeScreen(
@@ -179,9 +184,14 @@ fun HomeScreen(
     onToggleTheme: () -> Unit = {},
     onOpenAppearance: () -> Unit = onOpenSettings,
     onCreateAgent: () -> Unit = {},
+    /** User-saved agents only. The host opens the same create screen in edit mode. */
+    onEditAgent: ((InstalledAgent) -> Unit)? = null,
     onEditProfile: () -> Unit = {},
     onOpenMemory: () -> Unit = {},
     onOpenArtifacts: () -> Unit = {},
+    artifacts: List<Artifact> = emptyList(),
+    onUpsertArtifact: (Artifact) -> Unit = {},
+    onDeleteArtifact: (String) -> Unit = {},
     artifactCount: Int = 0,
     /** Agent behaviour knobs (reply style, preview) live in Chat preferences. */
     onOpenChatPreferences: () -> Unit = onOpenSettings,
@@ -210,6 +220,36 @@ fun HomeScreen(
     onOpenPlaybook: (ai.orhan.feature.discover.Playbook) -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
+    var profileOpen by rememberSaveable { mutableStateOf(false) }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var artifactToOpen by rememberSaveable { mutableStateOf<String?>(null) }
+    if (searchOpen) {
+        BackHandler { searchOpen = false }
+        LocalSearchScreen(
+            chats = recentChats,
+            agents = agents,
+            artifacts = artifacts,
+            onCancel = { searchOpen = false },
+            onOpenChat = { chat ->
+                searchOpen = false
+                onOpenChat(chat)
+            },
+            onOpenAgent = { agent ->
+                searchOpen = false
+                onOpenChat(OrhanChat(agent.name, agent.blurb, "", isAgent = true))
+            },
+            onOpenArtifact = { id ->
+                searchOpen = false
+                artifactToOpen = id
+                tab = OrhanTab.Artifacts
+            },
+            modifier = modifier,
+        )
+        return
+    }
+    if (profileOpen) {
+        BackHandler { profileOpen = false }
+    }
 
     Column(
         modifier = modifier
@@ -217,69 +257,119 @@ fun HomeScreen(
             .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.statusBars),
     ) {
-        HomeTopBar(
-            isDark = isDark,
-            onToggleTheme = onToggleTheme,
-            onOpenSettings = onOpenSettings,
-        )
+        if (!profileOpen && tab == OrhanTab.Chats) {
+            HomeTopBar(
+                profile = profile,
+                onOpenProfile = { profileOpen = true },
+                onNewChat = {
+                    onOpenChat(OrhanChat(title = "Orhan", snippet = "", time = "", isAgent = true))
+                },
+            )
+        }
+        if (profileOpen) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = { profileOpen = false }, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        imageVector = Icons.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onBackground,
+                    )
+                }
+                Text(
+                    text = "Profile",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+            }
+        }
 
         Box(modifier = Modifier.weight(1f)) {
-            when (tab) {
-                OrhanTab.Chats -> ChatsTab(
-                    onOpenChat = onOpenChat,
-                    recentChats = recentChats,
-                    pinnedTitles = pinnedTitles,
-                    onTogglePin = onTogglePin,
-                    onRemoveRecent = onRemoveRecent,
-                    modifier = Modifier.fillMaxSize(),
-                )
-
-                OrhanTab.Agents -> AgentsScreen(
-                    agents = agents,
-                    onOpenAgent = { onOpenChat(OrhanChat(it.name, it.blurb, "", isAgent = true)) },
-                    onCreateAgent = onCreateAgent,
-                    deletableNames = deletableAgentNames,
-                    onDeleteAgent = onDeleteAgent,
-                    workflows = workflows,
-                    onOpenWorkflow = onOpenWorkflow,
-                    onCreateWorkflow = onCreateWorkflow,
-                    onEditWorkflow = onEditWorkflow,
-                    onDeleteWorkflow = onDeleteWorkflow,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                OrhanTab.Discover -> DiscoverScreen(
-                    onOpenPlaybook = onOpenPlaybook,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                OrhanTab.Profile -> ProfileTab(
+            if (profileOpen) {
+                ProfileTab(
                     onOpenSettings = onOpenSettings,
                     onOpenAppearance = onOpenAppearance,
                     onEditProfile = onEditProfile,
-                    onOpenMemory = onOpenMemory,
-                    onOpenArtifacts = onOpenArtifacts,
+                    onOpenMemory = {
+                        profileOpen = false
+                        tab = OrhanTab.Memory
+                    },
+                    onOpenArtifacts = {
+                        profileOpen = false
+                        tab = OrhanTab.Artifacts
+                    },
                     onOpenChatPreferences = onOpenChatPreferences,
-                    onOpenAgents = { tab = OrhanTab.Agents },
+                    onOpenAgents = {
+                        profileOpen = false
+                        tab = OrhanTab.Agents
+                    },
                     onSignOut = onSignOut,
                     onOpenSettingsPage = onOpenSettingsPage,
-                    onOpenDiscover = { tab = OrhanTab.Discover },
                     artifactCount = artifactCount,
                     agentCount = agents.size,
                     profile = profile,
                     modifier = Modifier.fillMaxSize(),
                 )
-            }
-
-            if (tab == OrhanTab.Chats) {
-                NewChatFab(
-                    onClick = { onOpenChat(OrhanChat(title = "Orhan", snippet = "", time = "", isAgent = true)) },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 16.dp, bottom = 16.dp),
-                )
+            } else {
+                when (tab) {
+                    OrhanTab.Chats -> ChatsTab(
+                        onOpenChat = onOpenChat,
+                        onOpenSearch = { searchOpen = true },
+                        recentChats = recentChats,
+                        pinnedTitles = pinnedTitles,
+                        onTogglePin = onTogglePin,
+                        onRemoveRecent = onRemoveRecent,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    OrhanTab.Agents -> AgentsScreen(
+                        agents = agents,
+                        onOpenAgent = { onOpenChat(OrhanChat(it.name, it.blurb, "", isAgent = true)) },
+                        onCreateAgent = onCreateAgent,
+                        onEditAgent = onEditAgent,
+                        deletableNames = deletableAgentNames,
+                        onDeleteAgent = onDeleteAgent,
+                        workflows = workflows,
+                        onOpenWorkflow = onOpenWorkflow,
+                        onCreateWorkflow = onCreateWorkflow,
+                        onEditWorkflow = onEditWorkflow,
+                        onDeleteWorkflow = onDeleteWorkflow,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    OrhanTab.Discover -> DiscoverScreen(
+                        onOpenPlaybook = onOpenPlaybook,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    OrhanTab.Memory -> MemoryScreen(
+                        onBack = { tab = OrhanTab.Chats },
+                        embedded = true,
+                    )
+                    OrhanTab.Artifacts -> ArtifactsScreen(
+                        artifacts = artifacts,
+                        onUpsert = onUpsertArtifact,
+                        onDelete = onDeleteArtifact,
+                        onBack = { tab = OrhanTab.Chats },
+                        embedded = true,
+                        pendingOpenId = artifactToOpen,
+                        onPendingOpenConsumed = { artifactToOpen = null },
+                    )
+                }
             }
         }
 
-        OrhanBottomBar(selected = tab, onSelect = { tab = it })
+        if (!profileOpen) {
+            OrhanBottomBar(
+                selected = tab,
+                onSelect = { tab = it },
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
+            )
+        }
     }
 }
 
@@ -287,52 +377,57 @@ fun HomeScreen(
 
 @Composable
 private fun HomeTopBar(
-    isDark: Boolean,
-    onToggleTheme: () -> Unit,
-    onOpenSettings: () -> Unit,
+    profile: UserProfile,
+    onOpenProfile: () -> Unit,
+    onNewChat: () -> Unit,
 ) {
-    Row(
+    val colors = OrhanTheme.colors
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .padding(start = 16.dp, end = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        // The real Orhan wordmark \u2014 no placeholder text.
-        // Drop orhan_wordmark.png (dark ink) and orhan_wordmark_dark.png
-        // (mint, for night mode) into app/src/main/res/drawable-xxhdpi/.
-        Icon(
-            painter = painterResource(
-                if (isDark) R.drawable.orhan_wordmark_dark else R.drawable.orhan_wordmark,
-            ),
-            contentDescription = "Orhan AI",
-            tint = Color.Unspecified, // keep the PNG's own brand colours
+        Image(
+            painter = painterResource(profile.safeAvatarResId),
+            contentDescription = profile.name,
+            contentScale = ContentScale.Crop,
             modifier = Modifier
-                .height(26.dp)
-                .widthIn(max = 132.dp),
+                .align(Alignment.CenterStart)
+                .size(40.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onOpenProfile),
         )
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        IconButton(onClick = { /* the search field is the first list row */ }) {
-            Icon(
-                imageVector = Icons.Rounded.Search,
-                contentDescription = "Search",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                painter = painterResource(R.drawable.orhan_mark),
+                contentDescription = null,
+                modifier = Modifier.size(28.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Orhan",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
             )
         }
-        IconButton(onClick = onToggleTheme) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, colors.fieldEdge, CircleShape)
+                .clickable(onClick = onNewChat),
+            contentAlignment = Alignment.Center,
+        ) {
             Icon(
-                imageVector = if (isDark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
-                contentDescription = "Switch theme",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        IconButton(onClick = onOpenSettings) {
-            Icon(
-                imageVector = Icons.Rounded.Menu,
-                contentDescription = "Open settings",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                imageVector = Icons.Rounded.Add,
+                contentDescription = "Chat with Orhan",
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(22.dp),
             )
         }
     }
@@ -343,6 +438,7 @@ private fun HomeTopBar(
 @Composable
 private fun ChatsTab(
     onOpenChat: (OrhanChat) -> Unit,
+    onOpenSearch: () -> Unit,
     recentChats: List<OrhanChat> = emptyList(),
     pinnedTitles: Set<String> = emptySet(),
     onTogglePin: (OrhanChat) -> Unit = {},
@@ -351,58 +447,72 @@ private fun ChatsTab(
 ) {
     val recentTitles = recentChats.map { it.title }.toSet()
     val chats = recentChats
-    var query by rememberSaveable { mutableStateOf("") }
-    // Orhan is the hub (pinned card above); keep it out of the recents list.
-    val visible = chats
-        .filterNot { it.title.equals("Orhan", ignoreCase = true) }
-        .filter { chat ->
-            val q = query.trim()
-            q.isEmpty() || chat.title.contains(q, ignoreCase = true) ||
-                chat.snippet.contains(q, ignoreCase = true)
-        }
+    var pinnedExpanded by rememberSaveable { mutableStateOf(true) }
+    var chatsExpanded by rememberSaveable { mutableStateOf(true) }
+    val hub = chats.firstOrNull { it.title.equals("Orhan", ignoreCase = true) }
+    // Orhan is the hub (card above the sections); keep it out of the rows.
+    val visible = chats.filterNot { it.title.equals("Orhan", ignoreCase = true) }
     val pinnedVisible = visible.filter { it.title in pinnedTitles }
     val unpinnedVisible = visible.filterNot { it.title in pinnedTitles }
-    val pinnedCount = pinnedTitles.size
+    val hubSnippet = hub?.snippet
+        ?.takeIf { it.isNotBlank() && !it.equals("Recent chat", ignoreCase = true) }
+        ?: "Your main agent"
 
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(top = 4.dp, bottom = 88.dp),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp),
     ) {
         item(key = "search") {
-            SearchField(
-                query = query,
-                onQueryChange = { query = it },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            SearchPill(
+                onClick = onOpenSearch,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
         }
 
         item(key = "orhan-hub") {
             OrhanHubCard(
+                snippet = hubSnippet,
+                time = hub?.time.orEmpty(),
                 onClick = { onOpenChat(OrhanChat(title = "Orhan", snippet = "", time = "", isAgent = true)) },
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
 
         if (pinnedVisible.isNotEmpty()) {
-            item(key = "pinned-header") { SectionHeader("Pinned", "$pinnedCount pinned") }
-            items(items = pinnedVisible, key = { "pinned:" + it.title }) { chat ->
-                ChatRowItem(
-                    chat = chat,
-                    pinned = true,
-                    onClick = { onOpenChat(chat) },
-                    onTogglePin = { onTogglePin(chat) },
-                    onRemoveRecent = if (chat.title in recentTitles) ({ onRemoveRecent(chat) }) else null,
+            item(key = "pinned-header") {
+                SectionHeader(
+                    title = "PINNED · ${pinnedVisible.size}",
+                    icon = Icons.Rounded.PushPin,
+                    expanded = pinnedExpanded,
+                    onToggle = { pinnedExpanded = !pinnedExpanded },
                 )
+            }
+            if (pinnedExpanded) {
+                items(items = pinnedVisible, key = { "pinned:" + it.title }) { chat ->
+                    ChatRowItem(
+                        chat = chat,
+                        pinned = true,
+                        onClick = { onOpenChat(chat) },
+                        onTogglePin = { onTogglePin(chat) },
+                        onRemoveRecent = if (chat.title in recentTitles) ({ onRemoveRecent(chat) }) else null,
+                    )
+                }
             }
         }
 
         item(key = "recent") {
-            SectionHeader("Recent", if (pinnedVisible.isEmpty()) "$pinnedCount pinned" else null)
+            SectionHeader(
+                title = "CHATS · ${unpinnedVisible.size}",
+                icon = Icons.Rounded.Chat,
+                expanded = chatsExpanded,
+                onToggle = { chatsExpanded = !chatsExpanded },
+            )
         }
 
-        if (visible.isEmpty()) {
+        if (chatsExpanded && visible.isEmpty() && chats.isEmpty()) {
             item(key = "empty") {
                 Text(
-                    text = if (chats.isEmpty()) "No chats yet — tap + to start one" else "No chats match",
+                    text = "No chats yet — tap + to start one",
                     style = OrhanTextStyles.snippet,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
@@ -410,90 +520,144 @@ private fun ChatsTab(
             }
         }
 
-        items(items = unpinnedVisible, key = { it.title }) { chat ->
-            ChatRowItem(
-                chat = chat,
-                pinned = false,
-                onClick = { onOpenChat(chat) },
-                onTogglePin = { onTogglePin(chat) },
-                onRemoveRecent = if (chat.title in recentTitles) ({ onRemoveRecent(chat) }) else null,
-            )
+        if (chatsExpanded) {
+            items(items = unpinnedVisible, key = { it.title }) { chat ->
+                ChatRowItem(
+                    chat = chat,
+                    pinned = false,
+                    onClick = { onOpenChat(chat) },
+                    onTogglePin = { onTogglePin(chat) },
+                    onRemoveRecent = if (chat.title in recentTitles) ({ onRemoveRecent(chat) }) else null,
+                )
+            }
         }
     }
 }
 
-/** Main controller entry: Orhan runs the user's other agents. */
+/** Main controller entry. Mint fill and a primary border match the observed hub row. */
 @Composable
-private fun OrhanHubCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun OrhanHubCard(
+    snippet: String,
+    time: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = OrhanTheme.colors
+    val shape = OrhanTheme.shapes.card
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(OrhanTheme.shapes.card)
+            .clip(shape)
             .background(colors.brandSoft)
+            .border(1.dp, MaterialTheme.colorScheme.primary, shape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = "Orhan", style = OrhanTextStyles.rowTitle, color = colors.onBrandSoft)
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "Your main agent · runs your other agents",
-                style = OrhanTextStyles.snippet,
-                color = colors.onBrandSoft,
-                maxLines = 2,
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surface),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.orhan_mark),
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
             )
         }
-        Icon(
-            imageVector = Icons.Rounded.KeyboardArrowRight,
-            contentDescription = "Open Orhan",
-            tint = colors.onBrandSoft,
-        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Orhan",
+                    style = OrhanTextStyles.rowTitle,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                if (time.isNotBlank()) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = time,
+                        style = OrhanTextStyles.meta,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = snippet,
+                style = OrhanTextStyles.snippet,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
 @Composable
-private fun SectionHeader(title: String, meta: String?) {
+private fun SectionHeader(
+    title: String,
+    icon: ImageVector,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp),
+            .clickable(onClick = onToggle)
+            .padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = title,
             style = OrhanTextStyles.kicker,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.weight(1f))
-        if (meta != null) {
-            Text(
-                text = meta,
-                style = OrhanTextStyles.meta,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Icon(
+            imageVector = if (expanded) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess,
+            contentDescription = if (expanded) "Collapse" else "Expand",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(OrhanTheme.colors.hairline),
+    )
     }
 }
 
 @Composable
-private fun SearchField(
-    query: String,
-    onQueryChange: (String) -> Unit,
+private fun SearchPill(
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
-
     Row(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .clip(shapes.pill)
-            .background(colors.field)
+            .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, colors.fieldEdge, shapes.pill)
-            .padding(horizontal = 14.dp),
+            .clickable(onClick = onClick),
+        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -502,26 +666,12 @@ private fun SearchField(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp),
         )
-        Spacer(modifier = Modifier.width(10.dp))
-        androidx.compose.foundation.text.BasicTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            singleLine = true,
-            textStyle = OrhanTextStyles.snippet.copy(color = MaterialTheme.colorScheme.onSurface),
-            cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
-            modifier = Modifier.weight(1f),
-            decorationBox = { inner ->
-                if (query.isEmpty()) {
-                    Text(
-                        text = "Search chats and agents",
-                        style = OrhanTextStyles.snippet,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                inner()
-            },
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "Search",
+            style = OrhanTextStyles.snippet,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
         )
     }
 }
@@ -538,7 +688,6 @@ private fun ChatRowItem(
     onRemoveRecent: (() -> Unit)? = null,
 ) {
     val colors = OrhanTheme.colors
-    val shapes = OrhanTheme.shapes
     var menuOpen by remember { mutableStateOf(false) }
 
     Box {
@@ -554,6 +703,7 @@ private fun ChatRowItem(
             )
         }
     }
+    Column {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -566,13 +716,8 @@ private fun ChatRowItem(
             Box(
                 modifier = Modifier
                     .size(46.dp)
-                    .clip(shapes.avatarList)
-                    .background(if (chat.isAgent) colors.brandSoft else colors.field)
-                    .border(
-                        width = 1.dp,
-                        color = if (chat.isAgent) colors.brandSoft else MaterialTheme.colorScheme.outline,
-                        shape = shapes.avatarList,
-                    ),
+                    .clip(CircleShape)
+                    .background(if (chat.isAgent) colors.brandSoft else colors.field),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -605,103 +750,71 @@ private fun ChatRowItem(
 
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = chat.title,
-                    style = OrhanTextStyles.rowTitle,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (chat.isAgent) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    AgentTag()
-                } else if (chat.members > 0) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "\u00b7 ${chat.members}",
-                        style = OrhanTextStyles.meta,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = chat.snippet,
-                style = OrhanTextStyles.snippet,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-
-        Spacer(modifier = Modifier.width(10.dp))
-
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                text = chat.time,
-                style = OrhanTextStyles.meta,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (chat.unread > 0) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Box(
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center,
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = chat.unread.toString(),
-                        style = OrhanTextStyles.kicker,
-                        color = MaterialTheme.colorScheme.onPrimary,
+                        text = chat.title,
+                        style = OrhanTextStyles.rowTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    if (!chat.isAgent && chat.members > 0) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "\u00b7 ${chat.members}",
+                            style = OrhanTextStyles.meta,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = chat.time,
+                    style = OrhanTextStyles.meta,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = chat.snippet,
+                    style = OrhanTextStyles.snippet,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (chat.unread > 0) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = chat.unread.toString(),
+                            style = OrhanTextStyles.kicker,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
                 }
             }
         }
     }
-    }
-}
-
-@Composable
-private fun AgentTag() {
-    val colors = OrhanTheme.colors
-    val shapes = OrhanTheme.shapes
     Box(
         modifier = Modifier
-            .clip(shapes.pill)
-            .background(colors.brandSoft)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
-    ) {
-        Text(
-            text = "AGENT",
-            style = OrhanTextStyles.eyebrow,
-            color = colors.onBrandSoft,
-        )
+            .padding(start = 74.dp, end = 16.dp)
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(colors.hairline),
+    )
     }
-}
-
-@Composable
-private fun NewChatFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val colors = OrhanTheme.colors
-    val shapes = OrhanTheme.shapes
-
-    Box(
-        modifier = modifier
-            .size(56.dp)
-            .shadow(elevation = 8.dp, shape = shapes.fab)
-            .clip(shapes.fab)
-            .background(colors.primaryGradient)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.Add,
-            contentDescription = "New chat",
-            tint = colors.onGradient,
-            modifier = Modifier.size(24.dp),
-        )
     }
 }
 
@@ -718,7 +831,6 @@ private fun ProfileTab(
     onOpenAgents: () -> Unit = {},
     onSignOut: (() -> Unit)? = null,
     onOpenSettingsPage: (String) -> Unit = {},
-    onOpenDiscover: () -> Unit = {},
     artifactCount: Int = 0,
     agentCount: Int = 0,
     appVersion: String = ai.orhan.BuildConfig.VERSION_NAME,
@@ -726,7 +838,6 @@ private fun ProfileTab(
     modifier: Modifier = Modifier,
 ) {
     val colors = OrhanTheme.colors
-    val shapes = OrhanTheme.shapes
 
     // Profile = "main kaun hoon + Orhan mujhe kaise samajhta hai + settings".
     // No social bits (handle, member-since, fake stat chips) — Orhan is an agent app.
@@ -858,61 +969,57 @@ private fun ProfileRow(title: String, subtitle: String, danger: Boolean = false,
 /* ------------------------------ bottom nav ------------------------------- */
 
 /**
- * Real M3 [NavigationBar] instead of a hand-rolled Surface/Row.
- *
- * The brand look is preserved by feeding M3's own colour slots from the token
- * layer: the 58 x 30 mint pill is [NavigationBarItemDefaults.colors]'
- * `indicatorColor`, the active glyph is `selectedIconColor`, and the bar's
- * translucent fill plus hairline top edge come from a [Surface] wrapper that M3
- * still owns (NavigationBar paints nothing behind the items).
- *
- * M3's NavigationBar already enforces a 48dp minimum touch target per item and
- * its own 80dp container height, so no manual height is needed.
+ * Floating pill. Selected ink uses [OrhanColors.navIndicatorInk]; inactive uses
+ * [OrhanColors.navInactiveInk]. No indicator blob — the observed bar is icon plus label.
  */
 @Composable
 fun OrhanBottomBar(
     selected: OrhanTab,
     onSelect: (OrhanTab) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = OrhanTheme.colors
-
-    Surface(color = colors.navBackground) {
-        Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(colors.hairline),
-            )
-            NavigationBar(
-                containerColor = Color.Transparent,
-                tonalElevation = 0.dp,
-            ) {
-                OrhanTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        selected = tab == selected,
-                        onClick = { onSelect(tab) },
-                        icon = {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = null, // label already announced
-                                modifier = Modifier.size(21.dp),
-                            )
-                        },
-                        label = {
-                            Text(
-                                text = tab.label,
-                                style = OrhanTextStyles.navLabel,
-                                maxLines = 1,
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = colors.navIndicatorInk,
-                            selectedTextColor = colors.navIndicatorInk,
-                            indicatorColor = colors.navIndicator,
-                            unselectedIconColor = colors.navInactiveInk,
-                            unselectedTextColor = colors.navInactiveInk,
-                        ),
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        color = colors.navBackground,
+        shadowElevation = 8.dp,
+        tonalElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OrhanTab.entries.forEach { tab ->
+                val isSelected = tab == selected
+                val tint = if (isSelected) colors.navIndicatorInk else colors.navInactiveInk
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .selectable(
+                            selected = isSelected,
+                            onClick = { onSelect(tab) },
+                            role = Role.Tab,
+                        )
+                        .padding(vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(
+                        imageVector = tab.icon,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = tab.label,
+                        style = OrhanTextStyles.navLabel,
+                        color = tint,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }

@@ -1,9 +1,12 @@
 package ai.orhan.design.screens
 
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,8 +39,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Stop
 import android.content.ClipData
@@ -64,13 +69,14 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,11 +86,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import ai.orhan.R
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -93,19 +104,11 @@ import ai.orhan.design.theme.OrhanTextStyles
 import ai.orhan.design.theme.OrhanTheme
 
 /* ============================================================================
- *  Orhan AI \u2014 Chat screen (Material 3, 390dp base)
+ *  Orhan AI — Chat screen (Material 3)
  *
- *  Same token set as HomeScreen.kt. The two bubble shapes come straight from
- *  Shape.kt:
- *      shapes.agentBubble  = 20 / 20 / 20 / 6  (tail bottom-start)
- *      shapes.userBubble   = 20 / 20 / 6 / 20  (tail bottom-end)
- *
- *  State lives in [ChatScreen] behind rememberSaveable, so the thread, the
- *  draft text and the scroll position survive rotation and process death.
- *  [ChatMessage] is not Parcelable, so [ChatThreadSaver] serialises the list.
- *
- *  Icons used: ArrowBack, Send, AttachFile, Mic, MoreVert and Description are
- *  all part of the core icon set — no extra dependency needed here.
+ *  One composer. The draft, multiline field, Enter-to-send and IME inset stay
+ *  in this file. Attach offers only the file types the engine accepts.
+ *  Long-press on a message opens Copy, Share, and (agent replies) Save.
  * ==========================================================================*/
 
 /** Author of a message. */
@@ -179,6 +182,7 @@ private fun initialThread(): List<ChatMessage> = emptyList()
  * empty bubble.
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun ChatScreen(
     agentName: String,
     modifier: Modifier = Modifier,
@@ -202,9 +206,6 @@ fun ChatScreen(
     /** Opens Settings → Chat preferences from the overflow menu; hidden when null. */
     onOpenChatPreferences: (() -> Unit)? = null,
 ) {
-    val colors = OrhanTheme.colors
-    val shapes = OrhanTheme.shapes
-
     var localMessages by rememberSaveable(stateSaver = ChatThreadSaver) {
         mutableStateOf(initialThread())
     }
@@ -217,6 +218,8 @@ fun ChatScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var attachment by remember { mutableStateOf<ChatAttachment?>(null) }
+    var attachSheet by rememberSaveable { mutableStateOf(false) }
+    var actionMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -238,9 +241,14 @@ fun ChatScreen(
         if (onSendAttachment == null) {
             Toast.makeText(context, "Attaching files isn't available in this chat yet", Toast.LENGTH_SHORT).show()
         } else {
-            runCatching { filePicker.launch(ChatAttachment.PICKER_TYPES) }
-                .onFailure { Toast.makeText(context, "No file picker found on this device", Toast.LENGTH_SHORT).show() }
+            attachSheet = true
         }
+    }
+
+    fun pickFiles(types: Array<String>) {
+        attachSheet = false
+        runCatching { filePicker.launch(types) }
+            .onFailure { Toast.makeText(context, "No file picker found on this device", Toast.LENGTH_SHORT).show() }
     }
 
     fun onMic() {
@@ -313,7 +321,6 @@ fun ChatScreen(
             .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.statusBars),
     ) {
-        val context = LocalContext.current
         ChatTopBar(
             agentName = agentName,
             onBack = onBack,
@@ -334,12 +341,8 @@ fun ChatScreen(
                 ) {
                     Text(
                         text = "Today",
-                        style = OrhanTextStyles.kicker,
+                        style = OrhanTextStyles.meta,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .clip(shapes.pill)
-                            .background(colors.field)
-                            .padding(horizontal = 12.dp, vertical = 4.dp),
                     )
                 }
             }
@@ -347,11 +350,13 @@ fun ChatScreen(
             items(items = messages, key = { it.id }) { message ->
                 MessageBubble(
                     message = message,
+                    agentName = agentName,
+                    selected = message.id == actionMessageId,
                     showActivityCards = showActivityCards,
-                    onSaveArtifact = onSaveArtifact?.let { save ->
-                        { text: String ->
-                            save(agentName.ifBlank { text.take(42) }, text)
-                        }
+                    onLongPress = if (message.text.isNotBlank()) {
+                        { actionMessageId = message.id }
+                    } else {
+                        null
                     },
                 )
             }
@@ -375,7 +380,7 @@ fun ChatScreen(
 
             if (showTypingIndicator && (loading || messagesOverride == null)) {
                 item(key = "typing") {
-                    TypingIndicator()
+                    TypingIndicator(agentName)
                 }
             }
         }
@@ -390,8 +395,38 @@ fun ChatScreen(
             onRemoveAttachment = { attachment = null },
             busy = busy || loading,
             onStop = { onStopGeneration?.invoke() },
-            agentName = agentName,
             sendWithEnter = sendWithEnter,
+        )
+    }
+
+    if (attachSheet) {
+        AttachSheet(
+            onDismiss = { attachSheet = false },
+            onPhotos = { pickFiles(arrayOf("image/*")) },
+            onFiles = { pickFiles(ChatAttachment.PICKER_TYPES) },
+        )
+    }
+    val actionMessage = actionMessageId?.let { id -> messages.firstOrNull { it.id == id } }
+    if (actionMessage != null && actionMessage.text.isNotBlank()) {
+        MessageActionsSheet(
+            canSave = actionMessage.role == ChatRole.Agent && onSaveArtifact != null,
+            onDismiss = { actionMessageId = null },
+            onCopy = {
+                copyText(context, actionMessage.text)
+                actionMessageId = null
+            },
+            onShare = {
+                shareText(context, actionMessage.text)
+                actionMessageId = null
+            },
+            onSave = {
+                onSaveArtifact?.invoke(
+                    agentName.ifBlank { actionMessage.text.take(42) },
+                    actionMessage.text,
+                )
+                Toast.makeText(context, "Saved to Artifacts", Toast.LENGTH_SHORT).show()
+                actionMessageId = null
+            },
         )
     }
 }
@@ -405,9 +440,6 @@ private fun ChatTopBar(
     onShareChat: (() -> Unit)? = null,
     onOpenChatPreferences: (() -> Unit)? = null,
 ) {
-    val colors = OrhanTheme.colors
-    val shapes = OrhanTheme.shapes
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -423,45 +455,18 @@ private fun ChatTopBar(
             )
         }
 
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(shapes.avatarHeader)
-                .background(colors.brandSoft),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = initialsOf(agentName),
-                style = OrhanTextStyles.rowTitle,
-                color = colors.onBrandSoft,
-            )
-        }
+        AgentMark(name = agentName, size = 40.dp)
 
         Spacer(modifier = Modifier.width(10.dp))
 
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = agentName,
-                style = OrhanTextStyles.rowTitle,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(colors.logoMint),
-                )
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(
-                    text = "Agent \u00b7 always on",
-                    style = OrhanTextStyles.meta,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        Text(
+            text = agentName,
+            style = OrhanTextStyles.rowTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
 
         var menuOpen by remember { mutableStateOf(false) }
         Box {
@@ -513,57 +518,67 @@ private fun shareTranscript(context: Context, agentName: String, messages: List<
 
 /* ------------------------------- messages -------------------------------- */
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MessageBubble(
     message: ChatMessage,
+    agentName: String,
+    selected: Boolean,
     showActivityCards: Boolean = true,
-    onSaveArtifact: ((String) -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
 ) {
     val colors = OrhanTheme.colors
-    val shapes = OrhanTheme.shapes
     val isUser = message.role == ChatRole.User
-    val bubbleShape = if (isUser) shapes.userBubble else shapes.agentBubble
+    val bubbleShape = RoundedCornerShape(20.dp)
+    val fill = if (isUser || selected) colors.brandSoft else MaterialTheme.colorScheme.surface
+    val borderColor = when {
+        selected -> MaterialTheme.colorScheme.primary
+        isUser -> Color.Transparent
+        else -> colors.hairline
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
-        verticalAlignment = Alignment.Bottom,
+        verticalAlignment = Alignment.Top,
     ) {
         if (!isUser) {
-            Box(
-                modifier = Modifier
-                    .size(26.dp)
-                    .clip(shapes.avatarMessage)
-                    .background(colors.brandSoft),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "T",
-                    style = OrhanTextStyles.meta,
-                    color = colors.onBrandSoft,
-                )
-            }
+            AgentMark(name = agentName, size = 32.dp)
             Spacer(modifier = Modifier.width(8.dp))
         }
 
-        Column(horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
-            Box(
-                modifier = Modifier
-                    .widthIn(max = 280.dp)
-                    .clip(bubbleShape)
-                    .background(if (isUser) colors.userBubble else colors.agentBubble)
-                    .border(
-                        width = if (isUser) 0.dp else 1.dp,
-                        color = if (isUser) Color.Transparent else colors.hairline,
-                        shape = bubbleShape,
-                    )
-                    .padding(horizontal = 14.dp, vertical = 11.dp),
-            ) {
+        Column(
+            modifier = Modifier.widthIn(max = 300.dp),
+            horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
+        ) {
+            if (!isUser) {
+                Text(
+                    text = agentName,
+                    style = OrhanTextStyles.meta,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+            }
+            val bubbleModifier = Modifier
+                .clip(bubbleShape)
+                .background(fill)
+                .border(width = if (isUser && !selected) 0.dp else 1.dp, color = borderColor, shape = bubbleShape)
+                .then(
+                    if (onLongPress != null) {
+                        Modifier.combinedClickable(onClick = {}, onLongClick = onLongPress)
+                    } else {
+                        Modifier
+                    },
+                )
+                .padding(horizontal = 14.dp, vertical = 11.dp)
+            Box(modifier = bubbleModifier) {
                 SelectionContainer {
                     Text(
                         text = message.text,
                         style = OrhanTextStyles.bubble,
-                        color = if (isUser) colors.userBubbleInk else colors.agentBubbleInk,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -573,26 +588,8 @@ private fun MessageBubble(
                 ArtifactCard(artifact = artifact)
             }
 
-            Spacer(modifier = Modifier.height(3.dp))
-            if (!isUser && message.text.isNotBlank()) {
-                val context = LocalContext.current
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = message.time,
-                        style = OrhanTextStyles.meta,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    MessageAction(Icons.Rounded.ContentCopy, "Copy message") { copyText(context, message.text) }
-                    MessageAction(Icons.Rounded.Share, "Share message") { shareText(context, message.text) }
-                    if (onSaveArtifact != null) {
-                        MessageAction(Icons.Rounded.Description, "Save as artifact") {
-                            onSaveArtifact(message.text)
-                            Toast.makeText(context, "Saved to Artifacts", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
-            } else {
+            if (message.time.isNotBlank()) {
+                Spacer(modifier = Modifier.height(3.dp))
                 Text(
                     text = message.time,
                     style = OrhanTextStyles.meta,
@@ -600,22 +597,6 @@ private fun MessageBubble(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun MessageAction(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit,
-) {
-    IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(16.dp),
-        )
     }
 }
 
@@ -646,7 +627,6 @@ private fun ArtifactCard(artifact: ChatArtifact) {
             .clip(shapes.artifactCard)
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, colors.hairline, shapes.artifactCard)
-            .clickable { }
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -687,21 +667,6 @@ private fun ArtifactCard(artifact: ChatArtifact) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.Description,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(13.dp),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "Open preview",
-                    style = OrhanTextStyles.meta,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
         }
     }
 }
@@ -721,30 +686,18 @@ private fun SkeletonRule(widthFraction: Float) {
 
 /** Three mint dots in an agent bubble \u2014 the agent is still writing. */
 @Composable
-private fun TypingIndicator() {
+private fun TypingIndicator(agentName: String) {
     val colors = OrhanTheme.colors
-    val shapes = OrhanTheme.shapes
+    val bubble = RoundedCornerShape(20.dp)
 
-    Row(verticalAlignment = Alignment.Bottom) {
-        Box(
-            modifier = Modifier
-                .size(26.dp)
-                .clip(shapes.avatarMessage)
-                .background(colors.brandSoft),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "T",
-                style = OrhanTextStyles.meta,
-                color = colors.onBrandSoft,
-            )
-        }
+    Row(verticalAlignment = Alignment.Top) {
+        AgentMark(name = agentName, size = 32.dp)
         Spacer(modifier = Modifier.width(8.dp))
         Row(
             modifier = Modifier
-                .clip(shapes.agentBubble)
-                .background(colors.agentBubble)
-                .border(1.dp, colors.hairline, shapes.agentBubble)
+                .clip(bubble)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, colors.hairline, bubble)
                 .padding(horizontal = 14.dp, vertical = 13.dp),
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -769,16 +722,15 @@ private fun Dot(alpha: Float) {
 /* -------------------------------- composer ------------------------------- */
 
 /**
- * Composer bar: 1dp top hairline, attach + field + mic, and a gradient Send
- * button that only appears once there is text \u2014 the mockup's behaviour.
- * Every control is at least 48dp tall at any font scale.
+ * One rounded composer. Plus opens Photos or Files. The round control is
+ * voice typing until there is text or a file, then Send. Stop replaces it
+ * while a reply is in progress.
  */
 @Composable
 private fun Composer(
     value: String,
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
-    agentName: String,
     onAttach: () -> Unit = {},
     onMic: () -> Unit = {},
     attachment: ChatAttachment? = null,
@@ -788,157 +740,138 @@ private fun Composer(
     sendWithEnter: Boolean = true,
 ) {
     val colors = OrhanTheme.colors
-    val shapes = OrhanTheme.shapes
+    val cardShape = RoundedCornerShape(24.dp)
     val canSend = value.isNotBlank() || attachment != null
 
-    Surface(color = colors.navBackground) {
-        // Apply bottom insets once: IME when keyboard open, else nav bar (no stacking).
-        Column(
-            modifier = Modifier.windowInsetsPadding(
+    // IME when the keyboard is open, otherwise the navigation bar. Applied once.
+    Column(
+        modifier = Modifier
+            .windowInsetsPadding(
                 WindowInsets.ime
                     .union(WindowInsets.navigationBars)
                     .only(WindowInsetsSides.Bottom),
-            ),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(colors.hairline),
             )
-
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(cardShape)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, colors.fieldEdge, cardShape),
+        ) {
             if (attachment != null) {
                 Row(
                     modifier = Modifier
-                        .padding(start = 16.dp, end = 8.dp, top = 8.dp)
-                        .clip(shapes.pill)
-                        .background(colors.field)
-                        .border(1.dp, colors.fieldEdge, shapes.pill)
+                        .padding(start = 12.dp, end = 4.dp, top = 8.dp)
+                        .clip(CircleShape)
+                        .background(colors.brandSoft)
                         .padding(start = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.AttachFile,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(16.dp),
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "${attachment.name} \u00B7 ${formatSize(attachment.sizeBytes)}",
-                        style = MaterialTheme.typography.labelLarge,
+                        style = OrhanTextStyles.meta,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = 240.dp),
+                        modifier = Modifier.widthIn(max = 220.dp),
                     )
-                    IconButton(onClick = onRemoveAttachment) {
+                    IconButton(onClick = onRemoveAttachment, modifier = Modifier.size(40.dp)) {
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = "Remove attachment",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(16.dp),
                         )
                     }
                 }
             }
 
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 40.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+            ) {
+                if (value.isEmpty()) {
+                    Text(
+                        text = "Type a message...",
+                        style = OrhanTextStyles.bubble,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = OrhanTextStyles.bubble.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    maxLines = 5,
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = if (sendWithEnter) ImeAction.Send else ImeAction.Default,
+                    ),
+                    keyboardActions = if (sendWithEnter) {
+                        KeyboardActions(onSend = { if (!busy) onSend() })
+                    } else {
+                        KeyboardActions.Default
+                    },
+                )
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.Bottom,
+                    .padding(start = 2.dp, end = 6.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onAttach) {
                     Icon(
-                        imageVector = Icons.Rounded.AttachFile,
-                        contentDescription = "Attach file",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = "Attach",
+                        tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
-
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 48.dp)
-                        .clip(shapes.composer)
-                        .background(colors.field)
-                        .border(1.dp, colors.fieldEdge, shapes.composer)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        if (value.isEmpty()) {
-                            Text(
-                                text = "Message $agentName\u2026",
-                                style = OrhanTextStyles.bubble,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        BasicTextField(
-                            value = value,
-                            onValueChange = onValueChange,
-                            modifier = Modifier.fillMaxWidth(),
-                            textStyle = OrhanTextStyles.bubble.copy(
-                                color = MaterialTheme.colorScheme.onSurface,
-                            ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            maxLines = 5,
-                            keyboardOptions = KeyboardOptions(
-                                imeAction = if (sendWithEnter) ImeAction.Send else ImeAction.Default,
-                            ),
-                            keyboardActions = if (sendWithEnter) {
-                                KeyboardActions(onSend = { if (!busy) onSend() })
-                            } else {
-                                KeyboardActions.Default
-                            },
-                        )
-                    }
+                Spacer(modifier = Modifier.weight(1f))
+                val actionDescription = when {
+                    busy -> "Stop generating"
+                    canSend -> "Send message"
+                    else -> "Voice typing"
                 }
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                if (busy) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(shapes.pill)
-                            .background(colors.primaryGradient)
-                            .clickable(onClick = onStop),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Stop,
-                            contentDescription = "Stop generating",
-                            tint = colors.onGradient,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                } else if (canSend) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(shapes.pill)
-                            .background(colors.primaryGradient)
-                            .clickable(onClick = onSend),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.Send,
-                            contentDescription = "Send message",
-                            tint = colors.onGradient,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                } else {
-                    IconButton(onClick = onMic) {
-                        Icon(
-                            imageVector = Icons.Rounded.Mic,
-                            contentDescription = "Voice typing",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                val actionClick = when {
+                    busy -> onStop
+                    canSend -> onSend
+                    else -> onMic
+                }
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(colors.primaryGradient)
+                        .clickable(onClick = actionClick),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = when {
+                            busy -> Icons.Rounded.Stop
+                            canSend -> Icons.AutoMirrored.Rounded.Send
+                            else -> Icons.Rounded.Mic
+                        },
+                        contentDescription = actionDescription,
+                        tint = colors.onGradient,
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             }
         }
@@ -987,6 +920,130 @@ private fun formatSize(bytes: Long): String = when {
     bytes >= 1024 * 1024 -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
     bytes >= 1024 -> "${bytes / 1024} KB"
     else -> "$bytes B"
+}
+
+@Composable
+private fun AgentMark(name: String, size: androidx.compose.ui.unit.Dp) {
+    val colors = OrhanTheme.colors
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(colors.brandSoft),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (name.equals("Orhan", ignoreCase = true)) {
+            Image(
+                painter = painterResource(R.drawable.orhan_mark),
+                contentDescription = null,
+                modifier = Modifier.size(size * 0.7f),
+                contentScale = ContentScale.Fit,
+            )
+        } else {
+            Text(
+                text = initialsOf(name).ifBlank { "?" },
+                style = OrhanTextStyles.meta,
+                color = colors.onBrandSoft,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AttachSheet(
+    onDismiss: () -> Unit,
+    onPhotos: () -> Unit,
+    onFiles: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = OrhanTheme.shapes.sheet,
+    ) {
+        Column(modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 28.dp)) {
+            Text(
+                text = "Attach",
+                style = OrhanTextStyles.rowTitle,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            SheetAction(Icons.Rounded.Image, "Photos", "Images on this device", onPhotos)
+            SheetAction(
+                Icons.Rounded.Description,
+                "Files",
+                "Images, PDFs, text, audio or video",
+                onFiles,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MessageActionsSheet(
+    canSave: Boolean,
+    onDismiss: () -> Unit,
+    onCopy: () -> Unit,
+    onShare: () -> Unit,
+    onSave: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = OrhanTheme.shapes.sheet,
+    ) {
+        Column(modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 28.dp)) {
+            Text(
+                text = "Message",
+                style = OrhanTextStyles.rowTitle,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            SheetAction(Icons.Rounded.ContentCopy, "Copy", null, onCopy)
+            SheetAction(Icons.Rounded.Share, "Share", null, onShare)
+            if (canSave) {
+                SheetAction(Icons.Rounded.Description, "Save as artifact", null, onSave)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SheetAction(
+    icon: ImageVector,
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(modifier = Modifier.width(14.dp))
+        Column {
+            Text(title, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface)
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    subtitle,
+                    style = OrhanTextStyles.meta,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
 }
 
 /* -------------------------------- previews ------------------------------- */
