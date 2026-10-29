@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun PrivacyScreen(
     onBack: () -> Unit,
-    /** Clears local recent + pinned chats. Returns once the stores are updated. */
+    /** Clears local recent + pinned chats and saved message threads. Returns once the stores are updated. */
     onClearChatHistory: suspend () -> Unit = {},
 ) {
     var confirmClear by remember { mutableStateOf(false) }
@@ -73,7 +73,7 @@ fun PrivacyScreen(
         AlertDialog(
             onDismissRequest = { confirmClear = false },
             title = { Text("Clear chat history?") },
-            text = { Text("This removes your recent and pinned chats from this device. Agents, memory and artifacts are kept.") },
+            text = { Text("This removes your recent and pinned chats and their saved messages from this device. Agents, memory and artifacts are kept.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmClear = false

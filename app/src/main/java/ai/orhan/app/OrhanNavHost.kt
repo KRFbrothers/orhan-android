@@ -1,5 +1,6 @@
 package ai.orhan.app
 
+import ai.orhan.data.history.chatThreads
 import android.app.Application
 import android.net.Uri
 import androidx.compose.runtime.Composable
@@ -80,6 +81,7 @@ fun OrhanNavHost(isDark: Boolean) {
     val scope = rememberCoroutineScope()
     val recentRepo = remember(context) { context.recentChats() }
     val recent by recentRepo.recent.collectAsStateWithLifecycle(initialValue = emptyList())
+    val threadStore = remember(context) { context.chatThreads() }
     val pinRepo = remember(context) { context.pinnedChats() }
     val pinnedTitles by pinRepo.pinned.collectAsStateWithLifecycle(initialValue = emptySet())
     val agentStore = remember(context) { context.agentStore() }
@@ -108,6 +110,7 @@ fun OrhanNavHost(isDark: Boolean) {
                     scope.launch {
                         recentRepo.remove(chat.title)
                         pinRepo.unpin(chat.title)
+                        threadStore.remove(chat.title)
                     }
                 },
                 onOpenChat = {
