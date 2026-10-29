@@ -3,6 +3,7 @@ package ai.orhan.app
 import android.app.Application
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
@@ -234,6 +235,7 @@ fun OrhanNavHost(isDark: Boolean) {
             val chatViewModel: ChatViewModel = viewModel { ChatViewModel(context as Application) }
             val chat by chatViewModel.state.collectAsStateWithLifecycle()
             val title = entry.arguments?.getString("title").orEmpty()
+            LaunchedEffect(title) { chatViewModel.loadThread(title) }
             val agent = savedAgents.firstOrNull { it.name.equals(title, ignoreCase = true) }
             chatViewModel.setAgent(agent?.name ?: title, agent?.instructions.orEmpty(), agent?.tools.orEmpty())
             chatViewModel.setPersonalMemory(personalMemory)

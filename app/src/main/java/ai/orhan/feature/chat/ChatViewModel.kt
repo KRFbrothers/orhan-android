@@ -15,6 +15,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.FlowPreview
+import ai.orhan.data.history.ChatThreadStore
+import ai.orhan.data.history.chatThreads
 import kotlinx.coroutines.launch
 
 data class ChatUiState(
@@ -27,6 +34,7 @@ data class ChatUiState(
 
 class ChatViewModel(
     private val repository: ChatRepository = ChatRepository(),
+    private val threadStore: ChatThreadStore? = null,
 ) : ViewModel() {
     /** Uses the signed-in Supabase session; falls back to DUA_DEV_JWT (debug only) when signed out. */
     constructor(app: Application) : this(
@@ -36,7 +44,41 @@ class ChatViewModel(
                 onUnauthorized = { auth.clear() },
             )
         },
+        app.chatThreads(),
     )
+
+    private var threadTitle: String? = null
+
+    /**
+     * Restores the saved thread for [title] once, then persists message changes (debounced).
+     * Only real turns are saved; the design-kit demo thread never flows through this VM.
+     */
+    @OptIn(FlowPreview::class)
+    fun loadThread(title: String) {
+        val store = threadStore ?: return
+        if (threadTitle != null || title.isBlank()) return
+        threadTitle = title
+        viewModelScope.launch {
+            val saved = store.load(title)
+            if (saved.isNotEmpty() && _state.value.messages.isEmpty()) {
+                _state.update { it.copy(messages = saved) }
+            }
+            _state.map { it.messages }
+                .distinctUntilChanged()
+                .drop(1)
+                .debounce(300)
+                .collect { msgs -> store.save(title, msgs) }
+        }
+    }
+
+    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+    override fun onCleared() {
+        // Flush the latest messages in case the debounce window hadn't elapsed.
+        val title = threadTitle ?: return
+        val store = threadStore ?: return
+        val msgs = _state.value.messages
+        if (msgs.isNotEmpty()) kotlinx.coroutines.GlobalScope.launch { store.save(title, msgs) }
+    }
 
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
