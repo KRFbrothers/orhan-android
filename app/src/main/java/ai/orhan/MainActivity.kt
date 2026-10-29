@@ -8,6 +8,8 @@ import ai.orhan.design.theme.themePreferences
 import ai.orhan.app.AppLockScreen
 import ai.orhan.data.applock.appLockStore
 import android.os.Bundle
+import android.view.WindowManager
+import androidx.compose.runtime.LaunchedEffect
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -42,6 +44,11 @@ class MainActivity : ComponentActivity() {
             val mode by preferences.themeMode.collectAsStateWithLifecycle(initialValue = ThemeMode.System)
             // null = not loaded yet: draw nothing so app content never flashes before the lock.
             val lockEnabled by lockStore.isEnabled.collectAsStateWithLifecycle(initialValue = null)
+            // FLAG_SECURE while App Lock is on: no chat content in Recents thumbnails or screenshots.
+            LaunchedEffect(lockEnabled) {
+                if (lockEnabled == true) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                else if (lockEnabled == false) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
             OrhanApp(themeMode = mode) {
                 val showLock = lockEnabled == true && locked
                 if (lockEnabled != null) {
