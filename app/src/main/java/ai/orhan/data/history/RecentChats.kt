@@ -62,6 +62,15 @@ class RecentChatsRepository(private val dataStore: DataStore<List<RecentChat>>) 
         if (title.isBlank()) return
         dataStore.updateData { it.withOpened(title.trim(), now) }
     }
+
+    suspend fun remove(title: String) {
+        val t = title.trim()
+        dataStore.updateData { list -> list.filterNot { it.title == t } }
+    }
+
+    suspend fun clear() {
+        dataStore.updateData { emptyList() }
+    }
 }
 
 fun Context.recentChats(): RecentChatsRepository = RecentChatsRepository(recentChatsDataStore)

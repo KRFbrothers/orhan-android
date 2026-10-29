@@ -104,6 +104,12 @@ fun OrhanNavHost(isDark: Boolean) {
                 },
                 pinnedTitles = pinnedTitles,
                 onTogglePin = { chat -> scope.launch { pinRepo.toggle(chat.title) } },
+                onRemoveRecent = { chat ->
+                    scope.launch {
+                        recentRepo.remove(chat.title)
+                        pinRepo.unpin(chat.title)
+                    }
+                },
                 onOpenChat = {
                     scope.launch { recentRepo.recordOpened(it.title) }
                     navController.navigate(AppRoutes.chat(it.title))

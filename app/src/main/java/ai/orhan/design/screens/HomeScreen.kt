@@ -245,6 +245,8 @@ fun HomeScreen(
     /** Titles of pinned chats (persisted locally). */
     pinnedTitles: Set<String> = emptySet(),
     onTogglePin: (OrhanChat) -> Unit = {},
+    /** Removes a chat from local recent history (and unpins it). */
+    onRemoveRecent: (OrhanChat) -> Unit = {},
     /** Agents tab list: user-created agents first, then samples. */
     agents: List<InstalledAgent> = SampleInstalledAgents,
     deletableAgentNames: Set<String> = emptySet(),
@@ -277,6 +279,7 @@ fun HomeScreen(
                     recentChats = recentChats,
                     pinnedTitles = pinnedTitles,
                     onTogglePin = onTogglePin,
+                    onRemoveRecent = onRemoveRecent,
                     modifier = Modifier.fillMaxSize(),
                 )
 
@@ -386,6 +389,7 @@ private fun ChatsTab(
     recentChats: List<OrhanChat> = emptyList(),
     pinnedTitles: Set<String> = emptySet(),
     onTogglePin: (OrhanChat) -> Unit = {},
+    onRemoveRecent: (OrhanChat) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val recentTitles = recentChats.map { it.title }.toSet()
@@ -468,6 +472,7 @@ private fun ChatsTab(
                     pinned = true,
                     onClick = { onOpenChat(chat) },
                     onTogglePin = { onTogglePin(chat) },
+                    onRemoveRecent = if (chat.title in recentTitles) ({ onRemoveRecent(chat) }) else null,
                 )
             }
         }
@@ -493,6 +498,7 @@ private fun ChatsTab(
                 pinned = false,
                 onClick = { onOpenChat(chat) },
                 onTogglePin = { onTogglePin(chat) },
+                onRemoveRecent = if (chat.title in recentTitles) ({ onRemoveRecent(chat) }) else null,
             )
         }
     }
@@ -580,6 +586,7 @@ private fun ChatRowItem(
     onClick: () -> Unit,
     pinned: Boolean = false,
     onTogglePin: () -> Unit = {},
+    onRemoveRecent: (() -> Unit)? = null,
 ) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
@@ -591,6 +598,12 @@ private fun ChatRowItem(
             text = { Text(if (pinned) "Unpin chat" else "Pin chat") },
             onClick = { menuOpen = false; onTogglePin() },
         )
+        if (onRemoveRecent != null) {
+            DropdownMenuItem(
+                text = { Text("Remove from recent") },
+                onClick = { menuOpen = false; onRemoveRecent() },
+            )
+        }
     }
     Row(
         modifier = Modifier

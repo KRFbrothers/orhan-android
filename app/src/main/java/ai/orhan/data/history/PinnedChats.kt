@@ -62,6 +62,15 @@ class PinnedChatsRepository(private val dataStore: DataStore<List<String>>) {
         dataStore.updateData { it.withToggled(t) }
     }
 
+    suspend fun unpin(title: String) {
+        val t = title.trim()
+        dataStore.updateData { list -> list.filterNot { it == t } }
+    }
+
+    suspend fun clear() {
+        dataStore.updateData { emptyList() }
+    }
+
     suspend fun isPinned(title: String): Boolean = title.trim() in pinned.first()
 }
 

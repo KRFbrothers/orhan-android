@@ -1,6 +1,8 @@
 package ai.orhan.feature.settings.detail
 
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -15,7 +17,13 @@ import kotlinx.coroutines.launch
 
 /** Settings → Privacy & security. Local state only. */
 @Composable
-fun PrivacyScreen(onBack: () -> Unit) {
+fun PrivacyScreen(
+    onBack: () -> Unit,
+    /** Clears local recent + pinned chats. Returns once the stores are updated. */
+    onClearChatHistory: suspend () -> Unit = {},
+) {
+    var confirmClear by remember { mutableStateOf(false) }
+    var clearing by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val toast: (String) -> Unit = { msg -> scope.launch { snackbar.showSnackbar(msg) } }
@@ -57,7 +65,32 @@ fun PrivacyScreen(onBack: () -> Unit) {
         SectionLabel("Data")
         GroupCard(listOf(
             { NavRow("Download my data", onClick = { toast("We'll email you when your export is ready") }) },
-            { NavRow("Clear chat history", destructive = true, showChevron = false, onClick = { toast("Chat history cleared") }) },
+            { NavRow("Clear chat history", destructive = true, showChevron = false, onClick = { if (!clearing) confirmClear = true }) },
         ))
+    }
+
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text("Clear chat history?") },
+            text = { Text("This removes your recent and pinned chats from this device. Agents, memory and artifacts are kept.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClear = false
+                    clearing = true
+                    scope.launch {
+                        try {
+                            onClearChatHistory()
+                            snackbar.showSnackbar("Chat history cleared")
+                        } catch (e: Exception) {
+                            snackbar.showSnackbar("Couldn't clear chat history")
+                        } finally {
+                            clearing = false
+                        }
+                    }
+                }) { Text("Clear") }
+            },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } },
+        )
     }
 }
