@@ -274,6 +274,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 showTypingIndicator = chatPrefs.typingIndicators,
                 showActivityCards = chatPrefs.agentActivityCards,
                 previewBeforeSending = chatPrefs.previewBeforeSending,
+                holdToRecord = chatPrefs.holdToRecord,
                 onSaveArtifact = { artTitle, content ->
                     scope.launch { artifactStore.upsert(artTitle, content) }
                 },

@@ -43,6 +43,20 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import android.app.Activity
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.activity.compose.BackHandler
+import ai.orhan.feature.chat.VoiceNoteRecorder
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import android.content.ActivityNotFoundException
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -193,6 +207,8 @@ fun ChatScreen(
     showTypingIndicator: Boolean = true,
     showActivityCards: Boolean = true,
     previewBeforeSending: Boolean = false,
+    /** Chat prefs "Hold to record voice": when on, long-press Mic records a voice note; tap is always voice typing. */
+    holdToRecord: Boolean = false,
     onSaveArtifact: ((title: String, content: String) -> Unit)? = null,
     /** Prefills the composer once (e.g. from a workflow). Never auto-sent; a restored draft wins. */
     initialComposerText: String = "",
@@ -230,6 +246,49 @@ fun ChatScreen(
             input = if (input.isBlank()) spoken else input.trimEnd() + " " + spoken
         }
     }
+
+    val recorder = remember { VoiceNoteRecorder(context) }
+    var recording by remember { mutableStateOf(false) }
+    var recordStart by remember { mutableStateOf(0L) }
+    DisposableEffect(Unit) { onDispose { recorder.cancel() } }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val msg = if (granted) "Microphone ready — hold Mic again to record" else "Microphone permission is needed to record voice notes"
+        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+    }
+
+    fun finishRecording() {
+        if (!recording) return
+        recording = false
+        val note = recorder.stop()
+        if (note == null) Toast.makeText(context, "Voice note too short", Toast.LENGTH_SHORT).show()
+        else attachment = note
+    }
+
+    fun cancelRecording() {
+        if (!recording) return
+        recording = false
+        recorder.cancel()
+        Toast.makeText(context, "Voice note discarded", Toast.LENGTH_SHORT).show()
+    }
+
+    /** Returns true if recording started. */
+    fun startRecording(): Boolean {
+        if (onSendAttachment == null) {
+            Toast.makeText(context, "Voice notes aren't available in this chat yet", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            return false
+        }
+        val ok = recorder.start(onMaxReached = { finishRecording() })
+        if (!ok) Toast.makeText(context, "Couldn't start recording", Toast.LENGTH_SHORT).show()
+        recording = ok
+        if (ok) recordStart = System.currentTimeMillis()
+        return ok
+    }
+
+    BackHandler(enabled = recording) { cancelRecording() }
 
     fun onAttach() {
         if (onSendAttachment == null) {
@@ -380,6 +439,12 @@ fun ChatScreen(
             onSend = { send() },
             onAttach = { onAttach() },
             onMic = { onMic() },
+            holdToRecord = holdToRecord,
+            recording = recording,
+            recordStart = recordStart,
+            onRecordStart = { startRecording() },
+            onRecordStop = { finishRecording() },
+            onRecordCancel = { cancelRecording() },
             attachment = attachment,
             onRemoveAttachment = { attachment = null },
             busy = busy || loading,
@@ -775,6 +840,12 @@ private fun Composer(
     agentName: String,
     onAttach: () -> Unit = {},
     onMic: () -> Unit = {},
+    holdToRecord: Boolean = false,
+    recording: Boolean = false,
+    recordStart: Long = 0L,
+    onRecordStart: () -> Boolean = { false },
+    onRecordStop: () -> Unit = {},
+    onRecordCancel: () -> Unit = {},
     attachment: ChatAttachment? = null,
     onRemoveAttachment: () -> Unit = {},
     busy: Boolean = false,
@@ -793,6 +864,19 @@ private fun Composer(
                     .height(1.dp)
                     .background(colors.hairline),
             )
+
+            if (recording) {
+                var elapsed by remember { mutableStateOf(0L) }
+                LaunchedEffect(recordStart) {
+                    while (true) { elapsed = (System.currentTimeMillis() - recordStart) / 1000; delay(250) }
+                }
+                Text(
+                    text = "\u25CF Recording ${elapsed / 60}:${"%02d".format(elapsed % 60)} / 1:00 \u00B7 release to attach, slide left or Back to cancel",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                )
+            }
 
             if (attachment != null) {
                 Row(
@@ -919,11 +1003,49 @@ private fun Composer(
                         )
                     }
                 } else {
-                    IconButton(onClick = onMic) {
+                    val longPressMs = LocalViewConfiguration.current.longPressTimeoutMillis
+                    val cancelPx = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() }
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(shapes.pill)
+                            .background(if (recording) MaterialTheme.colorScheme.errorContainer else androidx.compose.ui.graphics.Color.Transparent)
+                            .pointerInput(holdToRecord) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown()
+                                    if (!holdToRecord) {
+                                        val up = withTimeoutOrNull(longPressMs) {
+                                            var e = awaitPointerEvent()
+                                            while (e.changes.any { it.pressed }) e = awaitPointerEvent()
+                                        }
+                                        onMic()
+                                        return@awaitEachGesture
+                                    }
+                                    var released = false
+                                    withTimeoutOrNull(longPressMs) {
+                                        while (true) {
+                                            val e = awaitPointerEvent()
+                                            if (e.changes.none { it.pressed }) { released = true; break }
+                                        }
+                                    }
+                                    if (released) { onMic(); return@awaitEachGesture }
+                                    if (!onRecordStart()) return@awaitEachGesture
+                                    var dx = 0f
+                                    while (true) {
+                                        val e = awaitPointerEvent()
+                                        e.changes.forEach { dx += it.positionChange().x; it.consume() }
+                                        if (dx < -cancelPx) { onRecordCancel(); break }
+                                        if (e.changes.none { it.pressed }) { onRecordStop(); break }
+                                    }
+                                    down.consume()
+                                }
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Icon(
                             imageVector = Icons.Rounded.Mic,
-                            contentDescription = "Voice typing",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            contentDescription = if (holdToRecord) "Tap for voice typing, hold to record a voice note" else "Voice typing",
+                            tint = if (recording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
