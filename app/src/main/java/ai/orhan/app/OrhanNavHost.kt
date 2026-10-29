@@ -259,6 +259,10 @@ fun OrhanNavHost(isDark: Boolean) {
             LaunchedEffect(title) { chatViewModel.loadThread(title) }
             val agent = savedAgents.firstOrNull { it.name.equals(title, ignoreCase = true) }
             chatViewModel.setAgent(agent?.name ?: title, agent?.instructions.orEmpty(), agent?.tools.orEmpty())
+            chatViewModel.setRoster(
+                if (agent != null) emptyList()
+                else savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions, it.tools) },
+            )
             chatViewModel.setPersonalMemory(personalMemory)
             val languageRepo = remember(context) { context.settingsDetailPreferences() }
             val languagePrefs by languageRepo.language.collectAsStateWithLifecycle(initialValue = LanguagePrefs())
