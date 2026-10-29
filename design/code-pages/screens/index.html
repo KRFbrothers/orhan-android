@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orhan AI — Compose screens (Home + Chat)</title>
+<link rel="stylesheet" href="fonts/lato.css">
+<style>
+:root{
+  --canvas:#0d1110;--surface:#161b19;--surface-2:#1d2220;--surface-3:#252c29;
+  --line:#2b3330;--line-2:#3d4842;
+  --ink:#f7f9f7;--ink-2:#a9b8ae;--ink-3:#7d8d84;
+  --primary:#cbe7d2;--on-primary:#17201b;--soft:#235039;--soft-ink:#a6e6b9;
+  --mint:#42d982;--brand:#087c45;
+  --code-bg:#111614;--code-line:#1c2320;
+  --kw:#7fd6a4;--str:#e3c98a;--num:#9fc7f0;--com:#6b7d73;--fn:#c9b6f0;--type:#8fd3d0;--ann:#e8a87c;--id:#dbe6df;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 18px 40px -22px rgba(0,0,0,.9);
+}
+[data-theme="light"]{
+  --canvas:#eef2ef;--surface:#ffffff;--surface-2:#f6f8f5;--surface-3:#eef2ef;
+  --line:#dde6e0;--line-2:#c9d6ce;
+  --ink:#182b23;--ink-2:#4f6157;--ink-3:#5c6d63;
+  --primary:#087c45;--on-primary:#ffffff;--soft:#ddf3e5;--soft-ink:#066a3b;
+  --mint:#42d982;--brand:#087c45;
+  --code-bg:#fbfcfb;--code-line:#eef2ef;
+  --kw:#0a6b3d;--str:#8a5a00;--num:#1a5fa8;--com:#7b8b82;--fn:#6b3fa0;--type:#0a6b6b;--ann:#a04a12;--id:#24352d;
+  --shadow:0 1px 2px rgba(24,43,35,.06),0 14px 30px -18px rgba(24,43,35,.28);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+html{overflow-x:hidden}
+body{
+  background:var(--canvas);color:var(--ink);
+  font-family:Lato,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(900px 420px at 50% -10%,rgba(66,217,130,.10),transparent 70%);
+  background-repeat:no-repeat;min-height:100vh;overflow-x:hidden;
+}
+.wrap{max-width:1240px;margin:0 auto;padding:24px 20px 72px;min-width:0}
+
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;min-width:0}
+.logo{display:flex;align-items:center;gap:10px;min-width:0;flex:0 1 auto}
+.logo img{height:28px;width:auto;display:block;max-width:170px}
+[data-theme="light"] .logo .for-dark{display:none}
+[data-theme="dark"] .logo .for-light{display:none}
+.spacer{flex:1 1 auto;min-width:0}
+.tgl{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;min-width:48px;
+  padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);
+  color:var(--ink);font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;box-shadow:var(--shadow);
+  flex:none;
+}
+.tgl:hover{border-color:var(--line-2)}
+.tgl:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.tgl svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+[data-theme="dark"] .tgl .sun{display:block}
+[data-theme="dark"] .tgl .moon{display:none}
+[data-theme="light"] .tgl .sun{display:none}
+[data-theme="light"] .tgl .moon{display:block}
+
+h1{font-size:clamp(24px,3.4vw,36px);line-height:1.16;letter-spacing:-.02em;font-weight:900;margin:16px 0 10px;overflow-wrap:anywhere}
+h1 .accent{color:var(--mint)}
+[data-theme="light"] h1 .accent{color:var(--primary)}
+.sub{margin:0 0 20px;font-size:14.5px;line-height:1.62;color:var(--ink-2);max-width:76ch}
+.sub code{font-size:12.5px;padding:1px 5px;border-radius:5px;background:var(--surface-3)}
+
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px}
+.pill{
+  display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:999px;
+  background:var(--surface);border:1px solid var(--line);font-size:12.5px;font-weight:700;color:var(--ink-2);
+  max-width:100%;
+}
+.pill b{color:var(--ink);font-weight:900}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mint);flex:none}
+
+.grid{display:grid;grid-template-columns:250px minmax(0,1fr);gap:20px;align-items:start;min-width:0}
+nav{
+  position:sticky;top:16px;background:var(--surface);border:1px solid var(--line);
+  border-radius:20px;padding:10px;box-shadow:var(--shadow);min-width:0;
+}
+nav .nh{font-size:10.5px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);padding:6px 8px 8px}
+nav a{
+  display:flex;align-items:center;gap:9px;min-height:48px;padding:8px 10px;border-radius:12px;
+  color:var(--ink-2);text-decoration:none;font-size:13.5px;font-weight:700;min-width:0;
+}
+nav a:hover{background:var(--surface-2);color:var(--ink)}
+nav a.on{background:var(--soft);color:var(--soft-ink)}
+nav a .n{font-size:10.5px;font-weight:900;opacity:.6;font-variant-numeric:tabular-nums;width:16px;flex:none}
+nav a .ln{margin-left:auto;font-size:10.5px;font-weight:700;opacity:.55;font-variant-numeric:tabular-nums;flex:none}
+nav a span.tt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+nav a:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+nav .sep{height:1px;background:var(--line);margin:8px 6px}
+
+main{min-width:0;display:flex;flex-direction:column;gap:20px}
+
+.docs{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;min-width:0}
+.doc{
+  background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px;
+  box-shadow:var(--shadow);min-width:0;
+}
+.doc .t{font-size:13px;font-weight:900;color:var(--ink);margin-bottom:8px;letter-spacing:-.01em}
+.doc ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.doc li{display:flex;gap:8px;font-size:12.5px;line-height:1.45;color:var(--ink-2);min-width:0}
+.doc li b{color:var(--ink);font-weight:700}
+.doc li .ck{color:var(--mint);font-weight:900;flex:none}
+[data-theme="light"] .doc li .ck{color:var(--primary)}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{font-size:11px;font-weight:700;padding:4px 8px;border-radius:999px;background:var(--surface-3);color:var(--ink-2);border:1px solid var(--line);max-width:100%;overflow-wrap:anywhere}
+
+.file{
+  background:var(--surface);border:1px solid var(--line);border-radius:20px;
+  overflow:hidden;box-shadow:var(--shadow);min-width:0;scroll-margin-top:16px;
+}
+.fhead{display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid var(--line);background:var(--surface-2);flex-wrap:wrap;min-width:0}
+.fhead .fname{font-size:14.5px;font-weight:900;letter-spacing:-.01em;color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}
+.fhead .fdesc{font-size:12px;color:var(--ink-3);flex:1 1 160px;min-width:0;overflow-wrap:anywhere}
+.fhead .fmeta{font-size:11px;font-weight:700;color:var(--ink-3);font-variant-numeric:tabular-nums;flex:none}
+.copy{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:48px;min-width:48px;
+  padding:0 14px;border-radius:999px;border:1px solid var(--line-2);background:var(--surface);
+  color:var(--ink);font:inherit;font-size:12.5px;font-weight:900;cursor:pointer;flex:none;
+}
+.copy:hover{background:var(--surface-3)}
+.copy:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.copy svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.copy.done{background:var(--soft);color:var(--soft-ink);border-color:transparent}
+
+pre{
+  margin:0;padding:12px 0;overflow-x:auto;overflow-y:hidden;
+  background:var(--code-bg);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12px;line-height:1.62;tab-size:2;min-width:0;
+  -webkit-overflow-scrolling:touch;
+}
+code{display:block;min-width:max-content}
+.ln{display:flex;min-width:max-content}
+.ln:hover{background:var(--code-line)}
+.ln .g{
+  flex:none;width:52px;padding-right:14px;text-align:right;color:var(--ink-3);opacity:.5;
+  user-select:none;font-variant-numeric:tabular-nums;position:sticky;left:0;background:var(--code-bg);
+}
+.ln:hover .g{background:var(--code-line)}
+.ln .c{padding-right:20px;white-space:pre;color:var(--id)}
+.k{color:var(--kw);font-weight:700}
+.s{color:var(--str)}
+.n{color:var(--num)}
+.cm{color:var(--com);font-style:italic}
+.f{color:var(--fn)}
+.t{color:var(--type)}
+.a{color:var(--ann)}
+
+footer{margin-top:30px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-3);line-height:1.7;overflow-wrap:anywhere}
+footer code{display:inline;padding:1px 5px;border-radius:5px;background:var(--surface-3);font-size:11.5px}
+
+@media (max-width:980px){
+  .grid{grid-template-columns:minmax(0,1fr)}
+  nav{position:static;display:flex;gap:6px;overflow-x:auto;padding:8px;border-radius:16px}
+  nav .nh{display:none}
+  nav .sep{display:none}
+  nav a{flex:none;white-space:nowrap;min-height:48px}
+  nav a .ln{display:none}
+  nav a span.tt{overflow:visible;white-space:nowrap}
+}
+@media (max-width:560px){
+  .wrap{padding:16px 12px 56px}
+  .ln .g{width:38px;padding-right:10px}
+  pre{font-size:11px}
+  .fhead{padding:11px}
+  .fhead .fdesc{flex-basis:100%;order:3}
+  header{gap:8px}
+  .tgl{padding:0 12px;font-size:12.5px}
+  .pill{font-size:11.5px;padding:6px 10px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo">
+      <img class="for-light" src="images/orhan-wordmark.png" alt="Orhan AI">
+      <img class="for-dark" src="images/orhan-wordmark-dark.png" alt="Orhan AI">
+    </div>
+    <div class="spacer"></div>
+    <button class="tgl" id="themeBtn" type="button" aria-label="Switch theme">
+      <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <span id="themeLbl">Light</span>
+    </button>
+  </header>
+
+  <h1>Home &amp; Chat <span class="accent">in Compose</span></h1>
+  <p class="sub">
+    The two screens from the shipped Android mockup, built with the brand's own tokens —
+    <code>OrhanTheme</code>, <code>MaterialTheme.colorScheme</code>, <code>LocalOrhanColors</code>,
+    <code>OrhanShapeTokens</code> and <code>OrhanTextStyles</code>. No new colour, size or radius
+    was introduced: every value resolves to <code>Color.kt</code>, <code>Type.kt</code> or <code>Shape.kt</code>.
+  </p>
+
+  <div class="meta">
+    <span class="pill"><span class="dot"></span><b>2 files</b> · <b id="totalLines">1,736</b> lines</span>
+    <span class="pill">Material 3 <b>1.3+</b></span>
+    <span class="pill">Kotlin <b>2.0</b></span>
+    <span class="pill">390dp base <b>· 360dp safe</b></span>
+    <span class="pill">Lato <b>400 / 700 / 900</b></span>
+    <span class="pill">Light + dark <b>@Preview</b></span>
+  </div>
+
+  <div class="grid">
+    <nav id="nav">
+      <div class="nh">Files</div>
+    </nav>
+    <main id="main">
+      <div class="docs">
+        <div class="doc">
+          <div class="t">Screen 1 · Home / Chats</div>
+          <ul>
+            <li><span class="ck">✓</span><span>Top bar: real wordmark, search, theme toggle, menu</span></li>
+            <li><span class="ck">✓</span><span>Search field, 4 filter chips, 7 chat rows (agent / person / group)</span></li>
+            <li><span class="ck">✓</span><span>Unread badges, mint live dot, AGENT tags, FAB</span></li>
+            <li><span class="ck">✓</span><span>Bottom nav with 58×30 indicator pill — tabs really switch</span></li>
+          </ul>
+        </div>
+        <div class="doc">
+          <div class="t">Screen 2 · Chat</div>
+          <ul>
+            <li><span class="ck">✓</span><span>Back + agent avatar + live status in the top bar</span></li>
+            <li><span class="ck">✓</span><span>User bubble (bottom-end 6dp tail) and agent bubble (bottom-start 6dp)</span></li>
+            <li><span class="ck">✓</span><span>Inline artifact card + three-dot typing indicator</span></li>
+            <li><span class="ck">✓</span><span>Composer: attach, growing field, mic, gradient send that appends</span></li>
+          </ul>
+        </div>
+        <div class="doc">
+          <div class="t">State &amp; tokens</div>
+          <ul>
+            <li><span class="ck">✓</span><span><b>rememberSaveable</b> for messages, draft text and selected tab</span></li>
+            <li><span class="ck">✓</span><span><b>ChatThreadSaver</b> — lossless list saver (U+001F joined)</span></li>
+            <li><span class="ck">✓</span><span>0 raw colour literals in either file</span></li>
+            <li><span class="ck">✓</span><span>Every <code>OrhanTextStyles</code> / shape key verified against the theme sources</span></li>
+          </ul>
+          <div class="chips">
+            <span class="chip">card 20dp</span><span class="chip">bubble 20/6</span>
+            <span class="chip">composer 28dp</span><span class="chip">nav pill</span><span class="chip">fab 19dp</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <footer>
+    Package <code>ai.orhan.design.screens</code> · depends on
+    <code>ai.orhan.design.theme</code> (Color.kt, Type.kt, Shape.kt, Theme.kt) ·
+    Source design: <b>orhan-android-app_v3</b> ·
+    Fonts: Lato (SIL OFL 1.1) · No repository files were modified.
+  </footer>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
