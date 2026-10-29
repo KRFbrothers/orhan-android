@@ -192,16 +192,13 @@ private fun AgentCard(
             .clip(shapes.card)
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .border(1.dp, colors.hairline, shapes.card)
-            .then(
-                if (onLongPress != null) {
-                    Modifier.combinedClickable(
-                        onClick = {},
-                        onLongClick = onLongPress,
-                        onLongClickLabel = "Remove agent",
-                    )
-                } else {
-                    Modifier
-                },
+            // Whole card opens a chat with this agent; long-press removes (user agents only).
+            .combinedClickable(
+                role = Role.Button,
+                onClickLabel = "Chat with ${agent.name}",
+                onClick = onOpen,
+                onLongClick = onLongPress,
+                onLongClickLabel = if (onLongPress != null) "Remove agent" else null,
             )
             .padding(14.dp),
         verticalAlignment = Alignment.Top,
