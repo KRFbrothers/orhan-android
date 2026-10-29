@@ -838,20 +838,12 @@ private fun ProfileTab(
             }
         }
 
-        // 2) Apps: no connectors yet, so point at Discover (playbooks) honestly.
-        OrhanCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(4.dp)) {
-                ProfileRow("Connected apps", "Coming soon \u00b7 explore playbooks in Discover", onClick = onOpenDiscover)
-            }
-        }
-
         // 3) Bot: how Orhan behaves for you.
         ProfileSectionLabel("Bot")
         OrhanCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(4.dp)) {
                 ProfileRow("Agent defaults", "Reply style & preview before sending", onClick = onOpenChatPreferences)
                 ProfileRow("Your agents", if (agentCount > 0) "$agentCount agents" else "Create or manage agents", onClick = onOpenAgents)
-                ProfileRow("About me for Orhan", "Role, language, context \u2014 add it in Memory for now", onClick = onOpenMemory)
                 ProfileRow("Privacy & permissions", "What Orhan stores and can do", onClick = { onOpenSettingsPage("settings/privacy") })
             }
         }
