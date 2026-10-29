@@ -1,7 +1,15 @@
 # Orhan AI — Android
 
-Minimal Jetpack Compose + Material 3 app (`ai.orhan`) wired from
-[KRFbrothers/orhan-android-design-kit](https://github.com/KRFbrothers/orhan-android-design-kit).
+Minimal Jetpack Compose + Material 3 app (`ai.orhan`). App aur design ab isi ek repo me hain.
+
+## Design (live preview)
+- `design/index.html` — full HTML design preview (open in browser)
+- `design/m3-gallery.html` — Material 3 component gallery
+- `design/code-pages/` — HTML viewers for the Kotlin theme/screens/icons
+- `M3_AUDIT_REPORT.md` — Material 3 audit
+- Compose source from the old design kit already lives under `app/` (not duplicated).
+- Legacy: earlier the design lived in the separate repo
+  [orhan-android-design-kit](https://github.com/KRFbrothers/orhan-android-design-kit) (to be archived); old Teamily preview URL is noted in `design/README.md`.
 
 - `MainActivity` -> `OrhanAppSample()`: Home (chat list) <-> Chat, day/night toggle
 - `design/theme` (Color/Type/Shape/Theme/FallbackFonts/ThemePreferences), `design/icons`, `design/screens`

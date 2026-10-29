@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#141816">
+<title>Orhan AI — Material 3 component gallery</title>
+<link rel="icon" href="images/orhan-mark.png">
+<script>
+/* resolve theme before first paint so there is no flash */
+(function(){try{
+  var m=localStorage.getItem('orhan-m3-theme')||'dark';
+  document.documentElement.setAttribute('data-theme',m);
+}catch(e){}})();
+</script>
+<style>
+/* ============================================================================
+   Orhan AI — Material 3 component gallery
+
+   Every colour below is a real token from compose/theme/Color.kt, including
+   the three values the M3 audit changed:
+       --outline      #7A8B80 (light) / #72877C (dark)   was #DDE6E0 / #3D4842
+       --surface-var  #EEF2EF (light) / #323B36 (dark)   aligned with
+                                                          surfaceContainerHighest
+   Dimensions follow the M3 spec (48dp touch target, 40dp button height,
+   80dp NavigationBar, 64dp TopAppBar, 20dp card radius from the brand).
+   ========================================================================== */
+
+@font-face{font-family:'Lato';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/lato-400.woff2') format('woff2')}
+@font-face{font-family:'Lato';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/lato-700.woff2') format('woff2')}
+@font-face{font-family:'Lato';font-style:normal;font-weight:900;font-display:swap;src:url('fonts/lato-900.woff2') format('woff2')}
+
+/* ---------- light ---------- */
+[data-theme="light"]{
+  --canvas:#eef2ef; --surface:#ffffff; --surface-2:#f6f8f5; --surface-3:#eef2ef;
+  --surface-var:#eef2ef;                    /* = surfaceContainerHighest */
+  --line:#dde6e0; --line-soft:#e9efea;
+  --outline:#7a8b80;                        /* M3 outline — 3.60:1 on white */
+  --outline-variant:#e9efea;
+  --ink:#182b23; --ink-2:#4f6157; --ink-3:#5c6d63;
+  --primary:#087c45; --on-primary:#ffffff;
+  --primary-soft:#ddf3e5; --primary-ink:#066a3b;
+  --primary-grad:linear-gradient(180deg,#0b8249 0%,#087c45 100%);
+  --secondary:#42d982; --on-secondary:#06291a;
+  --tertiary:#066a3b; --on-tertiary:#ffffff;
+  --mint:#42d982; --brand-soft:#cbe7d2; --on-brand-soft:#066a3b;
+  --danger:#a4271e; --on-danger:#ffffff;
+  --nav-bg:rgba(255,255,255,.94); --nav-indicator:#ddf3e5; --nav-indicator-ink:#066a3b;
+  --shadow:0 1px 2px rgba(24,43,35,.06),0 8px 20px -10px rgba(24,43,35,.18);
+  --shadow-soft:0 1px 2px rgba(24,43,35,.05);
+  --halo:radial-gradient(900px 420px at 50% -10%,rgba(8,124,69,.10),transparent 70%);
+}
+/* ---------- dark ---------- */
+[data-theme="dark"]{
+  --canvas:#141816; --surface:#1d2220; --surface-2:#272e2b; --surface-3:#323b36;
+  --surface-var:#323b36;                    /* = surfaceContainerHighest */
+  --line:#3d4842; --line-soft:#2b3330;
+  --outline:#72877c;                        /* M3 outline — 4.20:1 on surface */
+  --outline-variant:#2b3330;
+  --ink:#f7f9f7; --ink-2:#c3cdc7; --ink-3:#93a199;
+  --primary:#cbe7d2; --on-primary:#17201b;
+  --primary-soft:#235039; --primary-ink:#a6e6b9;
+  --primary-grad:linear-gradient(180deg,#daf0df 0%,#cbe7d2 100%);
+  --secondary:#42d982; --on-secondary:#06291a;
+  --tertiary:#a6e6b9; --on-tertiary:#17201b;
+  --mint:#42d982; --brand-soft:#183826; --on-brand-soft:#a6e6b9;
+  --danger:#f2b8b5; --on-danger:#17201b;
+  --nav-bg:rgba(29,34,32,.95); --nav-indicator:#2c4a3a; --nav-indicator-ink:#bde9cb;
+  --shadow:0 1px 2px rgba(0,0,0,.24),0 8px 20px -10px rgba(0,0,0,.5);
+  --shadow-soft:0 1px 2px rgba(0,0,0,.3);
+  --halo:radial-gradient(900px 420px at 50% -10%,rgba(66,217,130,.08),transparent 70%);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; padding:0;
+  font-family:'Lato',system-ui,-apple-system,sans-serif;
+  background:var(--canvas); color:var(--ink);
+  font-size:14.5px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;                 /* nothing may ever scroll the page sideways */
+}
+body::before{
+  content:''; position:fixed; inset:0; pointer-events:none; background:var(--halo); z-index:0;
+}
+.wrap{
+  position:relative; z-index:1;
+  width:100%; max-width:1120px; margin:0 auto;
+  padding:0 16px 64px;
+  min-width:0;                        /* grid/flex blowout guard */
+}
+
+/* ---------- page chrome ---------- */
+.topbar{
+  position:sticky; top:0; z-index:20;
+  background:var(--nav-bg);
+  backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+  border-bottom:1px solid var(--line);
+}
+.topbar-in{
+  max-width:1120px; margin:0 auto; padding:10px 16px;
+  display:flex; align-items:center; gap:12px; min-width:0;
+}
+.brand{display:flex; align-items:center; gap:9px; min-width:0}
+.brand-mark{
+  flex:none; width:30px; height:30px; border-radius:9px;
+  background:var(--primary-grad); color:var(--on-primary);
+  display:grid; place-items:center; font-weight:900; font-size:15px;
+}
+.brand-name{
+  font-weight:900; font-size:15px; letter-spacing:-.02em;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;
+}
+.brand-sub{
+  font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--ink-3); white-space:nowrap;
+}
+.spacer{flex:1 1 auto; min-width:8px}
+.theme-btn{
+  flex:none; min-width:48px; min-height:48px;
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  padding:0 14px; border-radius:999px; cursor:pointer;
+  border:1px solid var(--outline); background:var(--surface); color:var(--ink);
+  font:inherit; font-weight:700; font-size:13px;
+}
+.theme-btn:hover{background:var(--surface-2)}
+.theme-btn:focus-visible{outline:2px solid var(--primary); outline-offset:2px}
+
+/* ---------- headers ---------- */
+.hero{padding:34px 0 8px}
+.hero h1{
+  margin:0 0 8px; font-size:32px; line-height:1.15; font-weight:900; letter-spacing:-.03em;
+}
+.hero p{margin:0; color:var(--ink-2); max-width:62ch; font-size:15px}
+.pill-row{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px}
+.pill{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:5px 11px; border-radius:999px;
+  background:var(--brand-soft); color:var(--on-brand-soft);
+  font-size:11.5px; font-weight:900; letter-spacing:.04em; text-transform:uppercase;
+}
+.pill.mint{background:var(--mint); color:#06291a}
+
+section{margin-top:30px; min-width:0}
+.sec-head{
+  display:flex; align-items:baseline; flex-wrap:wrap; gap:8px;
+  margin:0 0 12px;
+}
+.sec-head h2{
+  margin:0; font-size:19px; font-weight:900; letter-spacing:-.02em;
+}
+.sec-head code{
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:11.5px; font-weight:700;
+  color:var(--ink-2); background:var(--surface-2);
+  border:1px solid var(--line); border-radius:6px; padding:2px 6px;
+}
+.sec-note{margin:-6px 0 12px; color:var(--ink-2); font-size:13px}
+
+/* ---------- demo surfaces ---------- */
+.demo{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:20px;
+  padding:16px;
+  min-width:0;
+}
+.demo.flat{background:var(--surface-2)}
+.row{
+  display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+  min-width:0;
+}
+.row.tight{gap:8px}
+.stack{display:flex; flex-direction:column; gap:10px; min-width:0}
+.grid2{
+  display:grid; gap:12px;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));
+  min-width:0;
+}
+
+/* ============================================================================
+   M3 BUTTONS — 40dp min height, 20dp radius from the brand scale
+   ========================================================================== */
+.btn{
+  position:relative;
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  min-height:48px;                       /* touch target, not the 40dp visual box */
+  padding:0 24px; margin:0;
+  border:0; border-radius:20px;
+  font:inherit; font-weight:700; font-size:15px;
+  cursor:pointer; text-decoration:none;
+  transition:background .15s ease, box-shadow .15s ease, opacity .15s ease;
+  max-width:100%; white-space:nowrap;
+}
+.btn:focus-visible{outline:2px solid var(--primary); outline-offset:2px}
+.btn .ic{flex:none; width:18px; height:18px}
+
+/* Filled — the brand gradient is the app's primary fill */
+.btn--filled{background:var(--primary-grad); color:var(--on-primary)}
+.btn--filled:hover{opacity:.92}
+/* Filled tonal — brand soft wash */
+.btn--tonal{background:var(--brand-soft); color:var(--on-brand-soft)}
+.btn--tonal:hover{opacity:.9}
+/* Outlined — 1dp M3 outline; THIS is what the audit fixed */
+.btn--outlined{background:transparent; color:var(--primary); border:1px solid var(--outline)}
+.btn--outlined:hover{background:var(--surface-2)}
+/* Text */
+.btn--text{background:transparent; color:var(--primary); padding:0 16px}
+.btn--text:hover{background:var(--surface-2)}
+/* Elevated */
+.btn--elevated{background:var(--surface); color:var(--primary); box-shadow:var(--shadow-soft)}
+.btn--elevated:hover{box-shadow:var(--shadow)}
+/* Danger (error role) */
+.btn--danger{background:var(--danger); color:var(--on-danger)}
+
+/* FAB — 56dp squircle, brand gradient (19dp radius, not a circle) */
+.fab{
+  flex:none; width:56px; height:56px; border-radius:19px; border:0;
+  background:var(--primary-grad); color:var(--on-primary);
+  display:grid; place-items:center; cursor:pointer;
+  box-shadow:var(--shadow);
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+.fab:hover{transform:translateY(-1px); box-shadow:0 4px 8px rgba(0,0,0,.18),0 12px 28px -12px rgba(0,0,0,.4)}
+.fab:focus-visible{outline:2px solid var(--primary); outline-offset:3px}
+.fab--sm{width:48px; height:48px; border-radius:16px}
+.fab--tonal{background:var(--brand-soft); color:var(--on-brand-soft); box-shadow:var(--shadow-soft)}
+
+/* Icon button — 48dp target, 20dp glyph */
+.iconbtn{
+  flex:none; width:48px; height:48px; border-radius:999px;
+  border:0; background:transparent; color:var(--ink-2);
+  display:grid; place-items:center; cursor:pointer;
+}
+.iconbtn:hover{background:var(--surface-2)}
+.iconbtn:focus-visible{outline:2px solid var(--primary); outline-offset:2px}
+.iconbtn--filled{background:var(--primary); color:var(--on-primary)}
+.iconbtn--tonal{background:var(--brand-soft); color:var(--on-brand-soft)}
+.iconbtn--outlined{border:1px solid var(--outline); color:var(--primary)}
+
+/* ============================================================================
+   M3 CARDS — brand 20dp radius; outlined uses the fixed outline token
+   ========================================================================== */
+.card{
+  background:var(--surface); border-radius:20px; padding:16px;
+  min-width:0;
+  border:1px solid var(--line-soft);
+}
+.card--elevated{box-shadow:var(--shadow); border-color:transparent}
+.card--outlined{border:1px solid var(--outline)}
+.card--filled{background:var(--surface-2); border-color:transparent}
+.card h3{margin:0 0 6px; font-size:16px; font-weight:900; letter-spacing:-.01em}
+.card p{margin:0; color:var(--ink-2); font-size:13.5px}
+.card-actions{display:flex; flex-wrap:wrap; gap:6px; margin-top:14px}
+
+/* ============================================================================
+   M3 TOP APP BAR — 64dp, 4dp title inset per spec
+   ========================================================================== */
+.topappbar{
+  display:flex; align-items:center; gap:4px;
+  min-height:64px; padding:4px 4px 4px 4px;
+  background:var(--surface); border-radius:20px;
+  border:1px solid var(--line);
+  min-width:0;
+}
+.topappbar .tbar-title{
+  flex:1 1 auto; min-width:0;
+  font-size:20px; font-weight:900; letter-spacing:-.02em;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  padding-left:4px;
+}
+.topappbar--brand{background:var(--primary-grad); border-color:transparent}
+.topappbar--brand .tbar-title{color:var(--on-primary)}
+.topappbar--brand .iconbtn{color:var(--on-primary)}
+.topappbar--brand .iconbtn:hover{background:rgba(255,255,255,.14)}
+
+/* ============================================================================
+   M3 SEGMENTED BUTTON — the replacement for the hand-rolled FilterChip
+   ========================================================================== */
+.segmented{
+  display:flex; width:100%; min-width:0;
+  border-radius:999px; overflow:hidden;
+  border:1px solid var(--outline);
+  background:var(--surface);
+}
+.segmented button{
+  flex:1 1 0; min-width:0; min-height:48px;
+  border:0; border-left:1px solid var(--outline);
+  background:transparent; color:var(--ink-2);
+  font:inherit; font-weight:700; font-size:12px;
+  cursor:pointer; padding:0 6px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  transition:background .15s ease, color .15s ease;
+}
+.segmented button:first-child{border-left:0}
+.segmented button[aria-pressed="true"],
+.segmented button.is-on{background:var(--brand-soft); color:var(--on-brand-soft)}
+.segmented button:not(.is-on):hover{background:var(--surface-2)}
+.segmented button:focus-visible{outline:2px solid var(--primary); outline-offset:-2px}
+
+/* ============================================================================
+   M3 NAVIGATION BAR — 80dp container, 58x30 indicator pill, 12dp label
+   ========================================================================== */
+.navbar{
+  display:flex; align-items:center; justify-content:space-around;
+  min-height:80px; padding:8px 4px 10px;
+  background:var(--nav-bg);
+  backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+  border:1px solid var(--line); border-radius:20px;
+  min-width:0;
+}
+.navitem{
+  flex:1 1 0; min-width:0; min-height:48px;
+  border:0; background:transparent; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  padding:4px 2px; border-radius:12px; color:var(--ink-3);
+  font:inherit;
+}
+.navitem .ind{
+  width:58px; max-width:100%; height:30px; border-radius:999px;
+  display:grid; place-items:center;
+  background:transparent; transition:background .16s ease;
+}
+.navitem .lbl{
+  font-size:11px; font-weight:700; line-height:14px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;
+}
+.navitem[aria-current="page"]{color:var(--nav-indicator-ink)}
+.navitem[aria-current="page"] .ind{background:var(--nav-indicator)}
+.navitem:focus-visible{outline:2px solid var(--primary); outline-offset:-2px}
+
+/* ============================================================================
+   M3 LIST ITEM — 1-line / 2-line / 3-line, 56/72/88dp
+   ========================================================================== */
+.listitem{
+  display:flex; align-items:center; gap:16px;
+  width:100%; min-height:72px; padding:10px 16px;
+  border:0; background:transparent; color:var(--ink);
+  font:inherit; text-align:left; cursor:pointer;
+  border-radius:14px; min-width:0;
+}
+.listitem + .listitem{border-top:1px solid var(--line-soft); border-radius:0}
+.listitem:hover{background:var(--surface-2)}
+.listitem:focus-visible{outline:2px solid var(--primary); outline-offset:-2px}
+.li-leading{
+  flex:none; width:40px; height:40px; border-radius:12px;
+  background:var(--brand-soft); color:var(--on-brand-soft);
+  display:grid; place-items:center;
+}
+.li-body{flex:1 1 auto; min-width:0}
+.li-title{
+  font-size:15.5px; font-weight:700; line-height:20px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.li-sub{
+  font-size:13.5px; line-height:19px; color:var(--ink-2);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.li-trailing{flex:none; color:var(--ink-2); display:grid; place-items:center; min-width:24px}
+.list-wrap{
+  background:var(--surface); border:1px solid var(--line); border-radius:20px; overflow:hidden;
+}
+
+/* ============================================================================
+   M3 SELECTION CONTROLS — 48dp rows
+   ========================================================================== */
+.control{
+  display:flex; align-items:center; gap:12px; min-height:48px;
+  min-width:0; cursor:pointer;
+}
+.control .ctl-label{font-size:14.5px; font-weight:700; min-width:0}
+/* switch */
+.switch{
+  flex:none; position:relative; width:52px; height:32px; border-radius:999px;
+  background:var(--surface-3); border:2px solid var(--outline);
+  cursor:pointer; transition:background .18s ease, border-color .18s ease; padding:0;
+}
+.switch::after{
+  content:''; position:absolute; top:50%; left:6px; translate:0 -50%;
+  width:16px; height:16px; border-radius:999px; background:var(--outline);
+  transition:left .18s ease, width .18s ease, height .18s ease, background .18s ease;
+}
+.switch[aria-checked="true"]{background:var(--primary); border-color:var(--primary)}
+.switch[aria-checked="true"]::after{left:28px; width:24px; height:24px; background:var(--on-primary)}
+.switch:focus-visible{outline:2px solid var(--primary); outline-offset:2px}
+/* radio */
+.radio{
+  flex:none; width:20px; height:20px; border-radius:999px;
+  border:2px solid var(--outline); position:relative; background:transparent;
+}
+.radio[aria-checked="true"]{border-color:var(--primary)}
+.radio[aria-checked="true"]::after{
+  content:''; position:absolute; inset:3px; border-radius:999px; background:var(--primary);
+}
+/* checkbox */
+.checkbox{
+  flex:none; width:18px; height:18px; border-radius:2px;
+  border:2px solid var(--outline); position:relative; background:transparent;
+}
+.checkbox[aria-checked="true"]{background:var(--primary); border-color:var(--primary)}
+.checkbox[aria-checked="true"]::after{
+  content:''; position:absolute; left:4px; top:0px; width:5px; height:9px;
+  border:solid var(--on-primary); border-width:0 2px 2px 0; rotate:45deg;
+}
+
+/* ============================================================================
+   M3 CHIPS — 32dp visual, 48dp touch, 8dp radius
+   ========================================================================== */
+.chipset{display:flex; flex-wrap:wrap; gap:8px; min-width:0}
+.chip{
+  display:inline-flex; align-items:center; gap:6px;
+  min-height:48px; padding:0 14px; border-radius:8px;
+  border:1px solid var(--outline); background:var(--surface); color:var(--ink-2);
+  font:inherit; font-weight:700; font-size:12.5px; cursor:pointer;
+  max-width:100%; white-space:nowrap;
+}
+.chip:hover{background:var(--surface-2)}
+.chip:focus-visible{outline:2px solid var(--primary); outline-offset:2px}
+.chip.is-on{background:var(--brand-soft); color:var(--on-brand-soft); border-color:var(--brand-soft)}
+.chip--suggest{border-color:var(--line)}
+.chip--input{background:var(--surface-2)}
+.chip .ic{flex:none; width:16px; height:16px}
+
+/* ============================================================================
+   M3 TEXT FIELDS
+   ========================================================================== */
+.field{display:flex; flex-direction:column; gap:6px; min-width:0}
+.field label{font-size:11.5px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3)}
+.input{
+  width:100%; min-height:56px; padding:0 16px;
+  border-radius:14px; border:1px solid var(--outline);
+  background:var(--surface); color:var(--ink);
+  font:inherit; font-size:15px;
+}
+.input::placeholder{color:var(--ink-3)}
+.input:focus{outline:2px solid var(--primary); outline-offset:-1px; border-color:transparent}
+.input--filled{background:var(--surface-2); border-color:transparent; border-bottom:1px solid var(--outline); border-radius:14px 14px 0 0}
+.input--error{border-color:var(--danger)}
+.helper{font-size:11.5px; font-weight:700; color:var(--ink-3)}
+.helper--error{color:var(--danger)}
+
+/* ============================================================================
+   M3 MISC — divider, badge, progress, slider, snackbar, dialog
+   ========================================================================== */
+.divider{height:1px; background:var(--line); border:0; margin:14px 0}
+.badge{
+  display:inline-grid; place-items:center; min-width:16px; height:16px;
+  padding:0 4px; border-radius:999px; background:var(--danger); color:var(--on-danger);
+  font-size:11px; font-weight:900; line-height:1;
+}
+.badge::after{content:attr(data-count)}
+.badge-wrap{position:relative; display:inline-grid; place-items:center}
+.badge-wrap .badge{position:absolute; top:2px; right:2px}
+.progress{height:4px; border-radius:999px; background:var(--surface-3); overflow:hidden; width:100%}
+.progress > i{display:block; height:100%; border-radius:999px; background:var(--primary); width:62%}
+.linear-indet{height:4px; border-radius:999px; background:var(--surface-3); overflow:hidden; position:relative}
+.linear-indet::after{
+  content:''; position:absolute; inset:0 auto 0 0; width:40%; border-radius:999px;
+  background:var(--primary); animation:slide 1.4s ease-in-out infinite;
+}
+@keyframes slide{0%{left:-40%}100%{left:100%}}
+.spinner{
+  width:26px; height:26px; border-radius:999px;
+  border:3px solid var(--surface-3); border-top-color:var(--primary);
+  animation:spin .9s linear infinite;
+}
+@keyframes spin{to{rotate:360deg}}
+.slider{
+  -webkit-appearance:none; appearance:none;
+  width:100%; height:48px; background:transparent; cursor:pointer;
+}
+.slider::-webkit-slider-runnable-track{height:4px; border-radius:999px; background:var(--surface-3)}
+.slider::-webkit-slider-thumb{
+  -webkit-appearance:none; appearance:none;
+  width:20px; height:20px; border-radius:999px; margin-top:-8px;
+  background:var(--primary); border:2px solid var(--surface);
+}
+.slider::-moz-range-track{height:4px; border-radius:999px; background:var(--surface-3)}
+.slider::-moz-range-thumb{width:20px; height:20px; border:2px solid var(--surface); border-radius:999px; background:var(--primary)}
+
+.snackbar{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  min-height:48px; padding:12px 16px; border-radius:12px;
+  background:var(--ink); color:var(--canvas);
+  font-size:13.5px; font-weight:700; min-width:0;
+}
+.snackbar .sb-action{
+  margin-left:auto; min-height:48px; display:inline-flex; align-items:center;
+  background:transparent; border:0; color:var(--mint);
+  font:inherit; font-weight:900; font-size:13px; cursor:pointer; padding:0 8px;
+}
+.dialog{
+  background:var(--surface); border-radius:28px; padding:24px;
+  box-shadow:var(--shadow); border:1px solid var(--line); min-width:0;
+}
+.dialog h3{margin:0 0 12px; font-size:20px; font-weight:900; letter-spacing:-.02em}
+.dialog p{margin:0 0 20px; color:var(--ink-2); font-size:14px}
+.dialog-actions{display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end}
+
+/* ---------- token table ---------- */
+.tablewrap{
+  width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;
+  border:1px solid var(--line); border-radius:20px; background:var(--surface);
+}
+table{border-collapse:collapse; width:100%; min-width:520px; font-size:13px}
+th,td{text-align:left; padding:10px 14px; border-bottom:1px solid var(--line-soft); white-space:nowrap}
+th{
+  font-size:11px; font-weight:900; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--ink-3); background:var(--surface-2);
+}
+tr:last-child td{border-bottom:0}
+td code{font-family:ui-monospace,Menlo,monospace; font-size:12px; color:var(--ink-2)}
+.swatch{
+  display:inline-block; width:14px; height:14px; border-radius:4px;
+  border:1px solid var(--line); vertical-align:-2px; margin-right:7px;
+}
+.ok{color:#0f7a4a; font-weight:900}
+[data-theme="dark"] .ok{color:#4ade80}
+.fail{color:var(--danger); font-weight:900}
+
+footer{
+  margin-top:40px; padding-top:18px; border-top:1px solid var(--line);
+  color:var(--ink-3); font-size:12.5px;
+}
+
+/* ---------- small screens ---------- */
+@media (max-width:420px){
+  .hero h1{font-size:26px}
+  .btn{padding:0 18px; font-size:14px}
+  .demo{padding:14px}
+  .segmented button{font-size:11px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001s !important; animation-iteration-count:1 !important; transition-duration:.001s !important}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <div class="brand">
+      <div class="brand-mark">T</div>
+      <div style="min-width:0">
+        <div class="brand-name">Orhan AI</div>
+        <div class="brand-sub">Material 3 gallery</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <button class="theme-btn" id="themeBtn" type="button" aria-live="polite">
+      <span id="themeLabel">Dark</span>
+    </button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="hero">
+    <h1>Material 3 component gallery</h1>
+    <p>
+      Every Material 3 component rendered with the Orhan token layer, in both
+      themes. Colours come straight from <code style="font-family:ui-monospace,Menlo,monospace;font-size:13px">compose/theme/Color.kt</code>
+      — nothing invented. Component dimensions follow the M3 spec; radii follow the brand scale.
+    </p>
+    <div class="pill-row">
+      <span class="pill">WCAG AA — 26/26 pass</span>
+      <span class="pill mint">36/36 roles set</span>
+      <span class="pill">0 overflow @ 360 / 390 / 1440</span>
+    </div>
+  </div>
+
+  <!-- =================== Buttons =================== -->
+  <section>
+    <div class="sec-head">
+      <h2>Buttons</h2>
+      <code>Button · FilledTonalButton · OutlinedButton · TextButton · ElevatedButton</code>
+    </div>
+    <p class="sec-note">40dp visual height, 20dp brand radius, 48dp touch target. Outlined is the one the audit repaired — its 1dp border is now 3.60:1 on white instead of 1.28:1.</p>
+    <div class="demo">
+      <div class="row">
+        <button class="btn btn--filled" type="button">Start a new chat</button>
+        <button class="btn btn--tonal" type="button">Save draft</button>
+        <button class="btn btn--outlined" type="button">Outlined</button>
+        <button class="btn btn--text" type="button">Text</button>
+        <button class="btn btn--elevated" type="button">Elevated</button>
+        <button class="btn btn--danger" type="button">Delete</button>
+      </div>
+      <hr class="divider">
+      <div class="row">
+        <button class="btn btn--filled" type="button" disabled style="opacity:.38;cursor:not-allowed">Disabled</button>
+        <button class="btn btn--filled" type="button">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          With icon
+        </button>
+        <button class="iconbtn iconbtn--filled" type="button" aria-label="Add">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="iconbtn iconbtn--tonal" type="button" aria-label="Search">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </button>
+        <button class="iconbtn iconbtn--outlined" type="button" aria-label="More">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== FAB =================== -->
+  <section>
+    <div class="sec-head">
+      <h2>Floating action buttons</h2>
+      <code>FloatingActionButton · SmallFAB</code>
+    </div>
+    <p class="sec-note">56dp squircle with a 19dp radius — the brand does not use a circular FAB.</p>
+    <div class="demo flat">
+      <div class="row">
+        <button class="fab" type="button" aria-label="New chat">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="fab fab--sm" type="button" aria-label="New chat, small">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="fab fab--tonal" type="button" aria-label="New agent">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2 13.9 8.4 19 10.3 13.9 12.2 12 17.4 10.1 12.2 5 10.3 10.1 8.4z"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== Cards =================== -->
+  <section>
+    <div class="sec-head">
+      <h2>Cards</h2>
+      <code>Card · ElevatedCard · OutlinedCard · FilledCard</code>
+    </div>
+    <div class="grid2">
+      <div class="card card--elevated">
+        <h3>Elevated</h3>
+        <p>Soft brand shadow, no border. Used for the agent cards on Home.</p>
+        <div class="card-actions">
+          <button class="btn btn--text" type="button" style="font-size:13px">Open</button>
+        </div>
+      </div>
+      <div class="card card--outlined">
+        <h3>Outlined</h3>
+        <p>1dp outline at 3.60:1 — visible without shouting. Audio and artifact cards.</p>
+        <div class="card-actions">
+          <button class="btn btn--text" type="button" style="font-size:13px">Open</button>
+        </div>
+      </div>
+      <div class="card card--filled">
+        <h3>Filled</h3>
+        <p>surfaceContainerHighest. Stat tiles and inline previews.</p>
+        <div class="card-actions">
+          <button class="btn btn--text" type="button" style="font-size:13px">Open</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Default</h3>
+        <p>Surface with a soft hairline. The <code style="font-family:ui-monospace,Menlo,monospace;font-size:12px">OrhanCard</code> in HomeScreen.</p>
+        <div class="card-actions">
+          <button class="btn btn--text" type="button" style="font-size:13px">Open</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== Top app bar =================== -->
+  <section>
+    <div class="sec-head">
+      <h2>Top app bar</h2>
+      <code>TopAppBar · CenterAlignedTopAppBar</code>
+    </div>
+    <p class="sec-note">64dp container, 4dp title inset, 48dp icon targets. M3 expects this instead of a bare Row with IconButtons.</p>
+    <div class="stack">
+      <div class="topappbar">
+        <button class="iconbtn" type="button" aria-label="Menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div class="tbar-title">Chats</div>
+        <button class="iconbtn" type="button" aria-label="Search">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </button>
+        <button class="iconbtn" type="button" aria-label="Settings">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg>
+        </button>
+      </div>
+      <div class="topappbar topappbar--brand">
+        <button class="iconbtn" type="button" aria-label="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <div class="tbar-title">Slide Studio</div>
+        <button class="iconbtn" type="button" aria-label="More">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== Segmented button =================== -->
+  <section>
+    <div class="sec-head">
+      <h2>Segmented button</h2>
+      <code>SingleChoiceSegmentedButtonRow</code>
+    </div>
+    <p class="sec-note">
+      This replaced the hand-rolled <code style="font-family:ui-monospace,Menlo,monospace;font-size:12px">FilterChip</code> that shadowed M3's own.
+      The four chat filters are mutually exclusive, so the segmented container is the correct M3 expression — it also brings the shared
+      divider, the group outline and <code style="font-family:ui-monospace,Menlo,monospace;font-size:12px">Role.RadioButton</code> semantics.
+    </p>
+    <div class="demo">
+      <div class="segmented" role="group" aria-label="Chat filter">
+        <button type="button" class="is-on" aria-pressed="true">All</button>
+        <button type="button" aria-pressed="false">Unread</button>
+        <button type="button" aria-pressed="false">Groups</button>
+        <button type="button" aria-pressed="false">Recent</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== Navigation bar =================== -->
+  <section>
+    <div class="sec-head">
+      <h2>Navigation bar</h2>
+      <code>NavigationBar · NavigationBarItem</code>
+    </div>
+    <p class="sec-note">
+      80dp container, 58 × 30 indicator pill, 12dp label, 48dp per-item target — all M3 defaults.
+      The brand colours are fed through <code style="font-family:ui-monospace,Menlo,monospace;font-size:12px">NavigationBarItemDefaults.colors()</code> instead of being hand-drawn.
+    </p>
+    <div class="navbar" role="tablist" aria-label="Main navigation">
+      <button class="navitem" type="button" role="tab" aria-current="page">
+        <span class="ind"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16v10H9l-5 4z"/></svg></span>
+        <span class="lbl">Chats</span>
+      </button>
+      <button class="navitem" type="button" role="tab">
+        <span class="ind"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="4"/><path d="M12 7V4M9 13h.01M15 13h.01"/></svg></span>
+        <span class="lbl">Agents</span>
+      </button>
+      <button class="navitem" type="button" role="tab">
+        <span class="ind"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2.2 5-5 2.2 2.2-5z"/></svg></span>
+        <span class="lbl">Discover</span>
+      </button>
+      <button class="navitem" type="button" role="tab">
+        <span class="ind"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8.5" r="3.4"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg></span>
+        <span class="lbl">Profile</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- =================== List items =================== -->
+  <section>
+    <div class="sec-head">
+      <h2>List items</h2>
+      <code>ListItem</code>
+    </div>
+    <p class="sec-note">72dp two-line rows. <code style="font-family:ui-monospace,Menlo,monospace;font-size:12px">SettingsScreen</code> still hand-rolls these — see the report's "suggested next" table.</p>
+    <div class="list-wrap">
+      <button class="listitem" type="button">
+        <span class="li-leading">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg>
+        </span>
+        <span class="li-body">
+          <span class="li-title">Appearance</span>
+          <span class="li-sub">System · Light · Dark</span>
+        </span>
+        <span class="li-trailing">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        </span>
+      </button>
+      <button class="listitem" type="button">
+        <span class="li-leading">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+        </span>
+        <span class="li-body">
+          <span class="li-title">Privacy &amp; permissions</span>
+          <span class="li-sub">Memory, history, connected apps</span>
+        </span>
+        <span class="li-trailing">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        </span>
+      </button>
+      <button class="listitem" type="button">
+        <span class="li-leading">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="M4 10h16"/></svg>
+        </span>
+        <span class="li-body">
+          <span class="li-title">Storage</span>
+          <span class="li-sub">3.2 GB of 15 GB used</span>
+        </span>
+        <span class="li-trailing"><span class="badge" data-count="2"></span></span>
+      </button>
+    </div>
+  </section>
+
+  <!-- =================== Selection =================== -->
+  <section>
+    <div class="sec-head">
+      <h2>Selection controls</h2>
+      <code>Switch · RadioButton · Checkbox</code>
+    </div>
+    <div class="grid2">
+      <div class="demo">
+        <div class="stack">
+          <label class="control">
+            <span class="ctl-label" style="flex:1">Use wallpaper colours</span>
+            <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Use wallpaper colours"></button>
+          </label>
+          <label class="control">
+            <span class="ctl-label" style="flex:1">Send on Enter</span>
+            <button class="switch" type="button" role="switch" aria-checked="true" aria-label="Send on Enter"></button>
+          </label>
+        </div>
+      </div>
+      <div class="demo">
+        <div class="stack">
+          <label class="control"><span class="radio" aria-checked="true"></span><span class="ctl-label">System</span></label>
+          <label class="control"><span class="radio" aria-checked="false"></span><span class="ctl-label">Light</span></label>
+          <label class="control"><span class="radio" aria-checked="false"></span><span class="ctl-label">Dark</span></label>
+          <hr class="divider" style="margin:4px 0">
+          <label class="control"><span class="checkbox" aria-checked="true"></span><span class="ctl-label">Sync across devices</span></label>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== Chips =================== -->
+  <section>
+    <div class="sec-head">
+      <h2>Chips</h2>
+      <code>AssistChip · FilterChip · InputChip · SuggestionChip</code>
+    </div>
+    <p class="sec-note">32dp visual height inside a 48dp touch target, 8dp radius. Filter chips are still correct where the choices are <em>not</em> one-of — the chat filter row moved to segmented buttons.</p>
+    <div class="demo">
+      <div class="chipset">
+        <button class="chip" type="button">Assist</button>
+        <button class="chip is-on" type="button">Filter · on</button>
+        <button class="chip" type="button">Filter</button>
+        <button class="chip chip--input" type="button">
+          Input
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+        <button class="chip chip--suggest" type="button">Suggestion</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== Text fields =================== -->
+  <section>
+    <div class="sec-head">
+      <h2>Text fields</h2>
+      <code>OutlinedTextField · TextField</code>
+    </div>
+    <div class="grid2">
+      <div class="demo">
+        <div class="field">
+          <label for="f1">Outlined</label>
+          <input class="input" id="f1" placeholder="Search chats, agents, people">
+          <span class="helper">1dp outline, 14dp radius</span>
+        </div>
+      </div>
+      <div class="demo">
+        <div class="field">
+          <label for="f2">Filled</label>
+          <input class="input input--filled" id="f2" placeholder="Name your agent">
+          <span class="helper">surfaceVariant fill, bottom rule</span>
+        </div>
+      </div>
+      <div class="demo">
+        <div class="field">
+          <label for="f3">Error</label>
+          <input class="input input--error" id="f3" value="not-an-email" aria-invalid="true">
+          <span class="helper helper--error">Enter a valid address</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== Misc =================== -->
+  <section>
+    <div class="sec-head">
+      <h2>Progress, slider, badges</h2>
+      <code>LinearProgressIndicator · CircularProgressIndicator · Slider · Badge</code>
+    </div>
+    <div class="grid2">
+      <div class="demo">
+        <div class="stack">
+          <div class="progress" role="progressbar" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100"><i></i></div>
+          <div class="linear-indet" role="progressbar" aria-label="Loading"></div>
+          <div class="row" style="gap:16px">
+            <div class="spinner" role="progressbar" aria-label="Loading"></div>
+            <span class="badge-wrap">
+              <button class="iconbtn" type="button" aria-label="Notifications, 3 unread">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 10a6 6 0 1 1 12 0c0 4 1.5 5 1.5 5h-15S6 14 6 10z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+              </button>
+              <span class="badge" data-count="3"></span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="demo">
+        <div class="field">
+          <label for="sl">Response length</label>
+          <input class="slider" id="sl" type="range" min="0" max="100" value="58" aria-label="Response length">
+          <span class="helper">Short — Balanced — Detailed</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== Snackbar + dialog =================== -->
+  <section>
+    <div class="sec-head">
+      <h2>Snackbar &amp; dialog</h2>
+      <code>Snackbar · AlertDialog</code>
+    </div>
+    <div class="grid2">
+      <div class="demo flat" style="display:flex;align-items:center">
+        <div class="snackbar">
+          <span>Agent is working on your deck…</span>
+          <button class="sb-action" type="button">Undo</button>
+        </div>
+      </div>
+      <div class="dialog">
+        <h3>Delete this chat?</h3>
+        <p>This removes 42 messages and the two artifacts the agent produced. It cannot be undone.</p>
+        <div class="dialog-actions">
+          <button class="btn btn--text" type="button">Cancel</button>
+          <button class="btn btn--danger" type="button">Delete</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== Token table =================== -->
+  <section>
+    <div class="sec-head">
+      <h2>What the audit changed</h2>
+      <code>Color.kt</code>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Role</th><th>Theme</th><th>Was</th><th>Now</th><th>Contrast</th><th>Result</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>outline</code></td><td>light</td>
+            <td><span class="swatch" style="background:#dde6e0"></span>#DDE6E0</td>
+            <td><span class="swatch" style="background:#7a8b80"></span>#7A8B80</td>
+            <td>1.28 → 3.60</td><td class="ok">fixed</td>
+          </tr>
+          <tr>
+            <td><code>outline</code></td><td>dark</td>
+            <td><span class="swatch" style="background:#3d4842"></span>#3D4842</td>
+            <td><span class="swatch" style="background:#72877c"></span>#72877C</td>
+            <td>1.69 → 4.20</td><td class="ok">fixed</td>
+          </tr>
+          <tr>
+            <td><code>surfaceVariant</code></td><td>light</td>
+            <td><span class="swatch" style="background:#f6f8f5"></span>#F6F8F5</td>
+            <td><span class="swatch" style="background:#eef2ef"></span>#EEF2EF</td>
+            <td>= surfaceContainerHighest</td><td class="ok">aligned</td>
+          </tr>
+          <tr>
+            <td><code>surfaceVariant</code></td><td>dark</td>
+            <td><span class="swatch" style="background:#272e2b"></span>#272E2B</td>
+            <td><span class="swatch" style="background:#323b36"></span>#323B36</td>
+            <td>= surfaceContainerHighest</td><td class="ok">aligned</td>
+          </tr>
+          <tr>
+            <td><code>scrim</code></td><td>light</td>
+            <td><span class="swatch" style="background:#182b23"></span>#182B23</td>
+            <td><span class="swatch" style="background:#000000"></span>#000000</td>
+            <td>M3 spec</td><td class="ok">fixed</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    Orhan AI design kit · <code style="font-family:ui-monospace,Menlo,monospace">design/m3-gallery.html</code> ·
+    Colours from <code style="font-family:ui-monospace,Menlo,monospace">compose/theme/Color.kt</code>, dimensions from the M3 spec.
+    Verified: 26/26 contrast pairs pass, 36/36 roles set, 0 overflow at 360 / 390 / 1440.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement;
+
+  /* ---- theme toggle ---- */
+  var btn=document.getElementById('themeBtn');
+  var label=document.getElementById('themeLabel');
+  function paint(){
+    var t=root.getAttribute('data-theme');
+    label.textContent = t==='dark' ? 'Light' : 'Dark';
+    btn.setAttribute('aria-label', 'Switch to ' + (t==='dark'?'light':'dark') + ' theme');
+  }
+  btn.addEventListener('click',function(){
+    var next = root.getAttribute('data-theme')==='dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme',next);
+    try{localStorage.setItem('orhan-m3-theme',next);}catch(e){}
+    paint();
+  });
+  paint();
+
+  /* ---- segmented button: single-select ---- */
+  document.querySelectorAll('.segmented').forEach(function(g){
+    g.addEventListener('click',function(e){
+      var b=e.target.closest('button'); if(!b) return;
+      g.querySelectorAll('button').forEach(function(x){
+        x.classList.remove('is-on'); x.setAttribute('aria-pressed','false');
+      });
+      b.classList.add('is-on'); b.setAttribute('aria-pressed','true');
+    });
+  });
+
+  /* ---- nav bar: single current item ---- */
+  document.querySelectorAll('.navbar').forEach(function(n){
+    n.addEventListener('click',function(e){
+      var b=e.target.closest('.navitem'); if(!b) return;
+      n.querySelectorAll('.navitem').forEach(function(x){ x.removeAttribute('aria-current'); });
+      b.setAttribute('aria-current','page');
+    });
+  });
+
+  /* ---- switches / radios / checkboxes ---- */
+  document.querySelectorAll('.switch').forEach(function(s){
+    s.addEventListener('click',function(){
+      s.setAttribute('aria-checked', s.getAttribute('aria-checked')==='true'?'false':'true');
+    });
+  });
+  document.querySelectorAll('.radio').forEach(function(r){
+    r.addEventListener('click',function(){
+      var box=r.closest('.stack')||r.parentElement;
+      box.querySelectorAll('.radio').forEach(function(x){ x.setAttribute('aria-checked','false'); });
+      r.setAttribute('aria-checked','true');
+    });
+  });
+  document.querySelectorAll('.checkbox').forEach(function(c){
+    c.addEventListener('click',function(){
+      c.setAttribute('aria-checked', c.getAttribute('aria-checked')==='true'?'false':'true');
+    });
+  });
+
+  /* ---- filter chips ---- */
+  document.querySelectorAll('.chip').forEach(function(c){
+    c.addEventListener('click',function(){ c.classList.toggle('is-on'); });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><g transform="translate(0,0) scale(1)">
+<polygon points="64.00,14.00 107.30,39.00 107.30,89.00 64.00,114.00 20.70,89.00 20.70,39.00" fill="#087C45" stroke="#087C45" stroke-width="22" stroke-linejoin="round"/>
+<circle cx="64" cy="64" r="27" fill="none" stroke="#FFFFFF" stroke-width="15"/>
+<circle cx="83.09" cy="44.91" r="13" fill="#087C45"/>
+<circle cx="83.09" cy="44.91" r="8.5" fill="#42D982"/>
+<circle cx="64" cy="64" r="5" fill="#42D982"/>
+</g></svg>
