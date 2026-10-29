@@ -33,7 +33,7 @@ class ChatRepository(
 
     private fun body(turns: List<ChatTurn>, stream: Boolean) = JSONObject()
         .put("stream", stream)
-        .put("mode", "agent") // always Dua Agent pipeline (server uses AGENT_ENGINE=adk when configured)
+        .put("mode", "agent") // always agent pipeline (server uses AGENT_ENGINE=adk when configured)
         .put("messages", JSONArray().apply {
             turns.takeLast(20).forEach { put(JSONObject().put("role", it.role).put("text", it.text)) }
         })
