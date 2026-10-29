@@ -76,6 +76,8 @@ fun OrhanNavHost(isDark: Boolean) {
                 isDark = isDark,
                 profile = profile,
                 agents = mergeWithSamples(savedAgents.map { it.toInstalledAgent() }),
+                deletableAgentNames = savedAgents.map { it.name }.toSet(),
+                onDeleteAgent = { agent -> scope.launch { agentStore.delete(agent.name) } },
                 recentChats = recent.map {
                     OrhanChat(it.title, "Recent chat", relativeTime(it.openedAt), isAgent = true)
                 },
