@@ -1,6 +1,5 @@
 package ai.orhan.feature.settings.detail
 
-import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -17,9 +16,6 @@ fun ChatPreferencesScreen(onBack: () -> Unit) {
     val prefs by store.prefs.collectAsState(initial = ChatPrefs())
     val scope = rememberCoroutineScope()
     val set: ((ChatPrefs) -> ChatPrefs) -> Unit = { t -> scope.launch { store.update(t) } }
-    val comingSoon: () -> Unit = {
-        Toast.makeText(context, "Picker coming soon", Toast.LENGTH_SHORT).show()
-    }
 
     SettingsDetailScaffold(title = "Chat preferences", onBack = onBack) {
         SectionLabel("Composer")
@@ -33,11 +29,6 @@ fun ChatPreferencesScreen(onBack: () -> Unit) {
             { SwitchRow("Typing indicators", "Show when an agent is responding", prefs.typingIndicators, { v -> set { it.copy(typingIndicators = v) } }) },
             { SwitchRow("Auto-play media", "GIFs and video previews in chat", prefs.autoPlayMedia, { v -> set { it.copy(autoPlayMedia = v) } }) },
             { SwitchRow("Agent activity cards", "Inline artifact previews in replies", prefs.agentActivityCards, { v -> set { it.copy(agentActivityCards = v) } }) },
-        ))
-        SectionLabel("Default for new chats")
-        GroupCard(listOf(
-            { NavRow("Default agent", value = "Webpage Developer", onClick = comingSoon) },
-            { NavRow("Auto-archive chats", value = "After 30 days", onClick = comingSoon) },
         ))
     }
 }

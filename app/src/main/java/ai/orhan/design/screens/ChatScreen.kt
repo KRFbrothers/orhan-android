@@ -149,34 +149,8 @@ private val ChatThreadSaver: Saver<List<ChatMessage>, ArrayList<String>> = Saver
     },
 )
 
-/** Thread as it appears in the shipped mockup. */
-private fun initialThread(): List<ChatMessage> = listOf(
-    ChatMessage(
-        id = 1L,
-        role = ChatRole.User,
-        text = "Draft a landing page for our AI meetup in Palo Alto \u2014 dark hero, teal accent, one CTA.",
-        time = "9:38 AM",
-    ),
-    ChatMessage(
-        id = 2L,
-        role = ChatRole.Agent,
-        text = "On it. I\u2019ll use the Orhan green (#087c45) so it stays on-brand, keep one primary CTA, and make it mobile-first.",
-        time = "9:38 AM",
-        artifact = ChatArtifact(name = "meetup-landing \u00b7 v1", meta = "Responsive \u00b7 12 sections \u00b7 Lato"),
-    ),
-    ChatMessage(
-        id = 3L,
-        role = ChatRole.User,
-        text = "Looks right. Make the hero headline bigger and add the speaker line-up.",
-        time = "9:40 AM",
-    ),
-    ChatMessage(
-        id = 4L,
-        role = ChatRole.Agent,
-        text = "Done \u2014 headline is now 56/60 with the mint accent, and the line-up is a 3-up card row that stacks on small screens. Draft is ready to publish.",
-        time = "9:41 AM",
-    ),
-)
+/** New chats start empty. */
+private fun initialThread(): List<ChatMessage> = emptyList()
 
 /* ------------------------------ entry point ------------------------------ */
 
@@ -861,7 +835,7 @@ private fun Composer(
 @Composable
 private fun ChatLightPreview() {
     OrhanTheme(darkTheme = false) {
-        ChatScreen(agentName = "Webpage Developer")
+        ChatScreen(agentName = "Orhan")
     }
 }
 
@@ -869,7 +843,7 @@ private fun ChatLightPreview() {
 @Composable
 private fun ChatDarkPreview() {
     OrhanTheme(darkTheme = true) {
-        ChatScreen(agentName = "Webpage Developer")
+        ChatScreen(agentName = "Orhan")
     }
 }
 
@@ -877,6 +851,6 @@ private fun ChatDarkPreview() {
 @Composable
 private fun ChatNarrowPreview() {
     OrhanTheme(darkTheme = true) {
-        ChatScreen(agentName = "Webpage Developer")
+        ChatScreen(agentName = "Orhan")
     }
 }

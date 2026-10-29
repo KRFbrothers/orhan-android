@@ -14,22 +14,22 @@ data class Playbook(
 val StarterPlaybooks = listOf(
     Playbook(
         "landing-page", "Launch a landing page", "Describe your product and get a one-page site with hero, features and a call to action.",
-        "Web", "Webpage Developer",
+        "Web", "",
         "Build a landing page for [product]. Audience: [who it's for]. Include a hero with a clear headline, three feature sections, a short FAQ and a sign-up call to action. Keep the design clean and mobile-first.",
     ),
     Playbook(
         "pitch-deck", "Draft a 10-slide pitch", "Problem, solution, market, traction and ask \u2014 outlined and designed as a deck.",
-        "Slides", "Slides Assistant",
+        "Slides", "",
         "Create a 10-slide pitch deck for [company]. Cover: problem, solution, market size, product, business model, traction, competition, team, roadmap and the ask. Give each slide a headline and 3 short bullets.",
     ),
     Playbook(
         "competitor-brief", "Competitor snapshot", "A cited one-page brief comparing you with your top competitors.",
-        "Research", "Market Research",
+        "Research", "",
         "Research the top 3\u20135 competitors of [company/product] in [market]. For each, summarise positioning, pricing, key features and recent news, with sources. End with gaps we could exploit.",
     ),
     Playbook(
         "expense-review", "Tidy up monthly expenses", "Paste transactions and get them categorised with anything unusual flagged.",
-        "Finance", "Accounting Assistant",
+        "Finance", "",
         "Here are my transactions for [month]:\n[paste list]\nCategorise each one, total by category, and flag duplicates, unusual amounts or anything that needs a receipt.",
     ),
     Playbook(
