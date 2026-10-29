@@ -21,3 +21,37 @@ class ChatThreadStoreTest {
         assertEquals(false, l.any { it.title == "t0" })
     }
 }
+
+class ChatAttachmentPersistenceTest {
+    private val att = ai.orhan.data.chat.ChatAttachment("note.m4a", "audio/mp4", "AQID", 3)
+    private fun dec(s: String) = java.util.Base64.getDecoder().decode(s)
+    private fun enc(b: ByteArray) = java.util.Base64.getEncoder().encodeToString(b)
+
+    @Test fun serializerRoundTripsAttachmentMetadata() = kotlinx.coroutines.runBlocking {
+        val m = StoredMessage(1, "user", "\uD83D\uDCCE note.m4a", "now", StoredAttachment("note.m4a", "audio/mp4", 3, "a_1.bin"))
+        val list = listOf(ChatThread("t", 5, listOf(m, StoredMessage(2, "agent", "hi", "now"))))
+        val out = java.io.ByteArrayOutputStream()
+        ChatThreadsSerializer.writeTo(list, out)
+        assertEquals(list, ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()))
+    }
+
+    @Test fun filesRoundTripAndPrune() {
+        val dir = java.nio.file.Files.createTempDirectory("att").toFile()
+        val files = AttachmentFiles(dir)
+        val s = files.put("t", 1, att, ::dec)!!
+        assertEquals(att, files.read(s, ::enc))
+        files.prune(emptySet())
+        assertEquals(null, files.read(s, ::enc))
+    }
+
+    @Test fun pruneEnforcesDiskBudget() {
+        val dir = java.nio.file.Files.createTempDirectory("att").toFile()
+        val files = AttachmentFiles(dir, maxBytes = 4)
+        val a = files.put("t", 1, att, ::dec)!!
+        val b = files.put("t", 2, att, ::dec)!!
+        java.io.File(dir, a.fileName).setLastModified(1000)
+        files.prune(setOf(a.fileName, b.fileName))
+        assertEquals(null, files.read(a, ::enc))
+        assertEquals(att, files.read(b, ::enc))
+    }
+}
