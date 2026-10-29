@@ -99,9 +99,21 @@ class ChatViewModel(
         personalMemory = text.trim()
     }
 
+    /** Identity layer sent on every request so the shared engine never answers as Dua AI or names its model vendor. */
+    internal fun orhanIdentity(agent: String): String {
+        val custom = agent.isNotBlank() && !agent.equals("Orhan", ignoreCase = true)
+        val who = if (custom) "the agent \"$agent\" inside the Orhan app (a personal AI assistant)" else "Orhan, a personal AI assistant"
+        return "Identity (always follow): You are $who. Always speak as ${if (custom) agent else "Orhan"}. " +
+            "Never say you are Dua AI or Dua, and never mention Gemini, Google, OpenAI or any other model/vendor name. " +
+            "If asked who you are or which model you are, say you are ${if (custom) "$agent, an agent in Orhan" else "Orhan, your personal AI assistant"}, powered by Orhan's AI engine — nothing more. " +
+            "Reply in the user's language (Hinglish if they use Hinglish)."
+    }
+
     /** Prepends hidden user/model preface turns (engine only supports those roles); never shown in UI. */
     internal fun withPreface(uiTurns: List<ChatTurn>): List<ChatTurn> {
         val preface = buildList {
+            add(ChatTurn("user", orhanIdentity(agentName)))
+            add(ChatTurn("model", "Understood. I'm Orhan."))
             if (personalMemory.isNotBlank()) {
                 add(ChatTurn("user", "Personal context about the user (use when relevant):\n$personalMemory"))
                 add(ChatTurn("model", "Understood. I'll use that context when helpful."))
@@ -112,7 +124,6 @@ class ChatViewModel(
                 add(ChatTurn("model", "Understood. I'll follow those instructions."))
             }
         }
-        if (preface.isEmpty()) return uiTurns
         // preface + UI turns = 20, matching ChatRepository's takeLast(20) so the preface is never dropped.
         return preface + uiTurns.takeLast(20 - preface.size)
     }
