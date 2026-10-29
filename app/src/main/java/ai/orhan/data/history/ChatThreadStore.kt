@@ -114,6 +114,10 @@ fun List<ChatThread>.withSaved(
     return (rest + th).sortedByDescending { it.updatedAt }.take(MAX_THREADS)
 }
 
+/** Pure helper: drops attachment metadata from every message; text, titles and updatedAt are kept. */
+fun List<ChatThread>.withoutAttachments(): List<ChatThread> =
+    map { t -> t.copy(messages = t.messages.map { it.copy(attachment = null) }) }
+
 /** A restored thread: UI messages plus re-sendable attachments keyed by user message id. */
 data class LoadedThread(val messages: List<ChatMessage>, val attachments: Map<Long, ChatAttachment>)
 
@@ -147,6 +151,15 @@ class AttachmentFiles(private val dir: File?, private val maxBytes: Long = MAX_A
         if (!f.isFile) return null
         return try { ChatAttachment(s.name, s.mimeType, encode(f.readBytes()), s.sizeBytes) } catch (e: Exception) { null }
     }
+
+    /** Total bytes of attachment files on disk (0 if the dir is missing). Ignores in-progress .tmp files. */
+    fun totalBytes(): Long = liveFiles().sumOf { it.length() }
+
+    /** Number of attachment files on disk. */
+    fun fileCount(): Int = liveFiles().size
+
+    private fun liveFiles(): List<File> =
+        dir?.listFiles()?.filter { it.isFile && !it.name.endsWith(".tmp") }.orEmpty()
 
     /** Deletes files not referenced by [keep], then oldest files until under the disk budget. */
     fun prune(keep: Set<String>) {
@@ -198,6 +211,15 @@ class ChatThreadStore(
 
     suspend fun clear() {
         dataStore.updateData { emptyList() }
+        withContext(Dispatchers.IO) { files.prune(emptySet()) }
+    }
+
+    /** Disk usage of chat attachment files: bytes to file count. */
+    suspend fun attachmentUsage(): Pair<Long, Int> = withContext(Dispatchers.IO) { files.totalBytes() to files.fileCount() }
+
+    /** Deletes all chat attachment files and their metadata; chat text is kept. */
+    suspend fun clearAttachments() {
+        dataStore.updateData { it.withoutAttachments() }
         withContext(Dispatchers.IO) { files.prune(emptySet()) }
     }
 
