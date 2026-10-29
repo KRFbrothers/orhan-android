@@ -6,7 +6,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -22,6 +21,7 @@ import androidx.compose.ui.semantics.Role
 import ai.orhan.data.artifacts.Artifact
 import ai.orhan.feature.artifacts.ArtifactsScreen
 import ai.orhan.feature.memory.MemoryScreen
+import ai.orhan.feature.search.LocalSearchScreen
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.remember
@@ -66,11 +66,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
@@ -225,6 +220,32 @@ fun HomeScreen(
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
     var profileOpen by rememberSaveable { mutableStateOf(false) }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var artifactToOpen by rememberSaveable { mutableStateOf<String?>(null) }
+    if (searchOpen) {
+        BackHandler { searchOpen = false }
+        LocalSearchScreen(
+            chats = recentChats,
+            agents = agents,
+            artifacts = artifacts,
+            onCancel = { searchOpen = false },
+            onOpenChat = { chat ->
+                searchOpen = false
+                onOpenChat(chat)
+            },
+            onOpenAgent = { agent ->
+                searchOpen = false
+                onOpenChat(OrhanChat(agent.name, agent.blurb, "", isAgent = true))
+            },
+            onOpenArtifact = { id ->
+                searchOpen = false
+                artifactToOpen = id
+                tab = OrhanTab.Artifacts
+            },
+            modifier = modifier,
+        )
+        return
+    }
     if (profileOpen) {
         BackHandler { profileOpen = false }
     }
@@ -297,6 +318,7 @@ fun HomeScreen(
                 when (tab) {
                     OrhanTab.Chats -> ChatsTab(
                         onOpenChat = onOpenChat,
+                        onOpenSearch = { searchOpen = true },
                         recentChats = recentChats,
                         pinnedTitles = pinnedTitles,
                         onTogglePin = onTogglePin,
@@ -330,6 +352,8 @@ fun HomeScreen(
                         onDelete = onDeleteArtifact,
                         onBack = { tab = OrhanTab.Chats },
                         embedded = true,
+                        pendingOpenId = artifactToOpen,
+                        onPendingOpenConsumed = { artifactToOpen = null },
                     )
                 }
             }
@@ -412,6 +436,7 @@ private fun HomeTopBar(
 @Composable
 private fun ChatsTab(
     onOpenChat: (OrhanChat) -> Unit,
+    onOpenSearch: () -> Unit,
     recentChats: List<OrhanChat> = emptyList(),
     pinnedTitles: Set<String> = emptySet(),
     onTogglePin: (OrhanChat) -> Unit = {},
@@ -420,18 +445,11 @@ private fun ChatsTab(
 ) {
     val recentTitles = recentChats.map { it.title }.toSet()
     val chats = recentChats
-    var query by rememberSaveable { mutableStateOf("") }
     var pinnedExpanded by rememberSaveable { mutableStateOf(true) }
     var chatsExpanded by rememberSaveable { mutableStateOf(true) }
     val hub = chats.firstOrNull { it.title.equals("Orhan", ignoreCase = true) }
     // Orhan is the hub (card above the sections); keep it out of the rows.
-    val visible = chats
-        .filterNot { it.title.equals("Orhan", ignoreCase = true) }
-        .filter { chat ->
-            val q = query.trim()
-            q.isEmpty() || chat.title.contains(q, ignoreCase = true) ||
-                chat.snippet.contains(q, ignoreCase = true)
-        }
+    val visible = chats.filterNot { it.title.equals("Orhan", ignoreCase = true) }
     val pinnedVisible = visible.filter { it.title in pinnedTitles }
     val unpinnedVisible = visible.filterNot { it.title in pinnedTitles }
     val hubSnippet = hub?.snippet
@@ -443,9 +461,8 @@ private fun ChatsTab(
         contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp),
     ) {
         item(key = "search") {
-            SearchField(
-                query = query,
-                onQueryChange = { query = it },
+            SearchPill(
+                onClick = onOpenSearch,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
@@ -490,10 +507,10 @@ private fun ChatsTab(
             )
         }
 
-        if (chatsExpanded && visible.isEmpty() && (query.isNotBlank() || chats.isEmpty())) {
+        if (chatsExpanded && visible.isEmpty() && chats.isEmpty()) {
             item(key = "empty") {
                 Text(
-                    text = if (query.isNotBlank()) "No chats match" else "No chats yet — tap + to start one",
+                    text = "No chats yet — tap + to start one",
                     style = OrhanTextStyles.snippet,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
@@ -624,75 +641,35 @@ private fun SectionHeader(
 }
 
 @Composable
-private fun SearchField(
-    query: String,
-    onQueryChange: (String) -> Unit,
+private fun SearchPill(
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
-    val focusRequester = remember { FocusRequester() }
-    var focused by remember { mutableStateOf(false) }
-    val showHint = query.isEmpty() && !focused
-
-    Box(
+    Row(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .clip(shapes.pill)
             .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, colors.fieldEdge, shapes.pill),
-        contentAlignment = Alignment.CenterStart,
+            .border(1.dp, colors.fieldEdge, shapes.pill)
+            .clickable(onClick = onClick),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (showHint) {
-            Row(
-                modifier = Modifier.align(Alignment.Center),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Search,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Search",
-                    style = OrhanTextStyles.snippet,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-            }
-        }
-        BasicTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            singleLine = true,
-            textStyle = OrhanTextStyles.snippet.copy(
-                color = if (showHint) Color.Transparent else MaterialTheme.colorScheme.onSurface,
-            ),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester)
-                .onFocusChanged { focused = it.isFocused }
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            decorationBox = { inner ->
-                if (showHint) {
-                    Box(Modifier.fillMaxWidth()) { inner() }
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Rounded.Search,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Box(Modifier.weight(1f)) { inner() }
-                    }
-                }
-            },
+        Icon(
+            imageVector = Icons.Rounded.Search,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "Search",
+            style = OrhanTextStyles.snippet,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
         )
     }
 }

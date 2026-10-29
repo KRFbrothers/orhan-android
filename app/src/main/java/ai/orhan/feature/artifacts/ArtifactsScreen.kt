@@ -12,16 +12,33 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
+import ai.orhan.design.theme.OrhanTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,10 +63,24 @@ fun ArtifactsScreen(
     onBack: () -> Unit,
     /** True when shown under the home tabs, which already inset the status bar. */
     embedded: Boolean = false,
+    /** Opens this artifact once, for example from search. Cleared via [onPendingOpenConsumed]. */
+    pendingOpenId: String? = null,
+    onPendingOpenConsumed: () -> Unit = {},
 ) {
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
     // Id being edited; may be a fresh id not yet in the store (new document).
     var editId by rememberSaveable { mutableStateOf<String?>(null) }
+    var filter by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(pendingOpenId, artifacts) {
+        val id = pendingOpenId ?: return@LaunchedEffect
+        if (artifacts.any { it.id == id }) {
+            editId = null
+            openId = id
+            onPendingOpenConsumed()
+        } else if (artifacts.isNotEmpty()) {
+            onPendingOpenConsumed()
+        }
+    }
     val editing = editId
     if (editing != null) {
         val existing = artifacts.firstOrNull { it.id == editing }
@@ -87,30 +118,110 @@ fun ArtifactsScreen(
         showBack = !embedded,
         applyStatusBarPadding = !embedded,
     ) {
-        OutlinedButton(
-            onClick = { editId = UUID.randomUUID().toString() },
-            modifier = Modifier.padding(vertical = 8.dp),
-        ) { Text("New document") }
+        val colors = OrhanTheme.colors
+        val shown = artifacts
+            .filter {
+                filter.isBlank() || it.title.contains(filter, ignoreCase = true) ||
+                    it.content.contains(filter, ignoreCase = true)
+            }
+            .sortedByDescending { it.createdAt }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+                    .clip(OrhanTheme.shapes.pill)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, colors.fieldEdge, OrhanTheme.shapes.pill)
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                BasicTextField(
+                    value = filter,
+                    onValueChange = { filter = it },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    textStyle = OrhanTextStyles.snippet.copy(color = MaterialTheme.colorScheme.onSurface),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    decorationBox = { inner ->
+                        if (filter.isEmpty()) {
+                            Text("Search", style = OrhanTextStyles.snippet, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        inner()
+                    },
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, colors.fieldEdge, CircleShape)
+                    .clickable { editId = UUID.randomUUID().toString() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.Add, contentDescription = "New document", tint = MaterialTheme.colorScheme.onSurface)
+            }
+        }
         if (artifacts.isEmpty()) {
             Text(
-                text = "No artifacts yet \u2014 save a reply from chat, or create a document.",
+                text = "No artifacts yet — save a reply from chat, or create a document.",
                 style = OrhanTextStyles.snippet,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 24.dp, start = 4.dp),
+                modifier = Modifier.padding(top = 12.dp, start = 4.dp),
+            )
+        } else if (shown.isEmpty()) {
+            Text(
+                text = "No artifacts match",
+                style = OrhanTextStyles.snippet,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp, start = 4.dp),
             )
         }
-        artifacts.sortedByDescending { it.createdAt }.forEach { a ->
-            Column(
-                Modifier.fillMaxWidth().clickable { openId = a.id }.padding(vertical = 12.dp, horizontal = 4.dp),
+        shown.forEach { a ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, colors.hairline, RoundedCornerShape(16.dp))
+                    .clickable { openId = a.id }
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(a.title, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(a.content, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(formatDate(a.createdAt), style = OrhanTextStyles.meta,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.brandSoft),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Rounded.Description, contentDescription = null, tint = colors.onBrandSoft)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        a.title.ifBlank { "Untitled" },
+                        style = OrhanTextStyles.rowTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        formatDate(a.createdAt),
+                        style = OrhanTextStyles.meta,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             }
-            HorizontalDivider()
         }
     }
 }

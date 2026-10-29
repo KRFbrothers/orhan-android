@@ -1,6 +1,9 @@
 package ai.orhan.feature.memory
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,13 +11,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
+import ai.orhan.design.theme.OrhanTextStyles
+import ai.orhan.design.theme.OrhanTheme
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -54,7 +68,7 @@ import ai.orhan.feature.settings.detail.SettingsDetailScaffold
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-private val SECTIONS = listOf("Personal context", "Notes", "To-dos")
+private val SECTIONS = listOf("Context", "Notes", "To-dos")
 
 /** Memory: personal context (injected into chats), plus local-only notes and to-dos. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -131,8 +145,45 @@ private fun EntriesSection(isTodo: Boolean) {
     val items by (if (isTodo) store.todos else store.notes).collectAsState(initial = emptyList())
     var editing by remember(isTodo) { mutableStateOf<EditState?>(null) }
     var deleting by remember(isTodo) { mutableStateOf<MemoryEntry?>(null) }
+    var filter by rememberSaveable { mutableStateOf("") }
     val noun = if (isTodo) "to-do" else "note"
+    val colors = OrhanTheme.colors
+    val visible = items.filter {
+        filter.isBlank() || it.title.contains(filter, ignoreCase = true) || it.content.contains(filter, ignoreCase = true)
+    }
 
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 48.dp)
+                .clip(OrhanTheme.shapes.pill)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, colors.fieldEdge, OrhanTheme.shapes.pill)
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            BasicTextField(
+                value = filter,
+                onValueChange = { filter = it },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                textStyle = OrhanTextStyles.snippet.copy(color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                decorationBox = { inner ->
+                    if (filter.isEmpty()) {
+                        Text("Search", style = OrhanTextStyles.snippet, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    inner()
+                },
+            )
+        }
+    }
     OutlinedButton(
         onClick = { editing = EditState(null, "", "") },
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -141,35 +192,62 @@ private fun EntriesSection(isTodo: Boolean) {
     if (items.isEmpty()) {
         Text(
             if (isTodo) "No to-dos yet. Add one to keep track." else "No notes yet. Jot something down.",
-            style = MaterialTheme.typography.bodyMedium,
+            style = OrhanTextStyles.snippet,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 24.dp),
+        )
+    } else if (visible.isEmpty()) {
+        Text(
+            "No matches",
+            style = OrhanTextStyles.snippet,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 24.dp),
         )
     }
-    items.forEach { e ->
+    visible.forEach { e ->
         Row(
-            modifier = Modifier.fillMaxWidth().clickable { editing = EditState(e.id, e.title, e.content) }.padding(vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, colors.hairline, RoundedCornerShape(16.dp))
+                .clickable { editing = EditState(e.id, e.title, e.content) }
+                .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (isTodo) Checkbox(checked = e.done, onCheckedChange = { scope.launch { store.toggleDone(e.id) } })
-            Column(Modifier.weight(1f).padding(start = if (isTodo) 0.dp else 4.dp)) {
+            Box(
+                modifier = Modifier.size(36.dp).clip(CircleShape).background(colors.brandSoft),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (isTodo) Icons.Rounded.CheckCircle else Icons.Rounded.Description,
+                    contentDescription = null,
+                    tint = colors.onBrandSoft,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
                 Text(
                     e.title,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = OrhanTextStyles.rowTitle,
                     textDecoration = if (isTodo && e.done) TextDecoration.LineThrough else null,
-                    color = if (isTodo && e.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onBackground,
+                    color = if (isTodo && e.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 if (e.content.isNotBlank()) Text(
                     e.content,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = OrhanTextStyles.snippet,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2, overflow = TextOverflow.Ellipsis,
                 )
             }
+            if (isTodo) {
+                Checkbox(checked = e.done, onCheckedChange = { scope.launch { store.toggleDone(e.id) } })
+            }
             IconButton(onClick = { deleting = e }) { Icon(Icons.Rounded.Delete, "Delete $noun") }
         }
-        HorizontalDivider()
     }
     FootNote(if (isTodo) "To-dos stay on this device only." else "Notes stay on this device and aren't sent to your agents.")
 
