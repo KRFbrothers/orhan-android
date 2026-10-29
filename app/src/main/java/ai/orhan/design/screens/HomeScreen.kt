@@ -254,6 +254,7 @@ fun HomeScreen(
     onCreateWorkflow: () -> Unit = {},
     onEditWorkflow: (ai.orhan.data.workflows.Workflow) -> Unit = {},
     onDeleteWorkflow: ((ai.orhan.data.workflows.Workflow) -> Unit)? = null,
+    onOpenPlaybook: (ai.orhan.feature.discover.Playbook) -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
 
@@ -293,8 +294,7 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
                 OrhanTab.Discover -> DiscoverScreen(
-                    onStartFeatured = { onOpenChat(OrhanChat("Webpage Developer", "", "", isAgent = true)) },
-                    onAddAgent = { onOpenChat(OrhanChat(it.name, it.subtitle, "", isAgent = true)) },
+                    onOpenPlaybook = onOpenPlaybook,
                     modifier = Modifier.fillMaxSize(),
                 )
                 OrhanTab.Profile -> ProfileTab(

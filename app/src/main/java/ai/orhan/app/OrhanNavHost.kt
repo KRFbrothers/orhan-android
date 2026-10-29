@@ -130,6 +130,12 @@ fun OrhanNavHost(isDark: Boolean) {
                     scope.launch { recentRepo.recordOpened(chatTitle) }
                     navController.navigate(AppRoutes.chat(chatTitle, wf.content))
                 },
+                onOpenPlaybook = { pb ->
+                    // Chat route resolves saved/sample agent instructions by title, same as workflows.
+                    val chatTitle = pb.agentName.ifBlank { pb.title }
+                    scope.launch { recentRepo.recordOpened(chatTitle) }
+                    navController.navigate(AppRoutes.chat(chatTitle, pb.prompt))
+                },
                 onCreateWorkflow = {
                     navController.navigate(AppRoutes.workflowEdit()) { launchSingleTop = true }
                 },
