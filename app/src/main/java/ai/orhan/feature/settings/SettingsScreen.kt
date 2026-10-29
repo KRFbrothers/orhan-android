@@ -57,6 +57,7 @@ fun SettingsScreen(
     onOpenAppearance: () -> Unit = {},
     onOpenNotifications: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
+    onOpenChatPreferences: () -> Unit = {},
     onOpenStorage: () -> Unit = {},
     onOpenLanguage: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
@@ -139,6 +140,12 @@ fun SettingsScreen(
                     title = "Privacy",
                     subtitle = "Data, history, blocking",
                     onClick = onOpenPrivacy,
+                )
+                RowDivider()
+                SettingsRow(
+                    title = "Chat preferences",
+                    subtitle = "Send with Enter, typing indicators",
+                    onClick = onOpenChatPreferences,
                 )
                 RowDivider()
                 SettingsRow(
