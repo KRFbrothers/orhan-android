@@ -1,5 +1,8 @@
 package ai.orhan.app
 
+import ai.orhan.feature.settings.detail.LanguagePrefs
+import ai.orhan.feature.settings.detail.languageName
+import ai.orhan.feature.settings.detail.settingsDetailPreferences
 import ai.orhan.data.history.chatThreads
 import android.app.Application
 import android.net.Uri
@@ -257,6 +260,9 @@ fun OrhanNavHost(isDark: Boolean) {
             val agent = savedAgents.firstOrNull { it.name.equals(title, ignoreCase = true) }
             chatViewModel.setAgent(agent?.name ?: title, agent?.instructions.orEmpty(), agent?.tools.orEmpty())
             chatViewModel.setPersonalMemory(personalMemory)
+            val languageRepo = remember(context) { context.settingsDetailPreferences() }
+            val languagePrefs by languageRepo.language.collectAsStateWithLifecycle(initialValue = LanguagePrefs())
+            chatViewModel.setReplyLanguage(if (languagePrefs.agentsUseAppLanguage) languageName(languagePrefs.code) else null)
             val chatPrefsRepo = remember(context) { context.chatPreferences() }
             val chatPrefs by chatPrefsRepo.prefs.collectAsStateWithLifecycle(initialValue = ChatPrefs())
             ChatScreen(

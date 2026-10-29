@@ -12,40 +12,39 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import ai.orhan.design.theme.OrhanTextStyles
 
-private val Languages = listOf(
-    "en-US" to ("English (US)" to "English"),
-    "en-GB" to ("English (UK)" to "English"),
-    "hi" to ("Hindi" to "हिन्दी"),
-    "es" to ("Spanish" to "Español"),
-    "ja" to ("Japanese" to "日本語"),
-    "ar" to ("Arabic" to "العربية"),
-)
-
-/** Settings → Language. Local selection only. */
+/**
+ * Settings → Language. Saved on-device. Applied to agent replies in chat (when
+ * "Always reply in app language" is on); app UI strings are not localized yet.
+ */
 @Composable
 fun LanguageScreen(onBack: () -> Unit) {
-    var selected by rememberSaveable { mutableStateOf("en-US") }
-    var alwaysAppLang by rememberSaveable { mutableStateOf(true) }
+    val context = LocalContext.current
+    val repo = remember(context) { context.settingsDetailPreferences() }
+    val prefs by repo.language.collectAsStateWithLifecycle(initialValue = LanguagePrefs())
+    val scope = rememberCoroutineScope()
+    val selected = prefs.code
 
     SettingsDetailScaffold(title = "Language", onBack = onBack) {
         SectionLabel("App language")
         Column(Modifier.selectableGroup()) {
-            GroupCard(Languages.map { (code, names) ->
+            GroupCard(SupportedLanguages.map { (code, names) ->
                 @Composable {
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .heightIn(min = 56.dp)
-                            .selectable(selected = selected == code, role = Role.RadioButton) { selected = code }
+                            .selectable(selected = selected == code, role = Role.RadioButton) { scope.launch { repo.setLanguage(code) } }
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -60,7 +59,7 @@ fun LanguageScreen(onBack: () -> Unit) {
         }
         SectionLabel("Agent replies")
         GroupCard(listOf(
-            { SwitchRow("Always reply in app language", "Agents answer in your selected language", alwaysAppLang, { alwaysAppLang = it }) },
+            { SwitchRow("Always reply in app language", "Agents answer in your selected language. App text stays English for now.", prefs.agentsUseAppLanguage, { on -> scope.launch { repo.setAgentsUseAppLanguage(on) } }) },
         ))
     }
 }
