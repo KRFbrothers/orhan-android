@@ -83,10 +83,16 @@ fun NavGraphBuilder.settingsDetailPages(navController: NavHostController) {
         val threadStore = remember(context) { context.chatThreads() }
         val artifacts by artifactRepo.artifacts.collectAsStateWithLifecycle(initialValue = null)
         val threads by threadStore.threads.collectAsStateWithLifecycle(initialValue = null)
+        // Recount media whenever threads change (save, delete, or clear).
+        val mediaBytes by androidx.compose.runtime.produceState<Long?>(null, threads) {
+            value = threadStore.attachmentUsage().first
+        }
         StorageScreen(
             onBack = back,
             artifactCount = artifacts?.size,
             chatThreadCount = threads?.size,
+            chatMediaBytes = mediaBytes,
+            onClearChatMedia = { threadStore.clearAttachments() },
             onOpenArtifacts = { navController.navigate(AppRoutes.ARTIFACTS) },
         )
     }

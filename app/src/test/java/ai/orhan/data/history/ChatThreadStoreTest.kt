@@ -54,4 +54,34 @@ class ChatAttachmentPersistenceTest {
         assertEquals(null, files.read(a, ::enc))
         assertEquals(att, files.read(b, ::enc))
     }
+
+    @Test fun totalBytesAndCount() {
+        val dir = java.nio.file.Files.createTempDirectory("att").toFile()
+        val files = AttachmentFiles(dir)
+        assertEquals(0L, files.totalBytes()); assertEquals(0, files.fileCount())
+        files.put("t", 1, att, ::dec); files.put("t", 2, att, ::dec)
+        assertEquals(6L, files.totalBytes()); assertEquals(2, files.fileCount())
+        assertEquals(0L, AttachmentFiles(null).totalBytes())
+    }
+
+    @Test fun clearAttachmentsKeepsTextDropsFilesAndMetadata() = kotlinx.coroutines.runBlocking {
+        val dir = java.nio.file.Files.createTempDirectory("att").toFile()
+        val files = AttachmentFiles(dir)
+        val s = files.put("t", 1, att, ::dec)!!
+        val initial = listOf(ChatThread("t", 5, listOf(StoredMessage(1, "user", "hello", "now", s), StoredMessage(2, "agent", "hi", "now"))))
+        val ds = object : androidx.datastore.core.DataStore<List<ChatThread>> {
+            val state = kotlinx.coroutines.flow.MutableStateFlow(initial)
+            override val data = state
+            override suspend fun updateData(transform: suspend (List<ChatThread>) -> List<ChatThread>) =
+                transform(state.value).also { state.value = it }
+        }
+        val store = ChatThreadStore(ds, files)
+        assertEquals(3L to 1, store.attachmentUsage())
+        store.clearAttachments()
+        val after = ds.state.value.single()
+        assertEquals("t", after.title); assertEquals(5L, after.updatedAt)
+        assertEquals(listOf("hello", "hi"), after.messages.map { it.text })
+        assertEquals(true, after.messages.all { it.attachment == null })
+        assertEquals(0L to 0, store.attachmentUsage())
+    }
 }
