@@ -16,11 +16,13 @@ Headers:
 - `Content-Type: application/json`
 
 ```json
-{ "stream": false,
+{ "stream": false, "mode": "agent",
   "messages": [ {"role":"user","text":"hi"}, {"role":"model","text":"..."} ] }
 → 200 { "text": "..." }      | 4xx/5xx { "error": "..." }
 ```
 Roles are `user` / `model`. The app sends the last 20 turns.
+
+**Agent mode:** every request includes `"mode": "agent"` (streaming and non-stream fallback), matching Dua Android. This enables the engine's Agent pipeline; the server uses `AGENT_ENGINE=adk` when configured.
 
 ## Streaming (`"stream": true`, SSE) — default
 The app first sends `"stream": true` with `Accept: text/event-stream`. The engine replies with SSE frames
