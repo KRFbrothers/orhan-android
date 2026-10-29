@@ -23,12 +23,12 @@ import ai.orhan.feature.settings.detail.SettingsDetailScaffold
 
 private val AgentTools = listOf("Web", "Files", "Code", "Image")
 
-/** Create agent: name it, give it tools, done. Local UI only — nothing is persisted yet. */
+/** Create agent: name it, give it tools, done. Saved locally via AgentStore. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CreateAgentScreen(
     onBack: () -> Unit,
-    onCreated: (name: String, blurb: String) -> Unit,
+    onCreated: (name: String, blurb: String, instructions: String, tools: List<String>) -> Unit,
 ) {
     var name by rememberSaveable { mutableStateOf("") }
     var blurb by rememberSaveable { mutableStateOf("") }
@@ -77,7 +77,7 @@ fun CreateAgentScreen(
         Spacer(Modifier.height(24.dp))
         Button(
             onClick = {
-                if (name.isBlank()) showError = true else onCreated(name.trim(), blurb.trim())
+                if (name.isBlank()) showError = true else onCreated(name.trim(), blurb.trim(), instructions.trim(), AgentTools.filter { it in tools })
             },
             modifier = Modifier.fillMaxWidth().height(48.dp),
         ) { Text("Create") }

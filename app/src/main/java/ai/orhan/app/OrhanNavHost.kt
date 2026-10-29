@@ -106,10 +106,16 @@ fun OrhanNavHost(isDark: Boolean) {
         composable(AppRoutes.CREATE_AGENT) {
             CreateAgentScreen(
                 onBack = { navController.popBackStack() },
-                onCreated = { name, blurb ->
+                onCreated = { name, blurb, instructions, tools ->
                     scope.launch {
                         agentStore.upsert(
-                            SavedAgent(name = name, blurb = blurb, createdAt = System.currentTimeMillis()),
+                            SavedAgent(
+                                name = name,
+                                blurb = blurb,
+                                instructions = instructions,
+                                tools = tools,
+                                createdAt = System.currentTimeMillis(),
+                            ),
                         )
                         navController.navigate(AppRoutes.chat(name)) {
                             popUpTo(AppRoutes.CREATE_AGENT) { inclusive = true }
@@ -139,10 +145,13 @@ fun OrhanNavHost(isDark: Boolean) {
             }
             val chatViewModel: ChatViewModel = viewModel { ChatViewModel(context as Application) }
             val chat by chatViewModel.state.collectAsStateWithLifecycle()
+            val title = entry.arguments?.getString("title").orEmpty()
+            val agent = savedAgents.firstOrNull { it.name.equals(title, ignoreCase = true) }
+            chatViewModel.setAgent(agent?.name ?: title, agent?.instructions.orEmpty(), agent?.tools.orEmpty())
             val chatPrefsRepo = remember(context) { context.chatPreferences() }
             val chatPrefs by chatPrefsRepo.prefs.collectAsStateWithLifecycle(initialValue = ChatPrefs())
             ChatScreen(
-                agentName = entry.arguments?.getString("title").orEmpty(),
+                agentName = title,
                 onBack = { navController.popBackStack() },
                 messagesOverride = chat.messages,
                 loading = chat.loading,

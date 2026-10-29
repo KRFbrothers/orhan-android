@@ -39,14 +39,35 @@ class ChatViewModel(
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
+    private var agentName: String = ""
+    private var instructions: String = ""
+    private var tools: List<String> = emptyList()
+
+    /** Sets the agent personality used for API turns. Idempotent; safe to call on every recomposition. */
+    fun setAgent(name: String, instructions: String, tools: List<String> = emptyList()) {
+        agentName = name; this.instructions = instructions.trim(); this.tools = tools
+    }
+
+    /** Prepends a hidden user/model preface (engine only supports those roles); never shown in UI. */
+    internal fun withPreface(uiTurns: List<ChatTurn>): List<ChatTurn> {
+        if (instructions.isBlank()) return uiTurns
+        val toolsLine = if (tools.isEmpty()) "" else "\nAvailable tools: ${tools.joinToString(", ")}"
+        val preface = listOf(
+            ChatTurn("user", "You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions$toolsLine"),
+            ChatTurn("model", "Understood. I'll follow those instructions."),
+        )
+        // 2 + 18 = 20, matching ChatRepository's takeLast(20) so the preface is never dropped.
+        return preface + uiTurns.takeLast(18)
+    }
+
     fun send(raw: String) {
         val text = raw.trim()
         if (text.isEmpty() || _state.value.busy) return
         val user = ChatMessage(nextId(), ChatRole.User, text, "now")
         _state.update { it.copy(messages = it.messages + user, loading = true, busy = true, error = null) }
-        val turns = _state.value.messages.map {
+        val turns = withPreface(_state.value.messages.map {
             ChatTurn(if (it.role == ChatRole.User) "user" else "model", it.text)
-        }
+        })
         val replyId = nextId()
         viewModelScope.launch {
             var streamed = false
