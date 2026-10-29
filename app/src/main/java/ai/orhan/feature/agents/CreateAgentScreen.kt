@@ -73,7 +73,7 @@ fun CreateAgentScreen(
                 )
             }
         }
-        FootNote("Tools are a preview and aren't connected yet.")
+        FootNote("Selected tools guide what this agent should use. The shared engine still has its full tool set.")
         Spacer(Modifier.height(24.dp))
         Button(
             onClick = {

@@ -176,9 +176,12 @@ class ChatViewModel(
                 add(ChatTurn("model", "Understood. I'll delegate with a HANDOFF line when a specialist fits."))
             }
             if (instructions.isNotBlank()) {
-                val toolsLine = if (tools.isEmpty()) "" else "\nAvailable tools: ${tools.joinToString(", ")}"
+                val toolsLine = "\n\n" + AgentToolGuidance.text(tools)
                 add(ChatTurn("user", "You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions$toolsLine"))
                 add(ChatTurn("model", "Understood. I'll follow those instructions."))
+            } else if (tools.isNotEmpty()) {
+                add(ChatTurn("user", AgentToolGuidance.text(tools)))
+                add(ChatTurn("model", "Understood. I'll use those tools when helpful."))
             }
         }
         // preface + UI turns = 20, matching ChatRepository's takeLast(20) so the preface is never dropped.
@@ -286,7 +289,7 @@ class ChatViewModel(
                 add(ChatTurn("model", "Understood."))
             }
             if (agent.instructions.isNotBlank()) {
-                val toolsLine = if (agent.tools.isEmpty()) "" else "\nAvailable tools: ${agent.tools.joinToString(", ")}"
+                val toolsLine = "\n\n" + AgentToolGuidance.text(agent.tools)
                 add(ChatTurn("user", "You are the agent named \"${agent.name}\". Follow these system instructions:\n${agent.instructions}$toolsLine"))
                 add(ChatTurn("model", "Understood. I'll follow those instructions."))
             }
