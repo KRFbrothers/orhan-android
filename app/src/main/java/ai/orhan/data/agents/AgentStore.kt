@@ -17,7 +17,23 @@ import java.io.InputStream
 import java.io.OutputStream
 
 /* Local store for user-created agents (no backend). Name (case-insensitive) is the key. */
-private const val FORMAT_VERSION = 1
+private const val FORMAT_VERSION = 2
+private const val FORMAT_VERSION_V1 = 1
+
+const val MAX_AGENT_NAME = 80
+const val MAX_AGENT_BLURB = 200
+const val MAX_AGENT_INSTRUCTIONS = 8_000
+
+/** Trims and caps user-entered fields so storage and writeUTF stay bounded. */
+fun SavedAgent.capped(): SavedAgent = copy(
+    name = name.trim().take(MAX_AGENT_NAME).trim(),
+    blurb = blurb.trim().take(MAX_AGENT_BLURB),
+    instructions = instructions.trim().take(MAX_AGENT_INSTRUCTIONS),
+)
+
+/** Returns the saved/sample agent's canonical name if [title] matches case-insensitively, else [title]. */
+fun canonicalAgentTitle(title: String, agentNames: List<String>): String =
+    agentNames.firstOrNull { it.equals(title.trim(), ignoreCase = true) } ?: title
 
 data class SavedAgent(
     val name: String,
@@ -35,12 +51,13 @@ object SavedAgentsSerializer : Serializer<List<SavedAgent>> {
         if (bytes.isEmpty()) return defaultValue
         return try {
             DataInputStream(bytes.inputStream()).use { d ->
-                if (d.readInt() != FORMAT_VERSION) return defaultValue
+                val version = d.readInt()
+                if (version != FORMAT_VERSION && version != FORMAT_VERSION_V1) return defaultValue
                 List(d.readInt()) {
                     SavedAgent(
                         name = d.readUTF(),
                         blurb = d.readUTF(),
-                        instructions = d.readUTF(),
+                        instructions = if (version >= 2) readLongString(d) else d.readUTF(),
                         tools = List(d.readInt()) { d.readUTF() },
                         createdAt = d.readLong(),
                     )
@@ -54,11 +71,20 @@ object SavedAgentsSerializer : Serializer<List<SavedAgent>> {
         d.writeInt(FORMAT_VERSION)
         d.writeInt(t.size)
         t.forEach { a ->
-            d.writeUTF(a.name); d.writeUTF(a.blurb); d.writeUTF(a.instructions)
+            d.writeUTF(a.name); d.writeUTF(a.blurb); writeLongString(d, a.instructions)
             d.writeInt(a.tools.size); a.tools.forEach(d::writeUTF)
             d.writeLong(a.createdAt)
         }
         d.flush()
+    }
+
+    private fun writeLongString(d: DataOutputStream, s: String) {
+        val b = s.toByteArray(Charsets.UTF_8); d.writeInt(b.size); d.write(b)
+    }
+    private fun readLongString(d: DataInputStream): String {
+        val n = d.readInt()
+        if (n < 0 || n > 4 * 1024 * 1024) throw IOException("bad length")
+        val b = ByteArray(n); d.readFully(b); return String(b, Charsets.UTF_8)
     }
 }
 
@@ -91,8 +117,9 @@ class AgentStore(private val dataStore: DataStore<List<SavedAgent>>) {
         .catch { if (it is IOException) emit(emptyList()) else throw it }
 
     suspend fun upsert(agent: SavedAgent) {
-        if (agent.name.isBlank()) return
-        dataStore.updateData { it.upserted(agent.copy(name = agent.name.trim())) }
+        val a = agent.capped()
+        if (a.name.isBlank()) return
+        dataStore.updateData { it.upserted(a) }
     }
 
     suspend fun delete(name: String) {
