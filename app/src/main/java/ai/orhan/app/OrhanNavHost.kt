@@ -257,6 +257,7 @@ fun OrhanNavHost(isDark: Boolean) {
                     scope.launch { artifactStore.upsert(artTitle, content) }
                 },
                 initialComposerText = entry.arguments?.getString("draft").orEmpty(),
+                onOpenChatPreferences = { navController.openSettingsPage(SettingsRoutes.CHAT_PREFERENCES) },
             )
         }
         composable(SettingsRoutes.SETTINGS) {

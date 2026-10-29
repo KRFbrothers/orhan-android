@@ -47,6 +47,8 @@ import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +57,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -202,6 +205,8 @@ fun ChatScreen(
     onSaveArtifact: ((title: String, content: String) -> Unit)? = null,
     /** Prefills the composer once (e.g. from a workflow). Never auto-sent; a restored draft wins. */
     initialComposerText: String = "",
+    /** Opens Settings → Chat preferences from the overflow menu; hidden when null. */
+    onOpenChatPreferences: (() -> Unit)? = null,
 ) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
@@ -267,7 +272,13 @@ fun ChatScreen(
             .windowInsetsPadding(WindowInsets.statusBars)
             .imePadding(),
     ) {
-        ChatTopBar(agentName = agentName, onBack = onBack)
+        val context = LocalContext.current
+        ChatTopBar(
+            agentName = agentName,
+            onBack = onBack,
+            onShareChat = { shareTranscript(context, agentName, messages) },
+            onOpenChatPreferences = onOpenChatPreferences,
+        )
 
         LazyColumn(
             state = listState,
@@ -343,7 +354,12 @@ fun ChatScreen(
 /* -------------------------------- top bar -------------------------------- */
 
 @Composable
-private fun ChatTopBar(agentName: String, onBack: () -> Unit) {
+private fun ChatTopBar(
+    agentName: String,
+    onBack: () -> Unit,
+    onShareChat: (() -> Unit)? = null,
+    onOpenChatPreferences: (() -> Unit)? = null,
+) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
 
@@ -402,14 +418,52 @@ private fun ChatTopBar(agentName: String, onBack: () -> Unit) {
             }
         }
 
-        IconButton(onClick = { }) {
-            Icon(
-                imageVector = Icons.Rounded.MoreVert,
-                contentDescription = "More options",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        var menuOpen by remember { mutableStateOf(false) }
+        Box {
+            IconButton(onClick = { menuOpen = !menuOpen }) {
+                Icon(
+                    imageVector = Icons.Rounded.MoreVert,
+                    contentDescription = "More options",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                if (onShareChat != null) {
+                    DropdownMenuItem(
+                        text = { Text("Share chat") },
+                        onClick = { menuOpen = false; onShareChat() },
+                    )
+                }
+                if (onOpenChatPreferences != null) {
+                    DropdownMenuItem(
+                        text = { Text("Chat preferences") },
+                        onClick = { menuOpen = false; onOpenChatPreferences() },
+                    )
+                }
+            }
         }
     }
+}
+
+/** Shares the visible transcript as plain text via the Android share sheet. */
+private fun shareTranscript(context: Context, agentName: String, messages: List<ChatMessage>) {
+    val lines = messages.filter { it.text.isNotBlank() }.map { m ->
+        val who = if (m.role == ChatRole.User) "You" else agentName
+        "$who: ${m.text.trim()}"
+    }
+    if (lines.isEmpty()) {
+        Toast.makeText(context, "Nothing to share", Toast.LENGTH_SHORT).show()
+        return
+    }
+    val body = "Orhan \u00b7 $agentName\n\n" + lines.joinToString("\n\n")
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, "Orhan \u00b7 $agentName")
+        putExtra(Intent.EXTRA_TEXT, body)
+    }
+    val chooser = Intent.createChooser(send, "Share chat")
+    if (context !is android.app.Activity) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    context.startActivity(chooser)
 }
 
 /* ------------------------------- messages -------------------------------- */
