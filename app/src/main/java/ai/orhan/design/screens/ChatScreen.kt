@@ -33,6 +33,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Share
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MoreVert
@@ -183,6 +191,7 @@ fun ChatScreen(
     loading: Boolean = false,
     error: String? = null,
     onSendMessage: ((String) -> Unit)? = null,
+    onRetry: (() -> Unit)? = null,
     sendWithEnter: Boolean = true,
     showTypingIndicator: Boolean = true,
     showActivityCards: Boolean = true,
@@ -283,11 +292,18 @@ fun ChatScreen(
 
             if (error != null) {
                 item(key = "error") {
-                    Text(
-                        text = error,
-                        style = OrhanTextStyles.meta,
-                        color = MaterialTheme.colorScheme.error,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = error,
+                            style = OrhanTextStyles.meta,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (onRetry != null && !loading) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(onClick = onRetry) { Text("Try again") }
+                        }
+                    }
                 }
             }
 
@@ -437,13 +453,58 @@ private fun MessageBubble(message: ChatMessage, showActivityCards: Boolean = tru
             }
 
             Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = message.time,
-                style = OrhanTextStyles.meta,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (!isUser && message.text.isNotBlank()) {
+                val context = LocalContext.current
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = message.time,
+                        style = OrhanTextStyles.meta,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    MessageAction(Icons.Rounded.ContentCopy, "Copy message") { copyText(context, message.text) }
+                    MessageAction(Icons.Rounded.Share, "Share message") { shareText(context, message.text) }
+                }
+            } else {
+                Text(
+                    text = message.time,
+                    style = OrhanTextStyles.meta,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun MessageAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
+
+private fun copyText(context: Context, text: String) {
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+    cm.setPrimaryClip(ClipData.newPlainText("Orhan message", text))
+    // Android 13+ shows its own clipboard confirmation.
+    if (android.os.Build.VERSION.SDK_INT < 33) Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+}
+
+private fun shareText(context: Context, text: String) {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(send, "Share from Orhan").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
 /** Inline preview of what the agent produced \u2014 14dp radius, 42x54 thumb. */
