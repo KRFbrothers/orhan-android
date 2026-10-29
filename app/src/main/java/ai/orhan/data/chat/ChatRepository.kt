@@ -10,7 +10,20 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /** One turn sent to the Dua engine. [role] is "user" or "model". */
-data class ChatTurn(val role: String, val text: String)
+data class ChatTurn(val role: String, val text: String, val attachments: List<ChatAttachment> = emptyList())
+
+/**
+ * An inline file on a user turn. The engine accepts `attachments: [{mimeType, data}]` per message
+ * (base64, max 10 per message, 4 MB each; image/, application/pdf, text/, audio/, video/).
+ */
+data class ChatAttachment(val name: String, val mimeType: String, val base64: String, val sizeBytes: Long) {
+    companion object {
+        const val MAX_BYTES = 4L * 1024 * 1024
+        val SUPPORTED_PREFIXES = listOf("image/", "application/pdf", "text/", "audio/", "video/")
+        val PICKER_TYPES = arrayOf("image/*", "application/pdf", "text/*", "audio/*", "video/*")
+        fun isSupported(mime: String) = SUPPORTED_PREFIXES.any { mime.lowercase().startsWith(it) }
+    }
+}
 
 /**
  * Talks to the Dua AI engine: POST {DUA_ENGINE_URL}/api/chat (non-streaming).
@@ -35,7 +48,15 @@ class ChatRepository(
         .put("stream", stream)
         .put("mode", "agent") // always agent pipeline (server uses AGENT_ENGINE=adk when configured)
         .put("messages", JSONArray().apply {
-            turns.takeLast(20).forEach { put(JSONObject().put("role", it.role).put("text", it.text)) }
+            turns.takeLast(20).forEach { turn ->
+                val obj = JSONObject().put("role", turn.role).put("text", turn.text)
+                if (turn.role == "user" && turn.attachments.isNotEmpty()) {
+                    obj.put("attachments", JSONArray().apply {
+                        turn.attachments.forEach { put(JSONObject().put("mimeType", it.mimeType).put("data", it.base64)) }
+                    })
+                }
+                put(obj)
+            }
         })
 
     private suspend fun open(accept: String): HttpURLConnection {

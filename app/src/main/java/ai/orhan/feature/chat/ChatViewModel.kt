@@ -5,6 +5,7 @@ import ai.orhan.data.auth.AuthRepository
 import ai.orhan.data.chat.ChatRepository
 import android.app.Application
 import ai.orhan.data.chat.ChatTurn
+import ai.orhan.data.chat.ChatAttachment
 import ai.orhan.design.screens.ChatMessage
 import ai.orhan.design.screens.ChatRole
 import androidx.lifecycle.ViewModel
@@ -129,10 +130,18 @@ class ChatViewModel(
         return preface + uiTurns.takeLast(20 - preface.size)
     }
 
-    fun send(raw: String) {
+    /** In-memory file parts by user message id (not persisted; resent on retry within this session). */
+    private val attachmentsById = mutableMapOf<Long, ChatAttachment>()
+
+    fun send(raw: String) = send(raw, null)
+
+    /** Sends [raw] with an optional inline file. The bubble shows a "📎 name" line for the file. */
+    fun send(raw: String, attachment: ChatAttachment?) {
         val text = raw.trim()
-        if (text.isEmpty() || _state.value.busy) return
-        val user = ChatMessage(nextId(), ChatRole.User, text, "now")
+        if ((text.isEmpty() && attachment == null) || _state.value.busy) return
+        val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
+        val user = ChatMessage(nextId(), ChatRole.User, shown, "now")
+        if (attachment != null) attachmentsById[user.id] = attachment
         _state.update { it.copy(messages = it.messages + user, loading = true, busy = true, error = null) }
         streamReply()
     }
@@ -163,7 +172,7 @@ class ChatViewModel(
     private fun streamReply() {
         streamJob?.cancel()
         val turns = withPreface(_state.value.messages.map {
-            ChatTurn(if (it.role == ChatRole.User) "user" else "model", it.text)
+            ChatTurn(if (it.role == ChatRole.User) "user" else "model", it.text, listOfNotNull(attachmentsById[it.id]))
         })
         val replyId = nextId()
         streamJob = viewModelScope.launch {
