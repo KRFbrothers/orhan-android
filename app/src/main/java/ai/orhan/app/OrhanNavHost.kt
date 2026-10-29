@@ -45,6 +45,8 @@ import ai.orhan.feature.settings.openAppearance
 import ai.orhan.feature.settings.openSettingsPage
 import ai.orhan.feature.settings.settingsDetailPages
 import kotlinx.coroutines.launch
+import ai.orhan.data.artifacts.artifactStore
+import ai.orhan.feature.artifacts.ArtifactsScreen
 
 /** Top-level routes. Settings routes live in [SettingsRoutes]. */
 object AppRoutes {
@@ -52,6 +54,7 @@ object AppRoutes {
     const val CREATE_AGENT = "create_agent"
     const val EDIT_PROFILE = "edit_profile"
     const val MEMORY = "memory"
+    const val ARTIFACTS = "artifacts"
     const val CHAT = "chat/{title}"
     fun chat(title: String) = "chat/${Uri.encode(title)}"
 }
@@ -73,6 +76,8 @@ fun OrhanNavHost(isDark: Boolean) {
     val agentStore = remember(context) { context.agentStore() }
     val savedAgents by agentStore.agents.collectAsStateWithLifecycle(initialValue = emptyList())
     val memoryStore = remember(context) { context.memoryStore() }
+    val artifactStore = remember(context) { context.artifactStore() }
+    val artifacts by artifactStore.artifacts.collectAsStateWithLifecycle(initialValue = emptyList())
     val personalMemory by memoryStore.memory.collectAsStateWithLifecycle(initialValue = "")
 
     NavHost(navController = navController, startDestination = AppRoutes.HOME) {
@@ -103,6 +108,10 @@ fun OrhanNavHost(isDark: Boolean) {
                 onOpenMemory = {
                     navController.navigate(AppRoutes.MEMORY) { launchSingleTop = true }
                 },
+                onOpenArtifacts = {
+                    navController.navigate(AppRoutes.ARTIFACTS) { launchSingleTop = true }
+                },
+                artifactCount = artifacts.size,
                 onToggleTheme = {
                     scope.launch {
                         preferences.setThemeMode(if (isDark) ThemeMode.Light else ThemeMode.Dark)
@@ -115,6 +124,13 @@ fun OrhanNavHost(isDark: Boolean) {
         }
         composable(AppRoutes.MEMORY) {
             MemoryScreen(onBack = { navController.popBackStack() })
+        }
+        composable(AppRoutes.ARTIFACTS) {
+            ArtifactsScreen(
+                artifacts = artifacts,
+                onDelete = { id -> scope.launch { artifactStore.delete(id) } },
+                onBack = { navController.popBackStack() },
+            )
         }
         composable(AppRoutes.CREATE_AGENT) {
             CreateAgentScreen(
@@ -176,6 +192,9 @@ fun OrhanNavHost(isDark: Boolean) {
                 showTypingIndicator = chatPrefs.typingIndicators,
                 showActivityCards = chatPrefs.agentActivityCards,
                 previewBeforeSending = chatPrefs.previewBeforeSending,
+                onSaveArtifact = { artTitle, content ->
+                    scope.launch { artifactStore.upsert(artTitle, content) }
+                },
             )
         }
         composable(SettingsRoutes.SETTINGS) {

@@ -231,6 +231,8 @@ fun HomeScreen(
     onCreateAgent: () -> Unit = {},
     onEditProfile: () -> Unit = {},
     onOpenMemory: () -> Unit = {},
+    onOpenArtifacts: () -> Unit = {},
+    artifactCount: Int = 0,
     isDark: Boolean = isSystemInDarkTheme(),
     profile: UserProfile = UserProfile(),
     /** Recently opened chats (local history), newest first; shown above the samples. */
@@ -280,6 +282,8 @@ fun HomeScreen(
                     onOpenAppearance = onOpenAppearance,
                     onEditProfile = onEditProfile,
                     onOpenMemory = onOpenMemory,
+                    onOpenArtifacts = onOpenArtifacts,
+                    artifactCount = artifactCount,
                     profile = profile,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -683,6 +687,8 @@ private fun ProfileTab(
     onOpenAppearance: () -> Unit = {},
     onEditProfile: () -> Unit = {},
     onOpenMemory: () -> Unit = {},
+    onOpenArtifacts: () -> Unit = {},
+    artifactCount: Int = 0,
     profile: UserProfile = UserProfile(),
     modifier: Modifier = Modifier,
 ) {
@@ -732,13 +738,14 @@ private fun ProfileTab(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatTile(value = "128", label = "CHATS", modifier = Modifier.weight(1f))
             StatTile(value = "4", label = "AGENTS", modifier = Modifier.weight(1f))
-            StatTile(value = "37", label = "ARTIFACTS", modifier = Modifier.weight(1f))
+            StatTile(value = artifactCount.toString(), label = "ARTIFACTS", modifier = Modifier.weight(1f), onClick = onOpenArtifacts)
         }
 
         OrhanCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(4.dp)) {
                 ProfileRow("Edit profile", "Name, email, avatar", onClick = onEditProfile)
                 ProfileRow("Memory", "Shared context for agents", onClick = onOpenMemory)
+                ProfileRow("Artifacts", "Saved replies", onClick = onOpenArtifacts)
                 ProfileRow("Privacy & security", "Passcode, blocked users")
                 ProfileRow("Subscription", "Pro \u00b7 renews 12 Nov")
                 ProfileRow("Appearance", "Theme: System, Light or Dark", onClick = onOpenAppearance)
@@ -781,13 +788,19 @@ private fun ProfileRow(title: String, subtitle: String, onClick: () -> Unit = {}
 }
 
 @Composable
-private fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
+private fun StatTile(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
 
     Column(
         modifier = modifier
             .clip(shapes.statTile)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, colors.hairline, shapes.statTile)
             .padding(vertical = 12.dp),

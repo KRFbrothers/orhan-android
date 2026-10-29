@@ -196,6 +196,7 @@ fun ChatScreen(
     showTypingIndicator: Boolean = true,
     showActivityCards: Boolean = true,
     previewBeforeSending: Boolean = false,
+    onSaveArtifact: ((title: String, content: String) -> Unit)? = null,
 ) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
@@ -287,7 +288,15 @@ fun ChatScreen(
             }
 
             items(items = messages, key = { it.id }) { message ->
-                MessageBubble(message = message, showActivityCards = showActivityCards)
+                MessageBubble(
+                    message = message,
+                    showActivityCards = showActivityCards,
+                    onSaveArtifact = onSaveArtifact?.let { save ->
+                        { text: String ->
+                            save(agentName.ifBlank { text.take(42) }, text)
+                        }
+                    },
+                )
             }
 
             if (error != null) {
@@ -399,7 +408,11 @@ private fun ChatTopBar(agentName: String, onBack: () -> Unit) {
 /* ------------------------------- messages -------------------------------- */
 
 @Composable
-private fun MessageBubble(message: ChatMessage, showActivityCards: Boolean = true) {
+private fun MessageBubble(
+    message: ChatMessage,
+    showActivityCards: Boolean = true,
+    onSaveArtifact: ((String) -> Unit)? = null,
+) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
     val isUser = message.role == ChatRole.User
@@ -464,6 +477,12 @@ private fun MessageBubble(message: ChatMessage, showActivityCards: Boolean = tru
                     Spacer(modifier = Modifier.width(4.dp))
                     MessageAction(Icons.Rounded.ContentCopy, "Copy message") { copyText(context, message.text) }
                     MessageAction(Icons.Rounded.Share, "Share message") { shareText(context, message.text) }
+                    if (onSaveArtifact != null) {
+                        MessageAction(Icons.Rounded.Description, "Save as artifact") {
+                            onSaveArtifact(message.text)
+                            Toast.makeText(context, "Saved to Artifacts", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 }
             } else {
                 Text(
