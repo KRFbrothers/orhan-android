@@ -3,6 +3,11 @@ package ai.orhan.design.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -237,6 +242,9 @@ fun HomeScreen(
     profile: UserProfile = UserProfile(),
     /** Recently opened chats (local history), newest first; shown above the samples. */
     recentChats: List<OrhanChat> = emptyList(),
+    /** Titles of pinned chats (persisted locally). */
+    pinnedTitles: Set<String> = emptySet(),
+    onTogglePin: (OrhanChat) -> Unit = {},
     /** Agents tab list: user-created agents first, then samples. */
     agents: List<InstalledAgent> = SampleInstalledAgents,
     deletableAgentNames: Set<String> = emptySet(),
@@ -266,6 +274,8 @@ fun HomeScreen(
                 OrhanTab.Chats -> ChatsTab(
                     onOpenChat = onOpenChat,
                     recentChats = recentChats,
+                    pinnedTitles = pinnedTitles,
+                    onTogglePin = onTogglePin,
                     modifier = Modifier.fillMaxSize(),
                 )
 
@@ -374,6 +384,8 @@ private fun HomeTopBar(
 private fun ChatsTab(
     onOpenChat: (OrhanChat) -> Unit,
     recentChats: List<OrhanChat> = emptyList(),
+    pinnedTitles: Set<String> = emptySet(),
+    onTogglePin: (OrhanChat) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val recentTitles = recentChats.map { it.title }.toSet()
@@ -394,6 +406,9 @@ private fun ChatsTab(
             q.isEmpty() || chat.title.contains(q, ignoreCase = true) ||
                 chat.snippet.contains(q, ignoreCase = true)
         }
+    val pinnedVisible = visible.filter { it.title in pinnedTitles }
+    val unpinnedVisible = visible.filterNot { it.title in pinnedTitles }
+    val pinnedCount = pinnedTitles.size
 
     LazyColumn(
         modifier = modifier,
@@ -445,25 +460,20 @@ private fun ChatsTab(
             }
         }
 
-        item(key = "recent") {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Recent",
-                    style = OrhanTextStyles.kicker,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "4 pinned",
-                    style = OrhanTextStyles.meta,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        if (pinnedVisible.isNotEmpty()) {
+            item(key = "pinned-header") { SectionHeader("Pinned", "$pinnedCount pinned") }
+            items(items = pinnedVisible, key = { "pinned:" + it.title }) { chat ->
+                ChatRowItem(
+                    chat = chat,
+                    pinned = true,
+                    onClick = { onOpenChat(chat) },
+                    onTogglePin = { onTogglePin(chat) },
                 )
             }
+        }
+
+        item(key = "recent") {
+            SectionHeader("Recent", if (pinnedVisible.isEmpty()) "$pinnedCount pinned" else null)
         }
 
         if (visible.isEmpty()) {
@@ -477,8 +487,37 @@ private fun ChatsTab(
             }
         }
 
-        items(items = visible, key = { it.title }) { chat ->
-            ChatRowItem(chat = chat, onClick = { onOpenChat(chat) })
+        items(items = unpinnedVisible, key = { it.title }) { chat ->
+            ChatRowItem(
+                chat = chat,
+                pinned = false,
+                onClick = { onOpenChat(chat) },
+                onTogglePin = { onTogglePin(chat) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String, meta: String?) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = OrhanTextStyles.kicker,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        if (meta != null) {
+            Text(
+                text = meta,
+                style = OrhanTextStyles.meta,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -534,16 +573,30 @@ private fun SearchField(
 
 /* -------------------------------- chat row -------------------------------- */
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ChatRowItem(chat: OrhanChat, onClick: () -> Unit) {
+private fun ChatRowItem(
+    chat: OrhanChat,
+    onClick: () -> Unit,
+    pinned: Boolean = false,
+    onTogglePin: () -> Unit = {},
+) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
+    var menuOpen by remember { mutableStateOf(false) }
 
+    Box {
+    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+        DropdownMenuItem(
+            text = { Text(if (pinned) "Unpin chat" else "Pin chat") },
+            onClick = { menuOpen = false; onTogglePin() },
+        )
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 72.dp)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -645,6 +698,7 @@ private fun ChatRowItem(chat: OrhanChat, onClick: () -> Unit) {
                 }
             }
         }
+    }
     }
 }
 

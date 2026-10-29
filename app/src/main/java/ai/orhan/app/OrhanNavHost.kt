@@ -31,6 +31,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.orhan.design.screens.HomeScreen
 import ai.orhan.design.screens.OrhanChat
 import ai.orhan.data.history.recentChats
+import ai.orhan.data.history.pinnedChats
 import ai.orhan.data.agents.SavedAgent
 import ai.orhan.data.agents.agentStore
 import ai.orhan.data.agents.mergeWithSamples
@@ -78,6 +79,8 @@ fun OrhanNavHost(isDark: Boolean) {
     val scope = rememberCoroutineScope()
     val recentRepo = remember(context) { context.recentChats() }
     val recent by recentRepo.recent.collectAsStateWithLifecycle(initialValue = emptyList())
+    val pinRepo = remember(context) { context.pinnedChats() }
+    val pinnedTitles by pinRepo.pinned.collectAsStateWithLifecycle(initialValue = emptySet())
     val agentStore = remember(context) { context.agentStore() }
     val savedAgents by agentStore.agents.collectAsStateWithLifecycle(initialValue = emptyList())
     val memoryStore = remember(context) { context.memoryStore() }
@@ -98,6 +101,8 @@ fun OrhanNavHost(isDark: Boolean) {
                 recentChats = recent.map {
                     OrhanChat(it.title, "Recent chat", relativeTime(it.openedAt), isAgent = true)
                 },
+                pinnedTitles = pinnedTitles,
+                onTogglePin = { chat -> scope.launch { pinRepo.toggle(chat.title) } },
                 onOpenChat = {
                     scope.launch { recentRepo.recordOpened(it.title) }
                     navController.navigate(AppRoutes.chat(it.title))
