@@ -359,13 +359,31 @@ private fun ChatsTab(
     val recentTitles = recentChats.map { it.title }.toSet()
     val chats = recentChats + SampleChats.filterNot { it.title in recentTitles }
     var filter by rememberSaveable { mutableStateOf(0) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val visible = chats
+        .filter { chat ->
+            when (filter) {
+                1 -> chat.unread > 0
+                2 -> chat.members > 0
+                3 -> recentTitles.isEmpty() || chat.title in recentTitles
+                else -> true
+            }
+        }
+        .filter { chat ->
+            val q = query.trim()
+            q.isEmpty() || chat.title.contains(q, ignoreCase = true) ||
+                chat.snippet.contains(q, ignoreCase = true)
+        }
 
     LazyColumn(
         modifier = modifier,
         contentPadding = PaddingValues(top = 4.dp, bottom = 88.dp),
     ) {
         item(key = "search") {
-            SearchField(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            SearchField(
+                query = query,
+                onQueryChange = { query = it },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
 
         item(key = "filters") {
@@ -428,14 +446,29 @@ private fun ChatsTab(
             }
         }
 
-        items(items = chats, key = { it.title }) { chat ->
+        if (visible.isEmpty()) {
+            item(key = "empty") {
+                Text(
+                    text = "No chats match",
+                    style = OrhanTextStyles.snippet,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
+                )
+            }
+        }
+
+        items(items = visible, key = { it.title }) { chat ->
             ChatRowItem(chat = chat, onClick = { onOpenChat(chat) })
         }
     }
 }
 
 @Composable
-private fun SearchField(modifier: Modifier = Modifier) {
+private fun SearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
 
@@ -456,12 +489,25 @@ private fun SearchField(modifier: Modifier = Modifier) {
             modifier = Modifier.size(18.dp),
         )
         Spacer(modifier = Modifier.width(10.dp))
-        Text(
-            text = "Search chats, agents, people",
-            style = OrhanTextStyles.snippet,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        androidx.compose.foundation.text.BasicTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            singleLine = true,
+            textStyle = OrhanTextStyles.snippet.copy(color = MaterialTheme.colorScheme.onSurface),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+            modifier = Modifier.weight(1f),
+            decorationBox = { inner ->
+                if (query.isEmpty()) {
+                    Text(
+                        text = "Search chats, agents, people",
+                        style = OrhanTextStyles.snippet,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                inner()
+            },
         )
     }
 }
