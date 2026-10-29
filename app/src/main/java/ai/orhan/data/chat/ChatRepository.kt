@@ -14,7 +14,7 @@ data class ChatTurn(val role: String, val text: String)
 
 /**
  * Talks to the Dua AI engine: POST {DUA_ENGINE_URL}/api/chat (non-streaming).
- * Request:  {"stream":false,"messages":[{"role":"user|model","text":"..."}]}
+ * Request:  {"stream":false,"mode":"agent","messages":[{"role":"user|model","text":"..."}]}
  * Response: {"text":"..."} or {"error":"..."}
  *
  * [stream] sends `"stream":true` and parses the engine's SSE events
@@ -33,6 +33,7 @@ class ChatRepository(
 
     private fun body(turns: List<ChatTurn>, stream: Boolean) = JSONObject()
         .put("stream", stream)
+        .put("mode", "agent") // always Dua Agent pipeline (server uses AGENT_ENGINE=adk when configured)
         .put("messages", JSONArray().apply {
             turns.takeLast(20).forEach { put(JSONObject().put("role", it.role).put("text", it.text)) }
         })
