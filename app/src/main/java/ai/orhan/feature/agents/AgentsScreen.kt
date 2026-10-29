@@ -49,6 +49,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Canvas
+import ai.orhan.data.workflows.Workflow
 
 /** An agent the user has installed (design kit screen 03). */
 data class InstalledAgent(
@@ -90,7 +91,29 @@ fun AgentsScreen(
     deletableNames: Set<String> = emptySet(),
     /** When null, no delete affordance is shown. */
     onDeleteAgent: ((InstalledAgent) -> Unit)? = null,
+    workflows: List<Workflow> = emptyList(),
+    onOpenWorkflow: (Workflow) -> Unit = {},
+    onCreateWorkflow: () -> Unit = {},
+    onEditWorkflow: (Workflow) -> Unit = {},
+    onDeleteWorkflow: ((Workflow) -> Unit)? = null,
 ) {
+    var pendingWorkflowDelete by remember { mutableStateOf<Workflow?>(null) }
+    pendingWorkflowDelete?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingWorkflowDelete = null },
+            title = { Text("Delete ${target.title}?") },
+            text = { Text("This workflow will be removed.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingWorkflowDelete = null
+                    onDeleteWorkflow?.invoke(target)
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingWorkflowDelete = null }) { Text("Cancel") }
+            },
+        )
+    }
     var pendingDelete by remember { mutableStateOf<InstalledAgent?>(null) }
     pendingDelete?.let { target ->
         AlertDialog(
@@ -126,6 +149,31 @@ fun AgentsScreen(
         }
         item(key = "new") {
             NewAgentButton(onCreateAgent, Modifier.padding(start = 12.dp, end = 12.dp, top = 9.dp))
+        }
+        item(key = "wf_head") {
+            OrhanSectionLabel("Workflows", "${workflows.size}", Modifier.padding(top = 16.dp))
+        }
+        if (workflows.isEmpty()) {
+            item(key = "wf_empty") {
+                Text(
+                    "Save a prompt you reuse often.",
+                    style = OrhanTextStyles.snippet,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+            }
+        }
+        items(workflows, key = { "wf_" + it.id }) { wf ->
+            WorkflowRow(
+                wf,
+                onOpen = { onOpenWorkflow(wf) },
+                onEdit = { onEditWorkflow(wf) },
+                onLongPress = if (onDeleteWorkflow != null) ({ pendingWorkflowDelete = wf }) else null,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+            )
+        }
+        item(key = "wf_new") {
+            DashedAddButton("New workflow", onCreateWorkflow, Modifier.padding(start = 12.dp, end = 12.dp, top = 9.dp))
         }
     }
 }
@@ -210,7 +258,60 @@ internal fun PillTag(text: String, on: Boolean) {
 }
 
 @Composable
-private fun NewAgentButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun NewAgentButton(onClick: () -> Unit, modifier: Modifier = Modifier) =
+    DashedAddButton("Create a new agent", onClick, modifier)
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun WorkflowRow(
+    wf: Workflow,
+    onOpen: () -> Unit,
+    onEdit: () -> Unit,
+    modifier: Modifier = Modifier,
+    onLongPress: (() -> Unit)? = null,
+) {
+    val colors = OrhanTheme.colors
+    val shapes = OrhanTheme.shapes
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shapes.card)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .border(1.dp, colors.hairline, shapes.card)
+            .combinedClickable(
+                onClick = onOpen,
+                onClickLabel = "Open workflow",
+                onLongClick = onLongPress,
+                onLongClickLabel = if (onLongPress != null) "Delete workflow" else null,
+            )
+            .padding(start = 14.dp, top = 12.dp, bottom = 12.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(wf.title, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+            Text(
+                wf.content.replace('\n', ' '),
+                style = OrhanTextStyles.snippet,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            Text(
+                wf.agentName.ifBlank { "Default" },
+                style = OrhanTextStyles.meta,
+                color = colors.onBrandSoft,
+                modifier = Modifier.padding(top = 5.dp),
+            )
+        }
+        TextButton(onClick = onEdit, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text("Edit", style = OrhanTextStyles.meta)
+        }
+    }
+}
+
+@Composable
+private fun DashedAddButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
     val outline = MaterialTheme.colorScheme.outline
@@ -233,7 +334,7 @@ private fun NewAgentButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
                 Icon(Icons.Rounded.Add, contentDescription = null, tint = colors.onBrandSoft, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(12.dp))
-            Text("Create a new agent", style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface)
+            Text(label, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }

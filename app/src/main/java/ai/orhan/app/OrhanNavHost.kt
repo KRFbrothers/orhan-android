@@ -47,6 +47,8 @@ import ai.orhan.feature.settings.settingsDetailPages
 import kotlinx.coroutines.launch
 import ai.orhan.data.artifacts.artifactStore
 import ai.orhan.feature.artifacts.ArtifactsScreen
+import ai.orhan.data.workflows.workflowStore
+import ai.orhan.feature.workflows.WorkflowEditorScreen
 
 /** Top-level routes. Settings routes live in [SettingsRoutes]. */
 object AppRoutes {
@@ -55,8 +57,11 @@ object AppRoutes {
     const val EDIT_PROFILE = "edit_profile"
     const val MEMORY = "memory"
     const val ARTIFACTS = "artifacts"
-    const val CHAT = "chat/{title}"
-    fun chat(title: String) = "chat/${Uri.encode(title)}"
+    const val CHAT = "chat/{title}?draft={draft}"
+    fun chat(title: String, draft: String = "") =
+        "chat/${Uri.encode(title)}" + if (draft.isNotBlank()) "?draft=${Uri.encode(draft)}" else ""
+    const val WORKFLOW_EDIT = "workflow_edit?id={id}"
+    fun workflowEdit(id: String? = null) = if (id == null) "workflow_edit" else "workflow_edit?id=${Uri.encode(id)}"
 }
 
 /**
@@ -78,6 +83,8 @@ fun OrhanNavHost(isDark: Boolean) {
     val memoryStore = remember(context) { context.memoryStore() }
     val artifactStore = remember(context) { context.artifactStore() }
     val artifacts by artifactStore.artifacts.collectAsStateWithLifecycle(initialValue = emptyList())
+    val workflowStore = remember(context) { context.workflowStore() }
+    val workflows by workflowStore.workflows.collectAsStateWithLifecycle(initialValue = emptyList())
     val personalMemory by memoryStore.memory.collectAsStateWithLifecycle(initialValue = "")
 
     NavHost(navController = navController, startDestination = AppRoutes.HOME) {
@@ -112,6 +119,19 @@ fun OrhanNavHost(isDark: Boolean) {
                     navController.navigate(AppRoutes.ARTIFACTS) { launchSingleTop = true }
                 },
                 artifactCount = artifacts.size,
+                workflows = workflows,
+                onOpenWorkflow = { wf ->
+                    val chatTitle = wf.agentName.ifBlank { wf.title }
+                    scope.launch { recentRepo.recordOpened(chatTitle) }
+                    navController.navigate(AppRoutes.chat(chatTitle, wf.content))
+                },
+                onCreateWorkflow = {
+                    navController.navigate(AppRoutes.workflowEdit()) { launchSingleTop = true }
+                },
+                onEditWorkflow = { wf ->
+                    navController.navigate(AppRoutes.workflowEdit(wf.id)) { launchSingleTop = true }
+                },
+                onDeleteWorkflow = { wf -> scope.launch { workflowStore.delete(wf.id) } },
                 onToggleTheme = {
                     scope.launch {
                         preferences.setThemeMode(if (isDark) ThemeMode.Light else ThemeMode.Dark)
@@ -130,6 +150,30 @@ fun OrhanNavHost(isDark: Boolean) {
                 artifacts = artifacts,
                 onDelete = { id -> scope.launch { artifactStore.delete(id) } },
                 onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            AppRoutes.WORKFLOW_EDIT,
+            arguments = listOf(navArgument("id") { type = NavType.StringType; nullable = true; defaultValue = null }),
+        ) { entry ->
+            val id = entry.arguments?.getString("id")
+            val existing = id?.let { wid -> workflows.firstOrNull { it.id == wid } }
+            WorkflowEditorScreen(
+                existing = existing,
+                agentNames = mergeWithSamples(savedAgents.map { it.toInstalledAgent() }).map { it.name },
+                onBack = { navController.popBackStack() },
+                onSave = { wf ->
+                    scope.launch {
+                        workflowStore.upsert(wf)
+                        navController.popBackStack()
+                    }
+                },
+                onDelete = { wf ->
+                    scope.launch {
+                        workflowStore.delete(wf.id)
+                        navController.popBackStack()
+                    }
+                },
             )
         }
         composable(AppRoutes.CREATE_AGENT) {
@@ -155,7 +199,10 @@ fun OrhanNavHost(isDark: Boolean) {
         }
         composable(
             AppRoutes.CHAT,
-            arguments = listOf(navArgument("title") { type = NavType.StringType }),
+            arguments = listOf(
+                navArgument("title") { type = NavType.StringType },
+                navArgument("draft") { type = NavType.StringType; defaultValue = "" },
+            ),
         ) { entry ->
             val auth = remember(context) { AuthRepository.get(context) }
             val session by auth.session.collectAsStateWithLifecycle(initialValue = null)
@@ -197,6 +244,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 onSaveArtifact = { artTitle, content ->
                     scope.launch { artifactStore.upsert(artTitle, content) }
                 },
+                initialComposerText = entry.arguments?.getString("draft").orEmpty(),
             )
         }
         composable(SettingsRoutes.SETTINGS) {

@@ -241,6 +241,11 @@ fun HomeScreen(
     agents: List<InstalledAgent> = SampleInstalledAgents,
     deletableAgentNames: Set<String> = emptySet(),
     onDeleteAgent: ((InstalledAgent) -> Unit)? = null,
+    workflows: List<ai.orhan.data.workflows.Workflow> = emptyList(),
+    onOpenWorkflow: (ai.orhan.data.workflows.Workflow) -> Unit = {},
+    onCreateWorkflow: () -> Unit = {},
+    onEditWorkflow: (ai.orhan.data.workflows.Workflow) -> Unit = {},
+    onDeleteWorkflow: ((ai.orhan.data.workflows.Workflow) -> Unit)? = null,
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
 
@@ -270,6 +275,11 @@ fun HomeScreen(
                     onCreateAgent = onCreateAgent,
                     deletableNames = deletableAgentNames,
                     onDeleteAgent = onDeleteAgent,
+                    workflows = workflows,
+                    onOpenWorkflow = onOpenWorkflow,
+                    onCreateWorkflow = onCreateWorkflow,
+                    onEditWorkflow = onEditWorkflow,
+                    onDeleteWorkflow = onDeleteWorkflow,
                     modifier = Modifier.fillMaxSize(),
                 )
                 OrhanTab.Discover -> DiscoverScreen(

@@ -200,6 +200,8 @@ fun ChatScreen(
     showActivityCards: Boolean = true,
     previewBeforeSending: Boolean = false,
     onSaveArtifact: ((title: String, content: String) -> Unit)? = null,
+    /** Prefills the composer once (e.g. from a workflow). Never auto-sent; a restored draft wins. */
+    initialComposerText: String = "",
 ) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
@@ -208,7 +210,7 @@ fun ChatScreen(
         mutableStateOf(initialThread())
     }
     val messages = messagesOverride ?: localMessages
-    var input by rememberSaveable { mutableStateOf("") }
+    var input by rememberSaveable { mutableStateOf(initialComposerText) }
     val listState = rememberLazyListState()
 
     var pendingPreview by rememberSaveable { mutableStateOf<String?>(null) }
