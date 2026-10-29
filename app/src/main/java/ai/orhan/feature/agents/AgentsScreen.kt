@@ -60,11 +60,9 @@ data class InstalledAgent(
     @DrawableRes val avatar: Int,
 )
 
+/** The single built-in agent so a new chat always has a target. User agents are added on top. */
 val SampleInstalledAgents = listOf(
-    InstalledAgent("Webpage Developer", "Builds and publishes landing pages, docs and dashboards from a single prompt.", "Web", true, R.drawable.agent_webpage),
-    InstalledAgent("Slides Assistant", "Turns a chat into a branded deck \u2014 outline, design and export in minutes.", "Slides", true, R.drawable.agent_slides),
-    InstalledAgent("Market Research", "Researches competitors with cited sources and keeps the brief up to date.", "Research", false, R.drawable.agent_market),
-    InstalledAgent("Accounting Assistant", "Reconciles invoices and flags anything that needs a human decision.", "Finance", false, R.drawable.agent_accounting),
+    InstalledAgent("Orhan", "Your general-purpose assistant.", "General", false, R.drawable.agent_webpage),
 )
 
 /** Section label row: "YOUR AGENTS ............ 4 active" */

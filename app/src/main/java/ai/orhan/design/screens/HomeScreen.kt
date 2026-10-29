@@ -130,59 +130,6 @@ data class OrhanAgent(
     val working: Boolean,
 )
 
-/** Chat list, verbatim from the shipped mockup. */
-private val SampleChats = listOf(
-    OrhanChat(
-        title = "Webpage Developer",
-        snippet = "Landing page draft is ready \u2014 want me to publish it?",
-        time = "2m",
-        isAgent = true,
-        unread = 1,
-        working = true,
-    ),
-    OrhanChat(
-        title = "Design Team",
-        snippet = "Alice: the new M3 tokens look great",
-        time = "12m",
-        isAgent = false,
-        members = 5,
-        unread = 3,
-    ),
-    OrhanChat(
-        title = "Slides Assistant",
-        snippet = "Q4 deck exported \u2014 12 slides, brand theme applied",
-        time = "26m",
-        isAgent = true,
-        working = true,
-    ),
-    OrhanChat(
-        title = "David Park",
-        snippet = "Sent you the repo link for review",
-        time = "1h",
-        isAgent = false,
-        unread = 1,
-    ),
-    OrhanChat(
-        title = "Market Research",
-        snippet = "Competitor brief finished \u2014 8 sources cited",
-        time = "Yest.",
-        isAgent = true,
-    ),
-    OrhanChat(
-        title = "Accounting Assistant",
-        snippet = "Invoice #2211 flagged for your review",
-        time = "Yest.",
-        isAgent = true,
-    ),
-    OrhanChat(
-        title = "Family",
-        snippet = "Mum: dinner at 8? Alex is bringing dessert",
-        time = "Sun",
-        isAgent = false,
-        members = 8,
-    ),
-)
-
 private val ChatFilters = listOf("All", "Unread", "Groups", "Recent")
 
 /** Bottom-navigation destinations, in the order the design uses them. */
@@ -328,7 +275,7 @@ fun HomeScreen(
 
             if (tab == OrhanTab.Chats) {
                 NewChatFab(
-                    onClick = { onOpenChat(SampleChats.first()) },
+                    onClick = { onOpenChat(OrhanChat(title = agents.firstOrNull()?.name ?: "Orhan", snippet = "", time = "", isAgent = true)) },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = 16.dp, bottom = 16.dp),
@@ -407,7 +354,7 @@ private fun ChatsTab(
     modifier: Modifier = Modifier,
 ) {
     val recentTitles = recentChats.map { it.title }.toSet()
-    val chats = recentChats + SampleChats.filterNot { it.title in recentTitles }
+    val chats = recentChats
     var filter by rememberSaveable { mutableStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
     val visible = chats
@@ -498,7 +445,7 @@ private fun ChatsTab(
         if (visible.isEmpty()) {
             item(key = "empty") {
                 Text(
-                    text = "No chats match",
+                    text = if (chats.isEmpty()) "No chats yet — tap + to start one" else "No chats match",
                     style = OrhanTextStyles.snippet,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),

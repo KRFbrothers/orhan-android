@@ -11,7 +11,7 @@ import androidx.compose.ui.platform.LocalContext
 import ai.orhan.BuildConfig
 import kotlinx.coroutines.launch
 
-/** Settings → About. Links open placeholder https pages. */
+/** Settings → About. Links open in the browser. */
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -30,14 +30,12 @@ fun AboutScreen(onBack: () -> Unit) {
         SectionLabel("Orhan")
         GroupCard(listOf(
             { NavRow("Version", value = BuildConfig.VERSION_NAME) },
-            { NavRow("Check for updates", onClick = { toast("You're on the latest version") }) },
         ))
         FootNote("Orhan brings your chats and AI agents together in one place.")
         SectionLabel("Legal")
         GroupCard(listOf(
             { NavRow("Terms of service", onClick = { open("https://orhan.ai/terms") }) },
             { NavRow("Privacy policy", onClick = { open("https://orhan.ai/privacy") }) },
-            { NavRow("Open-source licenses", onClick = { toast("Coming soon") }) },
         ))
         SectionLabel("Help")
         GroupCard(listOf(

@@ -151,7 +151,7 @@ fun EditProfileScreen(onBack: () -> Unit, onSaved: () -> Unit = onBack) {
             minLines = 3,
             modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
         )
-        FootNote("Changes stay on this device for now.")
+        FootNote("Saved on this device.")
         Spacer(Modifier.height(24.dp))
         Button(onClick = save, enabled = loaded, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Save changes") }
         Spacer(Modifier.height(8.dp))
