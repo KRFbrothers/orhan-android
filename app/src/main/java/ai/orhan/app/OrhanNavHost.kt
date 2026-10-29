@@ -96,6 +96,8 @@ fun OrhanNavHost(isDark: Boolean) {
 
     NavHost(navController = navController, startDestination = AppRoutes.HOME) {
         composable(AppRoutes.HOME) {
+            val homeAuth = remember(context) { AuthRepository.get(context) }
+            val homeSession by homeAuth.session.collectAsStateWithLifecycle(initialValue = null)
             HomeScreen(
                 isDark = isDark,
                 profile = profile,
@@ -136,6 +138,11 @@ fun OrhanNavHost(isDark: Boolean) {
                     navController.navigate(AppRoutes.ARTIFACTS) { launchSingleTop = true }
                 },
                 artifactCount = artifacts.size,
+                onOpenChatPreferences = { navController.openSettingsPage(SettingsRoutes.CHAT_PREFERENCES) },
+                onOpenSettingsPage = { route -> navController.openSettingsPage(route) },
+                onSignOut = if (homeSession != null) {
+                    { scope.launch { homeAuth.signOut() } }
+                } else null,
                 workflows = workflows,
                 onOpenWorkflow = { wf ->
                     val chatTitle = wf.agentName.ifBlank { wf.title }
