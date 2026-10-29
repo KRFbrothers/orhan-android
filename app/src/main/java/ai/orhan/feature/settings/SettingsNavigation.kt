@@ -9,6 +9,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import ai.orhan.data.history.pinnedChats
+import ai.orhan.data.history.recentChats
 import ai.orhan.design.theme.themePreferences
 import ai.orhan.feature.settings.appearance.AppearanceScreen
 import ai.orhan.feature.settings.appearance.AppearanceViewModel
@@ -53,7 +55,18 @@ fun NavHostController.openSettingsPage(route: String) {
 fun NavGraphBuilder.settingsDetailPages(navController: NavHostController) {
     val back: () -> Unit = { navController.popBackStack() }
     composable(SettingsRoutes.NOTIFICATIONS) { NotificationsScreen(onBack = back) }
-    composable(SettingsRoutes.PRIVACY) { PrivacyScreen(onBack = back) }
+    composable(SettingsRoutes.PRIVACY) {
+        val context = LocalContext.current.applicationContext
+        val recentRepo = remember(context) { context.recentChats() }
+        val pinRepo = remember(context) { context.pinnedChats() }
+        PrivacyScreen(
+            onBack = back,
+            onClearChatHistory = {
+                recentRepo.clear()
+                pinRepo.clear()
+            },
+        )
+    }
     composable(SettingsRoutes.CHAT_PREFERENCES) { ChatPreferencesScreen(onBack = back) }
     composable(SettingsRoutes.STORAGE) { StorageScreen(onBack = back) }
     composable(SettingsRoutes.LANGUAGE) { LanguageScreen(onBack = back) }
