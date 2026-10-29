@@ -236,6 +236,8 @@ fun HomeScreen(
     recentChats: List<OrhanChat> = emptyList(),
     /** Agents tab list: user-created agents first, then samples. */
     agents: List<InstalledAgent> = SampleInstalledAgents,
+    deletableAgentNames: Set<String> = emptySet(),
+    onDeleteAgent: ((InstalledAgent) -> Unit)? = null,
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
 
@@ -263,6 +265,8 @@ fun HomeScreen(
                     agents = agents,
                     onOpenAgent = { onOpenChat(OrhanChat(it.name, it.blurb, "", isAgent = true)) },
                     onCreateAgent = onCreateAgent,
+                    deletableNames = deletableAgentNames,
+                    onDeleteAgent = onDeleteAgent,
                     modifier = Modifier.fillMaxSize(),
                 )
                 OrhanTab.Discover -> DiscoverScreen(
