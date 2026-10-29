@@ -38,17 +38,7 @@ import androidx.compose.ui.unit.dp
 import ai.orhan.design.theme.OrhanTextStyles
 import ai.orhan.design.theme.OrhanTheme
 
-/* ============================================================================
- *  Settings — the list that hosts the Appearance entry point.
- *
- *  Only the Appearance row is wired; the rest are the rows the design already
- *  shows, kept as plain callbacks so this file has no dependency on the other
- *  feature modules.
- *
- *  Rows are real Material 3 [ListItem]s. The previous hand-rolled Row gave us
- *  no M3 semantics (no Role, no state layer, no 72dp two-line spec) and had to
- *  re-implement padding, alignment and ellipsis by hand.
- * ==========================================================================*/
+/* Settings list. Each row opens an existing page. Appearance owns light, dark, and system theme. */
 
 @Composable
 fun SettingsScreen(
@@ -63,6 +53,8 @@ fun SettingsScreen(
     onOpenAbout: () -> Unit = {},
     signedInEmail: String? = null,
     onSignOut: (() -> Unit)? = null,
+    /** Live language name from LanguagePrefs. Defaults to the app default. */
+    languageSubtitle: String = "English (US)",
 ) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
@@ -132,13 +124,13 @@ fun SettingsScreen(
                 RowDivider()
                 SettingsRow(
                     title = "Notifications",
-                    subtitle = "Push, sounds, badges",
+                    subtitle = "Saved on this device; delivery isn't connected",
                     onClick = onOpenNotifications,
                 )
                 RowDivider()
                 SettingsRow(
                     title = "Privacy",
-                    subtitle = "Data, history, blocking",
+                    subtitle = "App lock and chat history",
                     onClick = onOpenPrivacy,
                 )
                 RowDivider()
@@ -150,13 +142,13 @@ fun SettingsScreen(
                 RowDivider()
                 SettingsRow(
                     title = "Storage",
-                    subtitle = "Cache and downloads",
+                    subtitle = "Artifacts, chats, and media",
                     onClick = onOpenStorage,
                 )
                 RowDivider()
                 SettingsRow(
                     title = "Language",
-                    subtitle = "English (US)",
+                    subtitle = languageSubtitle,
                     onClick = onOpenLanguage,
                 )
                 RowDivider()
@@ -347,7 +339,7 @@ private fun SettingsRowVariantsPreview() {
                 onClick = {},
             )
             RowDivider()
-            SettingsRow(title = "Notifications", subtitle = "Push, sounds, badges", onClick = {})
+            SettingsRow(title = "Notifications", subtitle = "Saved on this device; delivery isn't connected", onClick = {})
             RowDivider()
             SettingsRow(title = "Language", onClick = {})
         }

@@ -50,6 +50,7 @@ import ai.orhan.feature.settings.appearance.AppearanceScreen
 import ai.orhan.feature.settings.openAppearance
 import ai.orhan.feature.settings.openSettingsPage
 import ai.orhan.feature.settings.settingsDetailPages
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -65,7 +66,10 @@ import ai.orhan.feature.workflows.WorkflowEditorScreen
 /** Top-level routes. Settings routes live in [SettingsRoutes]. */
 object AppRoutes {
     const val HOME = "home"
-    const val CREATE_AGENT = "create_agent"
+    /** Optional `name` opens the same screen in edit mode for a saved agent. */
+    const val CREATE_AGENT = "create_agent?name={name}"
+    fun createAgent(name: String? = null): String =
+        if (name.isNullOrBlank()) "create_agent" else "create_agent?name=${Uri.encode(name)}"
     const val EDIT_PROFILE = "edit_profile"
     const val MEMORY = "memory"
     const val ARTIFACTS = "artifacts"
@@ -135,7 +139,10 @@ fun OrhanNavHost(isDark: Boolean) {
                 },
                 onOpenAppearance = { navController.openAppearance() },
                 onCreateAgent = {
-                    navController.navigate(AppRoutes.CREATE_AGENT) { launchSingleTop = true }
+                    navController.navigate(AppRoutes.createAgent()) { launchSingleTop = true }
+                },
+                onEditAgent = { agent ->
+                    navController.navigate(AppRoutes.createAgent(agent.name)) { launchSingleTop = true }
                 },
                 onEditProfile = {
                     navController.navigate(AppRoutes.EDIT_PROFILE) { launchSingleTop = true }
@@ -219,22 +226,52 @@ fun OrhanNavHost(isDark: Boolean) {
                 },
             )
         }
-        composable(AppRoutes.CREATE_AGENT) {
+        composable(
+            AppRoutes.CREATE_AGENT,
+            arguments = listOf(
+                navArgument("name") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { entry ->
+            val editName = entry.arguments?.getString("name")
+            val existing = editName?.let { n -> savedAgents.firstOrNull { it.name.equals(n, ignoreCase = true) } }
+            if (editName != null && existing == null) {
+                // DataStore's first frame is empty. Pop only after the store has been read.
+                LaunchedEffect(editName) {
+                    val loaded = agentStore.agents.first()
+                    val found = loaded.any { it.name.equals(editName, ignoreCase = true) }
+                    if (!found) navController.popBackStack()
+                }
+                return@composable
+            }
             CreateAgentScreen(
                 onBack = { navController.popBackStack() },
+                existing = existing,
+                takenNames = savedAgents.map { it.name }.toSet(),
                 onCreated = { name, blurb, instructions, tools ->
                     scope.launch {
+                        val previous = existing
+                        if (previous != null && !previous.name.equals(name, ignoreCase = true)) {
+                            agentStore.delete(previous.name)
+                        }
                         agentStore.upsert(
                             SavedAgent(
                                 name = name,
                                 blurb = blurb,
                                 instructions = instructions,
                                 tools = tools,
-                                createdAt = System.currentTimeMillis(),
+                                createdAt = previous?.createdAt ?: System.currentTimeMillis(),
                             ),
                         )
-                        navController.navigate(AppRoutes.chat(name)) {
-                            popUpTo(AppRoutes.CREATE_AGENT) { inclusive = true }
+                        if (previous == null) {
+                            navController.navigate(AppRoutes.chat(name)) {
+                                popUpTo(AppRoutes.CREATE_AGENT) { inclusive = true }
+                            }
+                        } else {
+                            navController.popBackStack()
                         }
                     }
                 },
@@ -303,15 +340,18 @@ fun OrhanNavHost(isDark: Boolean) {
         composable(SettingsRoutes.SETTINGS) {
             val auth = remember(context) { AuthRepository.get(context) }
             val session by auth.session.collectAsStateWithLifecycle(initialValue = null)
+            val languageRepo = remember(context) { context.settingsDetailPreferences() }
+            val languagePrefs by languageRepo.language.collectAsStateWithLifecycle(initialValue = LanguagePrefs())
             SettingsScreen(
                 onBack = { navController.popBackStack() },
-onOpenAppearance = { navController.openAppearance() },
+                onOpenAppearance = { navController.openAppearance() },
                 onOpenNotifications = { navController.openSettingsPage(SettingsRoutes.NOTIFICATIONS) },
                 onOpenPrivacy = { navController.openSettingsPage(SettingsRoutes.PRIVACY) },
                 onOpenChatPreferences = { navController.openSettingsPage(SettingsRoutes.CHAT_PREFERENCES) },
                 onOpenStorage = { navController.openSettingsPage(SettingsRoutes.STORAGE) },
                 onOpenLanguage = { navController.openSettingsPage(SettingsRoutes.LANGUAGE) },
                 onOpenAbout = { navController.openSettingsPage(SettingsRoutes.ABOUT) },
+                languageSubtitle = languageName(languagePrefs.code),
                 signedInEmail = session?.email,
                 // Only offered while a session exists; clears it via AuthRepository.signOut().
                 onSignOut = if (session != null) {

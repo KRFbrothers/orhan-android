@@ -171,8 +171,7 @@ internal fun OrhanCard(
 /**
  * Home / Chats.
  *
- * @param onOpenChat fires when a row or the header + is tapped; the host switches to
- *   [ChatScreen] and passes the title through.
+ * @param onOpenChat fires when a row is tapped, or when header + opens the existing Orhan chat.
  * @param onOpenSettings fires from Profile.
  * @param onToggleTheme flips [ThemeMode] between Light and Dark at the app root.
  *   The header no longer shows the toggle; Appearance still owns it.
@@ -185,6 +184,8 @@ fun HomeScreen(
     onToggleTheme: () -> Unit = {},
     onOpenAppearance: () -> Unit = onOpenSettings,
     onCreateAgent: () -> Unit = {},
+    /** User-saved agents only. The host opens the same create screen in edit mode. */
+    onEditAgent: ((InstalledAgent) -> Unit)? = null,
     onEditProfile: () -> Unit = {},
     onOpenMemory: () -> Unit = {},
     onOpenArtifacts: () -> Unit = {},
@@ -329,6 +330,7 @@ fun HomeScreen(
                         agents = agents,
                         onOpenAgent = { onOpenChat(OrhanChat(it.name, it.blurb, "", isAgent = true)) },
                         onCreateAgent = onCreateAgent,
+                        onEditAgent = onEditAgent,
                         deletableNames = deletableAgentNames,
                         onDeleteAgent = onDeleteAgent,
                         workflows = workflows,
@@ -423,7 +425,7 @@ private fun HomeTopBar(
         ) {
             Icon(
                 imageVector = Icons.Rounded.Add,
-                contentDescription = "New chat",
+                contentDescription = "Chat with Orhan",
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(22.dp),
             )

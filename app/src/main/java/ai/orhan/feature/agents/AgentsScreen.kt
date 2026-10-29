@@ -84,6 +84,8 @@ fun AgentsScreen(
     agents: List<InstalledAgent> = SampleInstalledAgents,
     onOpenAgent: (InstalledAgent) -> Unit = {},
     onCreateAgent: () -> Unit = {},
+    /** Opens the editor for a user-saved agent. Samples are not editable. */
+    onEditAgent: ((InstalledAgent) -> Unit)? = null,
     /** Names of user-saved agents that may be removed. Samples are never in this set. */
     deletableNames: Set<String> = emptySet(),
     /** When null, no delete affordance is shown. */
@@ -160,6 +162,7 @@ fun AgentsScreen(
                     AgentCard(
                         agent,
                         onOpen = { onOpenAgent(agent) },
+                        onEdit = if (canDelete && onEditAgent != null) ({ onEditAgent(agent) }) else null,
                         onLongPress = if (canDelete) ({ pendingDelete = agent }) else null,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                     )
@@ -244,6 +247,7 @@ private fun AgentCard(
     agent: InstalledAgent,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
+    onEdit: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
 ) {
     val colors = OrhanTheme.colors
@@ -289,6 +293,11 @@ private fun AgentCard(
             )
         }
         Spacer(Modifier.width(8.dp))
+        if (onEdit != null) {
+            TextButton(onClick = onEdit, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text("Edit", style = OrhanTextStyles.meta)
+            }
+        }
         Box(
             modifier = Modifier
                 .heightIn(min = 40.dp)

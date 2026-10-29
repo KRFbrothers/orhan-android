@@ -25,7 +25,7 @@ fun NotificationsScreen(onBack: () -> Unit) {
         GroupCard(listOf(
             { SwitchRow("Push notifications", "Your preference is saved. Push delivery isn't connected yet.", n.push, { save(n.copy(push = it)) }) },
             { SwitchRow("Direct messages", checked = n.dms, onCheckedChange = { save(n.copy(dms = it)) }, enabled = n.push) },
-            { SwitchRow("Agent replies", "When an agent finishes a task", n.agentReplies, { save(n.copy(agentReplies = it)) }, n.push) },
+            { SwitchRow("Agent replies", "Saved only; you are not notified", n.agentReplies, { save(n.copy(agentReplies = it)) }, n.push) },
             { SwitchRow("Agent suggestions", checked = n.suggestions, onCheckedChange = { save(n.copy(suggestions = it)) }, enabled = n.push) },
             { SwitchRow("Community activity", checked = n.community, onCheckedChange = { save(n.copy(community = it)) }, enabled = n.push) },
         ))
@@ -36,8 +36,8 @@ fun NotificationsScreen(onBack: () -> Unit) {
         ))
         SectionLabel("Behavior")
         GroupCard(listOf(
-            { SwitchRow("Quiet hours", "10:00 PM – 7:00 AM", n.quiet, { save(n.copy(quiet = it)) }) },
-            { SwitchRow("Sound", checked = n.sound, onCheckedChange = { save(n.copy(sound = it)) }) },
+            { SwitchRow("Quiet hours", "Saved only; the schedule is not applied", n.quiet, { save(n.copy(quiet = it)) }) },
+            { SwitchRow("Sound", "Saved only; no sound is played", n.sound, { save(n.copy(sound = it)) }) },
         ))
     }
 }

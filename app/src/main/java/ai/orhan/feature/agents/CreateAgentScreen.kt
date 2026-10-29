@@ -17,34 +17,51 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import ai.orhan.data.agents.SavedAgent
 import ai.orhan.feature.settings.detail.FootNote
 import ai.orhan.feature.settings.detail.SectionLabel
 import ai.orhan.feature.settings.detail.SettingsDetailScaffold
 
 private val AgentTools = listOf("Web", "Files", "Code", "Image")
 
-/** Create agent: name it, give it tools, done. Saved locally via AgentStore. */
+/** Create or edit an agent. [existing] null means create. Saved locally via AgentStore. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CreateAgentScreen(
     onBack: () -> Unit,
+    existing: SavedAgent? = null,
+    /** Other saved names. The agent being edited may keep its own name. */
+    takenNames: Set<String> = emptySet(),
     onCreated: (name: String, blurb: String, instructions: String, tools: List<String>) -> Unit,
 ) {
-    var name by rememberSaveable { mutableStateOf("") }
-    var blurb by rememberSaveable { mutableStateOf("") }
-    var instructions by rememberSaveable { mutableStateOf("") }
-    var tools by rememberSaveable { mutableStateOf(setOf<String>()) }
+    var name by rememberSaveable(existing?.name) { mutableStateOf(existing?.name.orEmpty()) }
+    var blurb by rememberSaveable(existing?.name) { mutableStateOf(existing?.blurb.orEmpty()) }
+    var instructions by rememberSaveable(existing?.name) { mutableStateOf(existing?.instructions.orEmpty()) }
+    var tools by rememberSaveable(existing?.name) { mutableStateOf(existing?.tools?.toSet() ?: emptySet()) }
     var showError by rememberSaveable { mutableStateOf(false) }
+    var showTaken by rememberSaveable { mutableStateOf(false) }
 
-    SettingsDetailScaffold(title = "Create agent", onBack = onBack) {
+    SettingsDetailScaffold(title = if (existing == null) "Create agent" else "Edit agent", onBack = onBack) {
         SectionLabel("Identity")
         OutlinedTextField(
             value = name,
-            onValueChange = { name = it; if (it.isNotBlank()) showError = false },
+            onValueChange = {
+                name = it
+                showError = false
+                showTaken = false
+            },
             label = { Text("Name") },
             singleLine = true,
-            isError = showError,
-            supportingText = if (showError) { { Text("Name is required") } } else null,
+            isError = showError || showTaken,
+            supportingText = when {
+                showError -> {
+                    { Text("Name is required") }
+                }
+                showTaken -> {
+                    { Text("An agent with this name already exists") }
+                }
+                else -> null
+            },
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(8.dp))
@@ -74,12 +91,21 @@ fun CreateAgentScreen(
             }
         }
         FootNote("Selected tools guide what this agent should use. The shared engine still has its full tool set.")
+        if (existing != null) {
+            FootNote("Renaming does not move chats saved under the previous name.")
+        }
         Spacer(Modifier.height(24.dp))
         Button(
             onClick = {
-                if (name.isBlank()) showError = true else onCreated(name.trim(), blurb.trim(), instructions.trim(), AgentTools.filter { it in tools })
+                val trimmed = name.trim()
+                val taken = takenNames.any { it.equals(trimmed, ignoreCase = true) && !it.equals(existing?.name, ignoreCase = true) }
+                when {
+                    trimmed.isBlank() -> showError = true
+                    taken -> showTaken = true
+                    else -> onCreated(trimmed, blurb.trim(), instructions.trim(), AgentTools.filter { it in tools })
+                }
             },
             modifier = Modifier.fillMaxWidth().height(48.dp),
-        ) { Text("Create") }
+        ) { Text(if (existing == null) "Create" else "Save") }
     }
 }
