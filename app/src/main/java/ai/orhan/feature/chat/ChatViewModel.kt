@@ -60,15 +60,16 @@ class ChatViewModel(
         if (threadTitle != null || title.isBlank()) return
         threadTitle = title
         viewModelScope.launch {
-            val saved = store.load(title)
-            if (saved.isNotEmpty() && _state.value.messages.isEmpty()) {
-                _state.update { it.copy(messages = saved) }
+            val saved = store.loadThread(title)
+            if (saved.messages.isNotEmpty() && _state.value.messages.isEmpty()) {
+                saved.attachments.forEach { (id, a) -> attachmentsById.putIfAbsent(id, a) }
+                _state.update { it.copy(messages = saved.messages) }
             }
             _state.map { it.messages }
                 .distinctUntilChanged()
                 .drop(1)
                 .debounce(300)
-                .collect { msgs -> store.save(title, msgs) }
+                .collect { msgs -> store.save(title, msgs, attachmentsById.toMap()) }
         }
     }
 
@@ -78,7 +79,8 @@ class ChatViewModel(
         val title = threadTitle ?: return
         val store = threadStore ?: return
         val msgs = _state.value.messages
-        if (msgs.isNotEmpty()) kotlinx.coroutines.GlobalScope.launch { store.save(title, msgs) }
+        val atts = attachmentsById.toMap()
+        if (msgs.isNotEmpty()) kotlinx.coroutines.GlobalScope.launch { store.save(title, msgs, atts) }
     }
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -139,8 +141,11 @@ class ChatViewModel(
         return preface + uiTurns.takeLast(20 - preface.size)
     }
 
-    /** In-memory file parts by user message id (not persisted; resent on retry within this session). */
-    private val attachmentsById = mutableMapOf<Long, ChatAttachment>()
+    /**
+     * File parts by user message id. Persisted to disk via [ChatThreadStore] and restored on load,
+     * so turns within the last-20 window keep re-sending their files after an app restart.
+     */
+    private val attachmentsById = java.util.concurrent.ConcurrentHashMap<Long, ChatAttachment>()
 
     fun send(raw: String) = send(raw, null)
 
