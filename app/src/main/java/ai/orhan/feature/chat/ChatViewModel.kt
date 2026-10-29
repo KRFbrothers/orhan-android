@@ -65,6 +65,24 @@ class ChatViewModel(
         if (text.isEmpty() || _state.value.busy) return
         val user = ChatMessage(nextId(), ChatRole.User, text, "now")
         _state.update { it.copy(messages = it.messages + user, loading = true, busy = true, error = null) }
+        streamReply()
+    }
+
+    /**
+     * Re-sends the last user turn after a failure without adding another user bubble.
+     * A trailing partial agent reply (from an interrupted stream) is dropped first.
+     */
+    fun retry() {
+        val s = _state.value
+        if (s.busy || s.error == null) return
+        val msgs = s.messages.toMutableList()
+        while (msgs.isNotEmpty() && msgs.last().role == ChatRole.Agent) msgs.removeAt(msgs.lastIndex)
+        if (msgs.isEmpty()) { clearError(); return }
+        _state.update { it.copy(messages = msgs, loading = true, busy = true, error = null) }
+        streamReply()
+    }
+
+    private fun streamReply() {
         val turns = withPreface(_state.value.messages.map {
             ChatTurn(if (it.role == ChatRole.User) "user" else "model", it.text)
         })

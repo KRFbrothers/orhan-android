@@ -159,6 +159,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 loading = chat.loading,
                 error = chat.error,
                 onSendMessage = chatViewModel::send,
+                onRetry = chatViewModel::retry,
                 sendWithEnter = chatPrefs.sendWithEnter,
                 showTypingIndicator = chatPrefs.typingIndicators,
                 showActivityCards = chatPrefs.agentActivityCards,
