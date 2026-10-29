@@ -1,6 +1,7 @@
 package ai.orhan.app
 
 import ai.orhan.data.applock.AppLockStore
+import ai.orhan.data.applock.PinAttempt
 import ai.orhan.data.applock.PinHash
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Numeric, masked PIN input (max 6 digits). Shared by the lock screen and Privacy dialogs. */
@@ -71,22 +73,39 @@ fun AppLockScreen(store: AppLockStore, onUnlocked: () -> Unit, onBackExit: () ->
     var checking by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
+    var lockoutMs by remember { mutableStateOf(0L) }
+    val lockedOut = lockoutMs > 0
 
     BackHandler(onBack = onBackExit)
 
     fun submit() {
-        if (checking) return
+        if (checking || lockedOut) return
         if (!PinHash.isValidPin(pin)) { error = "Enter your 4–6 digit PIN"; return }
         checking = true
         val attempt = pin
         scope.launch {
-            val ok = store.verify(attempt)
+            val result = store.attempt(attempt)
             checking = false
-            if (ok) onUnlocked() else { error = "Wrong PIN. Try again."; pin = "" }
+            pin = ""
+            when (result) {
+                PinAttempt.Success -> onUnlocked()
+                is PinAttempt.Wrong -> error = "Wrong PIN. ${result.attemptsLeft} attempt(s) left."
+                is PinAttempt.LockedOut -> { lockoutMs = result.remainingMs; error = null }
+            }
         }
     }
 
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    LaunchedEffect(Unit) {
+        lockoutMs = store.lockoutRemainingMs()
+        runCatching { focus.requestFocus() }
+    }
+    // Count down while locked out; refresh from the persisted deadline each tick.
+    LaunchedEffect(lockedOut) {
+        while (lockoutMs > 0) {
+            delay(1_000)
+            lockoutMs = store.lockoutRemainingMs()
+        }
+    }
 
     Box(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).systemBarsPadding().imePadding(),
@@ -112,12 +131,18 @@ fun AppLockScreen(store: AppLockStore, onUnlocked: () -> Unit, onBackExit: () ->
                 onDone = ::submit,
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
             )
-            if (error != null) {
+            if (lockedOut) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Too many wrong PINs. Try again in ${(lockoutMs + 999) / 1000}s.",
+                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall,
+                )
+            } else if (error != null) {
                 Spacer(Modifier.height(8.dp))
                 Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
             Spacer(Modifier.height(16.dp))
-            Button(onClick = ::submit, enabled = !checking, modifier = Modifier.fillMaxWidth()) { Text("Unlock") }
+            Button(onClick = ::submit, enabled = !checking && !lockedOut, modifier = Modifier.fillMaxWidth()) { Text("Unlock") }
         }
     }
 }

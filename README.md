@@ -48,6 +48,7 @@ Early / in active development. On `main` today:
 - Handed-off agent replies stream live, and Stop cancels them mid-reply.
 - Storage shows real chat media size and Clear actually frees it.
 - App lock: optional 4–6 digit PIN (Settings → Privacy). Asks on open and when you come back to the app.
+- Security: public debug APKs no longer embed `DUA_DEV_JWT`; App Lock uses PBKDF2 PIN hashing with a 30s lockout after 5 wrong PINs, and hides the app from Recents/screenshots while on.
 - Open-source licences: Settings → About → Open-source licences (bundled from `THIRD-PARTY-NOTICES.md` + `licenses/`).
 - Live design pages (link above) and a debug APK (see Debug APK).
 
