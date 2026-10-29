@@ -35,6 +35,7 @@ import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Stop
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -189,9 +190,11 @@ fun ChatScreen(
     onBack: () -> Unit = {},
     messagesOverride: List<ChatMessage>? = null,
     loading: Boolean = false,
+    busy: Boolean = false,
     error: String? = null,
     onSendMessage: ((String) -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
+    onStopGeneration: (() -> Unit)? = null,
     sendWithEnter: Boolean = true,
     showTypingIndicator: Boolean = true,
     showActivityCards: Boolean = true,
@@ -327,6 +330,8 @@ fun ChatScreen(
             value = input,
             onValueChange = { input = it },
             onSend = { send() },
+            busy = busy || loading,
+            onStop = { onStopGeneration?.invoke() },
             agentName = agentName,
             sendWithEnter = sendWithEnter,
         )
@@ -671,6 +676,8 @@ private fun Composer(
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
     agentName: String,
+    busy: Boolean = false,
+    onStop: () -> Unit = {},
     sendWithEnter: Boolean = true,
 ) {
     val colors = OrhanTheme.colors
@@ -733,7 +740,7 @@ private fun Composer(
                                 imeAction = if (sendWithEnter) ImeAction.Send else ImeAction.Default,
                             ),
                             keyboardActions = if (sendWithEnter) {
-                                KeyboardActions(onSend = { onSend() })
+                                KeyboardActions(onSend = { if (!busy) onSend() })
                             } else {
                                 KeyboardActions.Default
                             },
@@ -743,7 +750,23 @@ private fun Composer(
 
                 Spacer(modifier = Modifier.width(6.dp))
 
-                if (canSend) {
+                if (busy) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(shapes.pill)
+                            .background(colors.primaryGradient)
+                            .clickable(onClick = onStop),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Stop,
+                            contentDescription = "Stop generating",
+                            tint = colors.onGradient,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                } else if (canSend) {
                     Box(
                         modifier = Modifier
                             .size(48.dp)

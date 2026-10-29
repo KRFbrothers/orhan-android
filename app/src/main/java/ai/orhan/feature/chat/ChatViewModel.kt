@@ -9,6 +9,8 @@ import ai.orhan.design.screens.ChatMessage
 import ai.orhan.design.screens.ChatRole
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -95,12 +97,22 @@ class ChatViewModel(
         streamReply()
     }
 
+    private var streamJob: Job? = null
+
+    /** Cancels the in-flight reply. Any partial agent bubble stays; a user cancel is not an error. */
+    fun stop() {
+        streamJob?.cancel()
+        streamJob = null
+        _state.update { it.copy(loading = false, busy = false) }
+    }
+
     private fun streamReply() {
+        streamJob?.cancel()
         val turns = withPreface(_state.value.messages.map {
             ChatTurn(if (it.role == ChatRole.User) "user" else "model", it.text)
         })
         val replyId = nextId()
-        viewModelScope.launch {
+        streamJob = viewModelScope.launch {
             var streamed = false
             val result = repository.stream(turns) { delta ->
                 streamed = true
@@ -115,6 +127,7 @@ class ChatViewModel(
                     s.copy(messages = msgs, loading = false)
                 }
             }.recoverCatching { e ->
+                if (e is CancellationException) throw e
                 // Fall back to non-streaming only if nothing was shown yet and the error isn't fatal (auth).
                 if (streamed || e is ChatRepository.FatalChatException) throw e
                 repository.send(turns).getOrThrow().also { reply ->
@@ -123,6 +136,8 @@ class ChatViewModel(
             }
             result.onSuccess { _state.update { it.copy(loading = false, busy = false) } }
                 .onFailure { e ->
+                    // User cancel (stop()) or scope teardown: state already reset; never surface as error.
+                    if (e is CancellationException) return@launch
                     _state.update { it.copy(loading = false, busy = false, error = e.message ?: "Request failed") }
                 }
         }
