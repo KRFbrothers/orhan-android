@@ -82,6 +82,7 @@ fun OrhanNavHost(isDark: Boolean) {
     val recentRepo = remember(context) { context.recentChats() }
     val recent by recentRepo.recent.collectAsStateWithLifecycle(initialValue = emptyList())
     val threadStore = remember(context) { context.chatThreads() }
+    val threads by threadStore.threads.collectAsStateWithLifecycle(initialValue = emptyList())
     val pinRepo = remember(context) { context.pinnedChats() }
     val pinnedTitles by pinRepo.pinned.collectAsStateWithLifecycle(initialValue = emptySet())
     val agentStore = remember(context) { context.agentStore() }
@@ -102,7 +103,8 @@ fun OrhanNavHost(isDark: Boolean) {
                 deletableAgentNames = savedAgents.map { it.name }.toSet(),
                 onDeleteAgent = { agent -> scope.launch { agentStore.delete(agent.name) } },
                 recentChats = recent.map {
-                    OrhanChat(it.title, "Recent chat", relativeTime(it.openedAt), isAgent = true)
+                    val lastText = threads.firstOrNull { t -> t.title == it.title }?.messages?.lastOrNull()?.text
+                    OrhanChat(it.title, previewSnippet(lastText), relativeTime(it.openedAt), isAgent = true)
                 },
                 pinnedTitles = pinnedTitles,
                 onTogglePin = { chat -> scope.launch { pinRepo.toggle(chat.title) } },
@@ -317,4 +319,11 @@ internal fun relativeTime(then: Long, now: Long = System.currentTimeMillis()): S
         m < 1440 -> "${m / 60}h"
         else -> "${m / 1440}d"
     }
+}
+
+/** Single-line preview of a saved message for Home rows; falls back to "Recent chat". */
+internal fun previewSnippet(text: String?, max: Int = 100): String {
+    val clean = text?.replace(Regex("\\s+"), " ")?.trim().orEmpty()
+    if (clean.isEmpty()) return "Recent chat"
+    return if (clean.length <= max) clean else clean.take(max).trimEnd() + "…"
 }
