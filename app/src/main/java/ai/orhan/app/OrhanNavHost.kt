@@ -142,6 +142,7 @@ fun OrhanNavHost(isDark: Boolean) {
 onOpenAppearance = { navController.openAppearance() },
                 onOpenNotifications = { navController.openSettingsPage(SettingsRoutes.NOTIFICATIONS) },
                 onOpenPrivacy = { navController.openSettingsPage(SettingsRoutes.PRIVACY) },
+                onOpenChatPreferences = { navController.openSettingsPage(SettingsRoutes.CHAT_PREFERENCES) },
                 onOpenStorage = { navController.openSettingsPage(SettingsRoutes.STORAGE) },
                 onOpenLanguage = { navController.openSettingsPage(SettingsRoutes.LANGUAGE) },
                 onOpenAbout = { navController.openSettingsPage(SettingsRoutes.ABOUT) },

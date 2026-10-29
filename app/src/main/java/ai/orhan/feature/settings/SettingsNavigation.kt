@@ -13,6 +13,7 @@ import ai.orhan.design.theme.themePreferences
 import ai.orhan.feature.settings.appearance.AppearanceScreen
 import ai.orhan.feature.settings.appearance.AppearanceViewModel
 import ai.orhan.feature.settings.detail.AboutScreen
+import ai.orhan.feature.settings.detail.ChatPreferencesScreen
 import ai.orhan.feature.settings.detail.LanguageScreen
 import ai.orhan.feature.settings.detail.NotificationsScreen
 import ai.orhan.feature.settings.detail.PrivacyScreen
@@ -37,6 +38,7 @@ object SettingsRoutes {
     const val APPEARANCE = "settings/appearance"
     const val NOTIFICATIONS = "settings/notifications"
     const val PRIVACY = "settings/privacy"
+    const val CHAT_PREFERENCES = "settings/chat-preferences"
     const val STORAGE = "settings/storage"
     const val LANGUAGE = "settings/language"
     const val ABOUT = "settings/about"
@@ -52,6 +54,7 @@ fun NavGraphBuilder.settingsDetailPages(navController: NavHostController) {
     val back: () -> Unit = { navController.popBackStack() }
     composable(SettingsRoutes.NOTIFICATIONS) { NotificationsScreen(onBack = back) }
     composable(SettingsRoutes.PRIVACY) { PrivacyScreen(onBack = back) }
+    composable(SettingsRoutes.CHAT_PREFERENCES) { ChatPreferencesScreen(onBack = back) }
     composable(SettingsRoutes.STORAGE) { StorageScreen(onBack = back) }
     composable(SettingsRoutes.LANGUAGE) { LanguageScreen(onBack = back) }
     composable(SettingsRoutes.ABOUT) { AboutScreen(onBack = back) }
@@ -98,6 +101,7 @@ fun SettingsNavHost(
                 onOpenAppearance = { navController.openAppearance() },
                 onOpenNotifications = { navController.openSettingsPage(SettingsRoutes.NOTIFICATIONS) },
                 onOpenPrivacy = { navController.openSettingsPage(SettingsRoutes.PRIVACY) },
+                onOpenChatPreferences = { navController.openSettingsPage(SettingsRoutes.CHAT_PREFERENCES) },
                 onOpenStorage = { navController.openSettingsPage(SettingsRoutes.STORAGE) },
                 onOpenLanguage = { navController.openSettingsPage(SettingsRoutes.LANGUAGE) },
                 onOpenAbout = { navController.openSettingsPage(SettingsRoutes.ABOUT) },
