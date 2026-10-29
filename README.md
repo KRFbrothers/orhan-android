@@ -1,30 +1,47 @@
 # Orhan AI — Android
 
-Minimal Jetpack Compose + Material 3 app (`ai.orhan`). App aur design ab isi ek repo me hain.
+Orhan is an Android AI chat app (`ai.orhan`), built with Jetpack Compose + Material 3.
+The app code and the HTML design live together in this repo.
 
-## Design (live preview)
-- `design/index.html` — full HTML design preview (open in browser)
-- `design/m3-gallery.html` — Material 3 component gallery
-- `design/code-pages/` — HTML viewers for the Kotlin theme/screens/icons
-- `M3_AUDIT_REPORT.md` — Material 3 audit
-- Compose source from the old design kit already lives under `app/` (not duplicated).
-- Legacy: earlier the design lived in the separate repo
-  [orhan-android-design-kit](https://github.com/KRFbrothers/orhan-android-design-kit) (to be archived); old Teamily preview URL is noted in `design/README.md`.
+## Design preview (live)
+- **https://krfbrothers.github.io/orhan-android/** — 14-screen HTML design
+- **https://krfbrothers.github.io/orhan-android/m3-gallery.html** — Material 3 component gallery
+- Source: `design/` (`index.html`, `m3-gallery.html`, `code-pages/`), audit in `M3_AUDIT_REPORT.md`
 
-- `MainActivity` -> `OrhanAppSample()`: Home (chat list) <-> Chat, day/night toggle
-- `design/theme` (Color/Type/Shape/Theme/FallbackFonts/ThemePreferences), `design/icons`, `design/screens`
-- `feature/settings` (+ `appearance`) and `app/OrhanApp.kt` compiled in, ready for a NavHost (not wired to the launcher yet)
-- Versions: `gradle/libs.versions.toml` from the kit (AGP 8.7.3, Gradle 8.9, Kotlin 2.0.21, Compose BOM 2024.12.01)
+## How it works
+- `MainActivity` → `OrhanNavHost`: Home (chats), Chat, Agents, Discover, Profile, Settings
+  (Appearance, Notifications, Privacy, Chat prefs, Storage, Language, About), plus Memory,
+  Artifacts, Workflows and Sign-in.
+- **Agent mode is always on.** Chat replies stream from the shared Dua engine
+  (`DUA_ENGINE_URL`, a Cloud Run service also used by the Dua app).
+- **Sign-in** uses Supabase auth. `SUPABASE_URL` / `SUPABASE_ANON_KEY` come from
+  `local.properties` locally, or from GitHub Actions secrets in CI. Without them the app
+  builds, but sign-in will not work. Never commit keys.
+- Chats, agents, artifacts, memory, workflows, profile and settings are stored on device (DataStore/files).
 
-## Open / build
-Android Studio -> Open -> pick this folder (JDK 17+). Or `./gradlew :app:assembleDebug`.
-Debug APK without a local build: GitHub -> Actions -> **Build debug APK** -> Run workflow, then download the `Orhan-debug-APK` artifact.
-The same APK is also published to GitHub Releases under the `debug-apk-latest` tag (always the newest debug build).
+## Build and run
+- Android Studio → Open this folder (JDK 17+), or `./gradlew :app:assembleDebug`.
+- Optional `local.properties`:
+  ```
+  SUPABASE_URL=...
+  SUPABASE_ANON_KEY=...
+  DUA_ENGINE_URL=...   # optional, has a default
+  ```
+- Tests: `./gradlew :app:testDebugUnitTest`.
 
-## Fonts
-- Lato 400/700/900 in `res/font/lato_*.ttf` — official TTFs from google/fonts `ofl/lato` (OFL, `licenses/Lato-OFL.txt`).
-- Inter variable (opt-in fallback) in `res/font/inter_*variable.ttf` from the kit (OFL, `licenses/Inter-OFL.txt`).
+## Debug APK
+- Latest build: [Releases → `debug-apk-latest`](https://github.com/KRFbrothers/orhan-android/releases/tag/debug-apk-latest)
+- Or Actions → **Build debug APK** → Run workflow → download the `Orhan-debug-APK` artifact.
+- These are debug builds for testing, not Play Store releases.
 
-## Kit deltas
-- `HomeScreen.kt` `OrhanAppSample`: `isSystemInDarkTheme()` hoisted out of the `rememberSaveable` lambda (didn't compile).
-- `FallbackFonts.kt`: `@OptIn(ExperimentalTextApi::class)` for `FontVariation`.
+## Status
+Early / in active development. Works: chat with streaming, agents list/create, profile,
+appearance, chat prefs, storage, memory, artifacts, workflows, sign-in.
+Not done yet: attach and mic buttons in chat, opening a chat from an agent card,
+notification and language settings are not saved, passcode / two-step and open-source
+licenses screen are "Coming soon". Only a few unit tests, no UI tests.
+
+## Fonts and licenses
+- Lato 400/700/900 (`res/font/lato_*.ttf`, OFL, `licenses/Lato-OFL.txt`)
+- Inter variable as opt-in fallback (OFL, `licenses/Inter-OFL.txt`)
+- See `THIRD-PARTY-NOTICES.md`.
