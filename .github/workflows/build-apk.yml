@@ -57,7 +57,7 @@ jobs:
           } > local.properties
 
       - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --max-workers=2
+        run: ./gradlew :app:assembleDebug --no-daemon --max-workers=2 -PbuildNumber=${{ github.run_number }}
 
       - name: Remove local.properties
         if: always()
@@ -79,13 +79,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: debug-apk-latest
         run: |
-          NOTES="Latest debug APK from run #${{ github.run_number }} (commit ${{ github.sha }})."
+          NOTES="Orhan v0.1.${{ github.run_number }} (versionCode ${{ github.run_number }}) - debug APK from run #${{ github.run_number }} (commit ${{ github.sha }})."
           if gh release view "$TAG" >/dev/null 2>&1; then
             git tag -f "$TAG" "${{ github.sha }}"
             git push -f origin "refs/tags/$TAG"
-            gh release edit "$TAG" --title "Debug APK (latest)" --notes "$NOTES" --prerelease
+            gh release edit "$TAG" --title "Debug APK v0.1.${{ github.run_number }} (latest)" --notes "$NOTES" --prerelease
             gh release upload "$TAG" Orhan-debug.apk --clobber
           else
             gh release create "$TAG" Orhan-debug.apk --target "${{ github.sha }}" \
-              --title "Debug APK (latest)" --notes "$NOTES" --prerelease
+              --title "Debug APK v0.1.${{ github.run_number }} (latest)" --notes "$NOTES" --prerelease
           fi
