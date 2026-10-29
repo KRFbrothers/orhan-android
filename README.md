@@ -14,6 +14,7 @@ The app code and the HTML design live together in this repo.
   Artifacts, Workflows and Sign-in.
 - **Agent mode is always on.** Chat replies stream from the shared Dua engine
   (`DUA_ENGINE_URL`, a Cloud Run service also used by the Dua app).
+  Orhan can hand a task off to one of your own agents.
 - **Sign-in** uses Supabase auth. `SUPABASE_URL` / `SUPABASE_ANON_KEY` come from
   `local.properties` locally, or from GitHub Actions secrets in CI. Without them the app
   builds, but sign-in will not work. Never commit keys.
@@ -35,11 +36,23 @@ The app code and the HTML design live together in this repo.
 - These are debug builds for testing, not Play Store releases.
 
 ## Status
-Early / in active development. Works: chat with streaming, agents list/create, profile,
-appearance, chat prefs, storage, memory, artifacts, workflows, sign-in.
-Not done yet: attach and mic buttons in chat, opening a chat from an agent card,
-notification and language settings are not saved, passcode / two-step and open-source
-licenses screen are "Coming soon". Only a few unit tests, no UI tests.
+Early / in active development. On `main` today:
+
+**Works**
+- Chat streams replies (always agent mode). Orhan knows its name and says it runs on Argon 4 when asked.
+- Attach files, mic, and hold-to-record voice notes. Attachments survive an app restart.
+- Agents: create, list, delete. Tapping an agent card opens a chat with it.
+- Orhan hub on Home. Orhan can hand a task off to one of your agents.
+- Notification and language settings are saved.
+- Memory, artifacts, workflows, pinned chats, chat prefs, profile, appearance, sign-in (Supabase).
+- Live design pages (link above) and a debug APK (see Debug APK).
+
+**Not done / limited**
+- Tool chips in Create Agent only guide the model; the engine still gets the full tool set.
+- Storage: "Cached previews", "Old chat media" and "Agent logs" show "Not available yet".
+- No passcode / two-step lock, and no open-source licenses screen in the app (see `THIRD-PARTY-NOTICES.md`).
+- A handed-off agent's reply does not stream, and Stop can't cancel it mid-reply.
+- Some unit tests for chat features; no UI tests.
 
 ## Fonts and licenses
 - Lato 400/700/900 (`res/font/lato_*.ttf`, OFL, `licenses/Lato-OFL.txt`)
