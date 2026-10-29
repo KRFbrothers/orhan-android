@@ -16,6 +16,8 @@ import ai.orhan.data.auth.AuthRepository
 import ai.orhan.design.screens.ChatScreen
 import ai.orhan.feature.agents.CreateAgentScreen
 import ai.orhan.feature.profile.EditProfileScreen
+import ai.orhan.feature.memory.MemoryScreen
+import ai.orhan.data.memory.memoryStore
 import ai.orhan.feature.profile.UserProfile
 import ai.orhan.feature.profile.profilePreferences
 import ai.orhan.feature.settings.detail.ChatPrefs
@@ -49,6 +51,7 @@ object AppRoutes {
     const val HOME = "home"
     const val CREATE_AGENT = "create_agent"
     const val EDIT_PROFILE = "edit_profile"
+    const val MEMORY = "memory"
     const val CHAT = "chat/{title}"
     fun chat(title: String) = "chat/${Uri.encode(title)}"
 }
@@ -69,6 +72,8 @@ fun OrhanNavHost(isDark: Boolean) {
     val recent by recentRepo.recent.collectAsStateWithLifecycle(initialValue = emptyList())
     val agentStore = remember(context) { context.agentStore() }
     val savedAgents by agentStore.agents.collectAsStateWithLifecycle(initialValue = emptyList())
+    val memoryStore = remember(context) { context.memoryStore() }
+    val personalMemory by memoryStore.memory.collectAsStateWithLifecycle(initialValue = "")
 
     NavHost(navController = navController, startDestination = AppRoutes.HOME) {
         composable(AppRoutes.HOME) {
@@ -95,6 +100,9 @@ fun OrhanNavHost(isDark: Boolean) {
                 onEditProfile = {
                     navController.navigate(AppRoutes.EDIT_PROFILE) { launchSingleTop = true }
                 },
+                onOpenMemory = {
+                    navController.navigate(AppRoutes.MEMORY) { launchSingleTop = true }
+                },
                 onToggleTheme = {
                     scope.launch {
                         preferences.setThemeMode(if (isDark) ThemeMode.Light else ThemeMode.Dark)
@@ -104,6 +112,9 @@ fun OrhanNavHost(isDark: Boolean) {
         }
         composable(AppRoutes.EDIT_PROFILE) {
             EditProfileScreen(onBack = { navController.popBackStack() })
+        }
+        composable(AppRoutes.MEMORY) {
+            MemoryScreen(onBack = { navController.popBackStack() })
         }
         composable(AppRoutes.CREATE_AGENT) {
             CreateAgentScreen(
@@ -150,6 +161,7 @@ fun OrhanNavHost(isDark: Boolean) {
             val title = entry.arguments?.getString("title").orEmpty()
             val agent = savedAgents.firstOrNull { it.name.equals(title, ignoreCase = true) }
             chatViewModel.setAgent(agent?.name ?: title, agent?.instructions.orEmpty(), agent?.tools.orEmpty())
+            chatViewModel.setPersonalMemory(personalMemory)
             val chatPrefsRepo = remember(context) { context.chatPreferences() }
             val chatPrefs by chatPrefsRepo.prefs.collectAsStateWithLifecycle(initialValue = ChatPrefs())
             ChatScreen(

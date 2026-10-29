@@ -230,6 +230,7 @@ fun HomeScreen(
     onOpenAppearance: () -> Unit = onOpenSettings,
     onCreateAgent: () -> Unit = {},
     onEditProfile: () -> Unit = {},
+    onOpenMemory: () -> Unit = {},
     isDark: Boolean = isSystemInDarkTheme(),
     profile: UserProfile = UserProfile(),
     /** Recently opened chats (local history), newest first; shown above the samples. */
@@ -278,6 +279,7 @@ fun HomeScreen(
                     onOpenSettings = onOpenSettings,
                     onOpenAppearance = onOpenAppearance,
                     onEditProfile = onEditProfile,
+                    onOpenMemory = onOpenMemory,
                     profile = profile,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -680,6 +682,7 @@ private fun ProfileTab(
     onOpenSettings: () -> Unit = {},
     onOpenAppearance: () -> Unit = {},
     onEditProfile: () -> Unit = {},
+    onOpenMemory: () -> Unit = {},
     profile: UserProfile = UserProfile(),
     modifier: Modifier = Modifier,
 ) {
@@ -735,6 +738,7 @@ private fun ProfileTab(
         OrhanCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(4.dp)) {
                 ProfileRow("Edit profile", "Name, email, avatar", onClick = onEditProfile)
+                ProfileRow("Memory", "Shared context for agents", onClick = onOpenMemory)
                 ProfileRow("Privacy & security", "Passcode, blocked users")
                 ProfileRow("Subscription", "Pro \u00b7 renews 12 Nov")
                 ProfileRow("Appearance", "Theme: System, Light or Dark", onClick = onOpenAppearance)
