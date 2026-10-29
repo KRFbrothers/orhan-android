@@ -1,23 +1,24 @@
 package ai.orhan.feature.agents
 
 import ai.orhan.R
-import ai.orhan.design.icons.OrhanIcons
+import ai.orhan.data.workflows.Workflow
 import ai.orhan.design.theme.OrhanTextStyles
 import ai.orhan.design.theme.OrhanTheme
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,30 +27,28 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.Canvas
-import ai.orhan.data.workflows.Workflow
 
 /** An agent the user has installed (design kit screen 03). */
 data class InstalledAgent(
@@ -129,50 +128,113 @@ fun AgentsScreen(
             },
         )
     }
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(top = 2.dp, bottom = 16.dp),
-    ) {
-        item(key = "head") {
-            OrhanSectionLabel("Your agents", "${agents.size} active")
+
+    var section by rememberSaveable { mutableIntStateOf(0) }
+    Column(modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 8.dp, end = 8.dp, top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SectionTab("Agents", selected = section == 0, onClick = { section = 0 })
+            SectionTab("Workflows", selected = section == 1, onClick = { section = 1 })
         }
-        items(agents, key = { it.name }) { agent ->
-            val canDelete = onDeleteAgent != null && agent.name in deletableNames
-            AgentCard(
-                agent,
-                onOpen = { onOpenAgent(agent) },
-                onLongPress = if (canDelete) ({ pendingDelete = agent }) else null,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-            )
-        }
-        item(key = "new") {
-            NewAgentButton(onCreateAgent, Modifier.padding(start = 12.dp, end = 12.dp, top = 9.dp))
-        }
-        item(key = "wf_head") {
-            OrhanSectionLabel("Workflows", "${workflows.size}", Modifier.padding(top = 16.dp))
-        }
-        if (workflows.isEmpty()) {
-            item(key = "wf_empty") {
-                Text(
-                    "Save a prompt you reuse often.",
-                    style = OrhanTextStyles.snippet,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                )
+        if (section == 0) {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp),
+            ) {
+                if (agents.isEmpty()) {
+                    item(key = "agents_empty") {
+                        Text(
+                            "No agents yet.",
+                            style = OrhanTextStyles.snippet,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+                items(agents, key = { it.name }) { agent ->
+                    val canDelete = onDeleteAgent != null && agent.name in deletableNames
+                    AgentCard(
+                        agent,
+                        onOpen = { onOpenAgent(agent) },
+                        onLongPress = if (canDelete) ({ pendingDelete = agent }) else null,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                    )
+                }
+                item(key = "new_agent") {
+                    AddRow(
+                        "Create a new agent",
+                        onCreateAgent,
+                        Modifier.padding(start = 12.dp, end = 12.dp, top = 9.dp),
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp),
+            ) {
+                if (workflows.isEmpty()) {
+                    item(key = "wf_empty") {
+                        Text(
+                            "Save a prompt you reuse often.",
+                            style = OrhanTextStyles.snippet,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+                items(workflows, key = { "wf_" + it.id }) { wf ->
+                    WorkflowRow(
+                        wf,
+                        onOpen = { onOpenWorkflow(wf) },
+                        onEdit = { onEditWorkflow(wf) },
+                        onLongPress = if (onDeleteWorkflow != null) ({ pendingWorkflowDelete = wf }) else null,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                    )
+                }
+                item(key = "wf_new") {
+                    AddRow(
+                        "New workflow",
+                        onCreateWorkflow,
+                        Modifier.padding(start = 12.dp, end = 12.dp, top = 9.dp),
+                    )
+                }
             }
         }
-        items(workflows, key = { "wf_" + it.id }) { wf ->
-            WorkflowRow(
-                wf,
-                onOpen = { onOpenWorkflow(wf) },
-                onEdit = { onEditWorkflow(wf) },
-                onLongPress = if (onDeleteWorkflow != null) ({ pendingWorkflowDelete = wf }) else null,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-            )
-        }
-        item(key = "wf_new") {
-            DashedAddButton("New workflow", onCreateWorkflow, Modifier.padding(start = 12.dp, end = 12.dp, top = 9.dp))
-        }
+    }
+}
+
+@Composable
+private fun SectionTab(label: String, selected: Boolean, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Tab, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+    ) {
+        Text(
+            text = label,
+            style = OrhanTextStyles.rowTitle,
+            color = if (selected) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+        Box(
+            modifier = Modifier
+                .padding(top = 4.dp)
+                .height(2.dp)
+                .width(28.dp)
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
+                ),
+        )
     }
 }
 
@@ -190,9 +252,8 @@ private fun AgentCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(shapes.card)
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, colors.hairline, shapes.card)
-            // Whole card opens a chat with this agent; long-press removes (user agents only).
             .combinedClickable(
                 role = Role.Button,
                 onClickLabel = "Chat with ${agent.name}",
@@ -201,60 +262,47 @@ private fun AgentCard(
                 onLongClickLabel = if (onLongPress != null) "Remove agent" else null,
             )
             .padding(14.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(
             painter = painterResource(agent.avatar),
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.size(46.dp).clip(RoundedCornerShape(15.dp)),
+            modifier = Modifier.size(48.dp).clip(CircleShape),
         )
-        Spacer(Modifier.width(13.dp))
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(agent.name, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-                Spacer(Modifier.width(7.dp))
-                Icon(OrhanIcons.Spark, contentDescription = null, tint = colors.logoMint, modifier = Modifier.size(14.dp))
-            }
-            Text(agent.blurb, style = OrhanTextStyles.snippet, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 3.dp))
-            Row(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                PillTag(if (agent.working) "Working" else "Idle", on = agent.working)
-                PillTag(agent.category, on = false)
-                Spacer(Modifier.weight(1f))
-                Box(
-                    modifier = Modifier
-                        .heightIn(min = 48.dp)
-                        .widthIn(min = 64.dp)
-                        .clip(shapes.pill)
-                        .border(1.dp, MaterialTheme.colorScheme.outline, shapes.pill)
-                        .clickable(role = Role.Button, onClick = onOpen)
-                        .padding(horizontal = 16.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("Open", style = OrhanTextStyles.meta, color = colors.onBrandSoft)
-                }
-            }
+            Text(
+                agent.name,
+                style = OrhanTextStyles.rowTitle,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                agent.blurb,
+                style = OrhanTextStyles.snippet,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .heightIn(min = 40.dp)
+                .widthIn(min = 72.dp)
+                .clip(shapes.pill)
+                .background(MaterialTheme.colorScheme.primary)
+                .clickable(role = Role.Button, onClick = onOpen)
+                .padding(horizontal = 14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("Chat", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onPrimary)
         }
     }
 }
-
-@Composable
-internal fun PillTag(text: String, on: Boolean) {
-    val colors = OrhanTheme.colors
-    Text(
-        text = text,
-        style = OrhanTextStyles.meta,
-        color = if (on) colors.onBrandSoft else MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier
-            .clip(OrhanTheme.shapes.pill)
-            .background(if (on) colors.brandSoft else MaterialTheme.colorScheme.surfaceContainerHighest)
-            .padding(horizontal = 9.dp, vertical = 4.dp),
-    )
-}
-
-@Composable
-private fun NewAgentButton(onClick: () -> Unit, modifier: Modifier = Modifier) =
-    DashedAddButton("Create a new agent", onClick, modifier)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -271,7 +319,7 @@ private fun WorkflowRow(
         modifier = modifier
             .fillMaxWidth()
             .clip(shapes.card)
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, colors.hairline, shapes.card)
             .combinedClickable(
                 onClick = onOpen,
@@ -283,21 +331,29 @@ private fun WorkflowRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(wf.title, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+            Text(
+                wf.title,
+                style = OrhanTextStyles.rowTitle,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(
                 wf.content.replace('\n', ' '),
                 style = OrhanTextStyles.snippet,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 2.dp),
             )
-            Text(
-                wf.agentName.ifBlank { "Default" },
-                style = OrhanTextStyles.meta,
-                color = colors.onBrandSoft,
-                modifier = Modifier.padding(top = 5.dp),
-            )
+            if (wf.agentName.isNotBlank()) {
+                Text(
+                    wf.agentName,
+                    style = OrhanTextStyles.meta,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
         }
         TextButton(onClick = onEdit, modifier = Modifier.heightIn(min = 48.dp)) {
             Text("Edit", style = OrhanTextStyles.meta)
@@ -306,30 +362,32 @@ private fun WorkflowRow(
 }
 
 @Composable
-private fun DashedAddButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun AddRow(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
-    val outline = MaterialTheme.colorScheme.outline
-    Box(
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 60.dp)
+            .heightIn(min = 56.dp)
             .clip(shapes.card)
-            .clickable(role = Role.Button, onClick = onClick),
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, colors.hairline, shapes.card)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Canvas(Modifier.matchParentSize()) {
-            drawRoundRect(
-                color = outline,
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(20.dp.toPx()),
-                style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))),
+        Box(
+            modifier = Modifier.size(36.dp).clip(CircleShape).background(colors.brandSoft),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Rounded.Add,
+                contentDescription = null,
+                tint = colors.onBrandSoft,
+                modifier = Modifier.size(20.dp),
             )
         }
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(38.dp).clip(CircleShape).background(colors.brandSoft), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Add, contentDescription = null, tint = colors.onBrandSoft, modifier = Modifier.size(20.dp))
-            }
-            Spacer(Modifier.width(12.dp))
-            Text(label, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface)
-        }
+        Spacer(Modifier.width(12.dp))
+        Text(label, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface)
     }
 }
