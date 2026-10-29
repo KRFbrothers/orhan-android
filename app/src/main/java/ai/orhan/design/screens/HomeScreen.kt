@@ -67,6 +67,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import ai.orhan.R
 import ai.orhan.feature.agents.AgentsScreen
+import ai.orhan.feature.agents.InstalledAgent
+import ai.orhan.feature.agents.SampleInstalledAgents
 import ai.orhan.feature.discover.DiscoverScreen
 import ai.orhan.design.theme.OrhanTextStyles
 import ai.orhan.design.theme.OrhanTheme
@@ -232,6 +234,8 @@ fun HomeScreen(
     profile: UserProfile = UserProfile(),
     /** Recently opened chats (local history), newest first; shown above the samples. */
     recentChats: List<OrhanChat> = emptyList(),
+    /** Agents tab list: user-created agents first, then samples. */
+    agents: List<InstalledAgent> = SampleInstalledAgents,
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
 
@@ -256,6 +260,7 @@ fun HomeScreen(
                 )
 
                 OrhanTab.Agents -> AgentsScreen(
+                    agents = agents,
                     onOpenAgent = { onOpenChat(OrhanChat(it.name, it.blurb, "", isAgent = true)) },
                     onCreateAgent = onCreateAgent,
                     modifier = Modifier.fillMaxSize(),
