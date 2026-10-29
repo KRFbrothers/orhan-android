@@ -1,6 +1,10 @@
 package ai.orhan.feature.settings
 
+import ai.orhan.app.AppRoutes
+import ai.orhan.data.artifacts.artifactStore
 import ai.orhan.data.history.chatThreads
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
@@ -71,7 +75,19 @@ fun NavGraphBuilder.settingsDetailPages(navController: NavHostController) {
         )
     }
     composable(SettingsRoutes.CHAT_PREFERENCES) { ChatPreferencesScreen(onBack = back) }
-    composable(SettingsRoutes.STORAGE) { StorageScreen(onBack = back) }
+    composable(SettingsRoutes.STORAGE) {
+        val context = LocalContext.current.applicationContext
+        val artifactRepo = remember(context) { context.artifactStore() }
+        val threadStore = remember(context) { context.chatThreads() }
+        val artifacts by artifactRepo.artifacts.collectAsStateWithLifecycle(initialValue = null)
+        val threads by threadStore.threads.collectAsStateWithLifecycle(initialValue = null)
+        StorageScreen(
+            onBack = back,
+            artifactCount = artifacts?.size,
+            chatThreadCount = threads?.size,
+            onOpenArtifacts = { navController.navigate(AppRoutes.ARTIFACTS) },
+        )
+    }
     composable(SettingsRoutes.LANGUAGE) { LanguageScreen(onBack = back) }
     composable(SettingsRoutes.ABOUT) { AboutScreen(onBack = back) }
 }
