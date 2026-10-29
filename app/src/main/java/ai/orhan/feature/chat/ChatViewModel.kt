@@ -48,16 +48,29 @@ class ChatViewModel(
         agentName = name; this.instructions = instructions.trim(); this.tools = tools
     }
 
-    /** Prepends a hidden user/model preface (engine only supports those roles); never shown in UI. */
+    private var personalMemory: String = ""
+
+    /** Sets the user's personal memory sent as hidden context. Idempotent; safe on every recomposition. */
+    fun setPersonalMemory(text: String) {
+        personalMemory = text.trim()
+    }
+
+    /** Prepends hidden user/model preface turns (engine only supports those roles); never shown in UI. */
     internal fun withPreface(uiTurns: List<ChatTurn>): List<ChatTurn> {
-        if (instructions.isBlank()) return uiTurns
-        val toolsLine = if (tools.isEmpty()) "" else "\nAvailable tools: ${tools.joinToString(", ")}"
-        val preface = listOf(
-            ChatTurn("user", "You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions$toolsLine"),
-            ChatTurn("model", "Understood. I'll follow those instructions."),
-        )
-        // 2 + 18 = 20, matching ChatRepository's takeLast(20) so the preface is never dropped.
-        return preface + uiTurns.takeLast(18)
+        val preface = buildList {
+            if (personalMemory.isNotBlank()) {
+                add(ChatTurn("user", "Personal context about the user (use when relevant):\n$personalMemory"))
+                add(ChatTurn("model", "Understood. I'll use that context when helpful."))
+            }
+            if (instructions.isNotBlank()) {
+                val toolsLine = if (tools.isEmpty()) "" else "\nAvailable tools: ${tools.joinToString(", ")}"
+                add(ChatTurn("user", "You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions$toolsLine"))
+                add(ChatTurn("model", "Understood. I'll follow those instructions."))
+            }
+        }
+        if (preface.isEmpty()) return uiTurns
+        // preface + UI turns = 20, matching ChatRepository's takeLast(20) so the preface is never dropped.
+        return preface + uiTurns.takeLast(20 - preface.size)
     }
 
     fun send(raw: String) {
