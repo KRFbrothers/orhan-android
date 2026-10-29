@@ -42,6 +42,20 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.net.Uri
+import android.provider.OpenableColumns
+import android.speech.RecognizerIntent
+import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.runtime.rememberCoroutineScope
+import ai.orhan.data.chat.ChatAttachment
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Mic
@@ -171,6 +185,8 @@ fun ChatScreen(
     busy: Boolean = false,
     error: String? = null,
     onSendMessage: ((String) -> Unit)? = null,
+    /** Sends text plus one inline file to the engine. When null, Attach explains files aren't available here. */
+    onSendAttachment: ((text: String, attachment: ChatAttachment) -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
     onStopGeneration: (() -> Unit)? = null,
     sendWithEnter: Boolean = true,
@@ -195,8 +211,52 @@ fun ChatScreen(
 
     var pendingPreview by rememberSaveable { mutableStateOf<String?>(null) }
 
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var attachment by remember { mutableStateOf<ChatAttachment?>(null) }
+
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            when (val r = withContext(Dispatchers.IO) { readAttachment(context, uri) }) {
+                is AttachResult.Ok -> attachment = r.file
+                is AttachResult.Fail -> Toast.makeText(context, r.message, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        val spoken = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (res.resultCode == Activity.RESULT_OK && !spoken.isNullOrBlank()) {
+            input = if (input.isBlank()) spoken else input.trimEnd() + " " + spoken
+        }
+    }
+
+    fun onAttach() {
+        if (onSendAttachment == null) {
+            Toast.makeText(context, "Attaching files isn't available in this chat yet", Toast.LENGTH_SHORT).show()
+        } else {
+            runCatching { filePicker.launch(ChatAttachment.PICKER_TYPES) }
+                .onFailure { Toast.makeText(context, "No file picker found on this device", Toast.LENGTH_SHORT).show() }
+        }
+    }
+
+    fun onMic() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your message")
+        try {
+            speech.launch(intent)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(context, "Voice typing isn't available on this device", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun deliver(text: String) {
-        if (onSendMessage != null) {
+        val file = attachment
+        if (file != null && onSendAttachment != null) {
+            onSendAttachment(text, file)
+            attachment = null
+        } else if (onSendMessage != null) {
             onSendMessage(text)
         } else {
             localMessages = localMessages + ChatMessage(
@@ -211,8 +271,8 @@ fun ChatScreen(
 
     fun send() {
         val text = input.trim()
-        if (text.isEmpty()) return
-        if (previewBeforeSending) pendingPreview = text else deliver(text)
+        if (text.isEmpty() && attachment == null) return
+        if (previewBeforeSending && attachment == null) pendingPreview = text else deliver(text)
     }
 
     pendingPreview?.let { draft ->
@@ -318,6 +378,10 @@ fun ChatScreen(
             value = input,
             onValueChange = { input = it },
             onSend = { send() },
+            onAttach = { onAttach() },
+            onMic = { onMic() },
+            attachment = attachment,
+            onRemoveAttachment = { attachment = null },
             busy = busy || loading,
             onStop = { onStopGeneration?.invoke() },
             agentName = agentName,
@@ -709,13 +773,17 @@ private fun Composer(
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
     agentName: String,
+    onAttach: () -> Unit = {},
+    onMic: () -> Unit = {},
+    attachment: ChatAttachment? = null,
+    onRemoveAttachment: () -> Unit = {},
     busy: Boolean = false,
     onStop: () -> Unit = {},
     sendWithEnter: Boolean = true,
 ) {
     val colors = OrhanTheme.colors
     val shapes = OrhanTheme.shapes
-    val canSend = value.isNotBlank()
+    val canSend = value.isNotBlank() || attachment != null
 
     Surface(color = colors.navBackground) {
         Column(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
@@ -726,13 +794,48 @@ private fun Composer(
                     .background(colors.hairline),
             )
 
+            if (attachment != null) {
+                Row(
+                    modifier = Modifier
+                        .padding(start = 16.dp, end = 8.dp, top = 8.dp)
+                        .clip(shapes.pill)
+                        .background(colors.field)
+                        .border(1.dp, colors.fieldEdge, shapes.pill)
+                        .padding(start = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.AttachFile,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "${attachment.name} \u00B7 ${formatSize(attachment.sizeBytes)}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 240.dp),
+                    )
+                    IconButton(onClick = onRemoveAttachment) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Remove attachment",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
-                IconButton(onClick = { }) {
+                IconButton(onClick = onAttach) {
                     Icon(
                         imageVector = Icons.Rounded.AttachFile,
                         contentDescription = "Attach file",
@@ -816,10 +919,10 @@ private fun Composer(
                         )
                     }
                 } else {
-                    IconButton(onClick = { }) {
+                    IconButton(onClick = onMic) {
                         Icon(
                             imageVector = Icons.Rounded.Mic,
-                            contentDescription = "Hold to record voice",
+                            contentDescription = "Voice typing",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -827,6 +930,50 @@ private fun Composer(
             }
         }
     }
+}
+
+/* ------------------------------ attachments ------------------------------ */
+
+private sealed interface AttachResult {
+    data class Ok(val file: ChatAttachment) : AttachResult
+    data class Fail(val message: String) : AttachResult
+}
+
+/** Reads a picked document into a base64 inline part, enforcing the engine's type and 4 MB limits. */
+private fun readAttachment(context: Context, uri: Uri): AttachResult {
+    val resolver = context.contentResolver
+    val mime = resolver.getType(uri) ?: "application/octet-stream"
+    if (!ChatAttachment.isSupported(mime)) return AttachResult.Fail("Only images, PDFs, text, audio or video files can be attached")
+    var name = "file"
+    var size = -1L
+    resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
+        if (c.moveToFirst()) {
+            c.getString(0)?.let { name = it }
+            if (!c.isNull(1)) size = c.getLong(1)
+        }
+    }
+    if (size > ChatAttachment.MAX_BYTES) return AttachResult.Fail("File is too large (max 4 MB)")
+    val bytes = runCatching {
+        resolver.openInputStream(uri)?.use { input ->
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                out.write(buf, 0, n)
+                if (out.size() > ChatAttachment.MAX_BYTES) return AttachResult.Fail("File is too large (max 4 MB)")
+            }
+            out.toByteArray()
+        }
+    }.getOrNull() ?: return AttachResult.Fail("Couldn't read that file")
+    if (bytes.isEmpty()) return AttachResult.Fail("That file is empty")
+    return AttachResult.Ok(ChatAttachment(name, mime, Base64.encodeToString(bytes, Base64.NO_WRAP), bytes.size.toLong()))
+}
+
+private fun formatSize(bytes: Long): String = when {
+    bytes >= 1024 * 1024 -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+    bytes >= 1024 -> "${bytes / 1024} KB"
+    else -> "$bytes B"
 }
 
 /* -------------------------------- previews ------------------------------- */

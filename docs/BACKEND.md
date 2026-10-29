@@ -64,3 +64,11 @@ SUPABASE_ANON_KEY=
 # Optional, debug only: fallback access token when not signed in (leave empty)
 DUA_DEV_JWT=
 ```
+
+## Attachments & voice (client)
+- **Attach:** the paperclip opens the system document picker (image/*, PDF, text/*, audio/*, video/*). One file per message,
+  max 4 MB, sent as the engine's existing per-message field `"attachments":[{"mimeType":"...","data":"<base64>"}]`
+  on the user turn. The bubble shows `📎 name`. File bytes are kept in memory only (not saved in history), so after
+  an app restart old files are no longer resent.
+- **Mic:** opens the system speech recognizer (`RecognizerIntent`) and inserts the transcript into the composer; the
+  user reviews and taps Send. No `RECORD_AUDIO` permission needed. Raw voice-note upload is not wired yet.
