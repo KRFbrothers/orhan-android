@@ -50,9 +50,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -130,7 +127,6 @@ data class OrhanAgent(
     val working: Boolean,
 )
 
-private val ChatFilters = listOf("All", "Unread", "Groups", "Recent")
 
 /** Bottom-navigation destinations, in the order the design uses them. */
 enum class OrhanTab(val label: String, val icon: ImageVector) {
@@ -275,7 +271,7 @@ fun HomeScreen(
 
             if (tab == OrhanTab.Chats) {
                 NewChatFab(
-                    onClick = { onOpenChat(OrhanChat(title = agents.firstOrNull()?.name ?: "Orhan", snippet = "", time = "", isAgent = true)) },
+                    onClick = { onOpenChat(OrhanChat(title = "Orhan", snippet = "", time = "", isAgent = true)) },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = 16.dp, bottom = 16.dp),
@@ -355,17 +351,10 @@ private fun ChatsTab(
 ) {
     val recentTitles = recentChats.map { it.title }.toSet()
     val chats = recentChats
-    var filter by rememberSaveable { mutableStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
+    // Orhan is the hub (pinned card above); keep it out of the recents list.
     val visible = chats
-        .filter { chat ->
-            when (filter) {
-                1 -> chat.unread > 0
-                2 -> chat.members > 0
-                3 -> recentTitles.isEmpty() || chat.title in recentTitles
-                else -> true
-            }
-        }
+        .filterNot { it.title.equals("Orhan", ignoreCase = true) }
         .filter { chat ->
             val q = query.trim()
             q.isEmpty() || chat.title.contains(q, ignoreCase = true) ||
@@ -386,43 +375,11 @@ private fun ChatsTab(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
 
-        item(key = "filters") {
-            // M3 SingleChoiceSegmentedButtonRow rather than a row of chips: the
-            // four options are mutually exclusive and always one-of, which is
-            // exactly what the segmented-button container expresses. It also
-            // brings the group's own 1dp outline, the shared divider between
-            // options, and Role.RadioButton semantics for TalkBack for free.
-            SingleChoiceSegmentedButtonRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-            ) {
-                ChatFilters.forEachIndexed { i, label ->
-                    SegmentedButton(
-                        selected = filter == i,
-                        onClick = { filter = i },
-                        shape = SegmentedButtonDefaults.itemShape(
-                            index = i,
-                            count = ChatFilters.size,
-                        ),
-                        colors = SegmentedButtonDefaults.colors(
-                            activeContainerColor = OrhanTheme.colors.brandSoft,
-                            activeContentColor = OrhanTheme.colors.onBrandSoft,
-                            activeBorderColor = OrhanTheme.colors.brandSoft,
-                            inactiveContainerColor = MaterialTheme.colorScheme.surface,
-                            inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            inactiveBorderColor = MaterialTheme.colorScheme.outline,
-                        ),
-                        label = {
-                            Text(
-                                text = label,
-                                style = OrhanTextStyles.meta,
-                                maxLines = 1,
-                            )
-                        },
-                    )
-                }
-            }
+        item(key = "orhan-hub") {
+            OrhanHubCard(
+                onClick = { onOpenChat(OrhanChat(title = "Orhan", snippet = "", time = "", isAgent = true)) },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
         }
 
         if (pinnedVisible.isNotEmpty()) {
@@ -462,6 +419,37 @@ private fun ChatsTab(
                 onRemoveRecent = if (chat.title in recentTitles) ({ onRemoveRecent(chat) }) else null,
             )
         }
+    }
+}
+
+/** Main controller entry: Orhan runs the user's other agents. */
+@Composable
+private fun OrhanHubCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = OrhanTheme.colors
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(OrhanTheme.shapes.card)
+            .background(colors.brandSoft)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = "Orhan", style = OrhanTextStyles.rowTitle, color = colors.onBrandSoft)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Your main agent · runs your other agents",
+                style = OrhanTextStyles.snippet,
+                color = colors.onBrandSoft,
+                maxLines = 2,
+            )
+        }
+        Icon(
+            imageVector = Icons.Rounded.KeyboardArrowRight,
+            contentDescription = "Open Orhan",
+            tint = colors.onBrandSoft,
+        )
     }
 }
 
@@ -525,7 +513,7 @@ private fun SearchField(
             decorationBox = { inner ->
                 if (query.isEmpty()) {
                     Text(
-                        text = "Search chats, agents, people",
+                        text = "Search chats and agents",
                         style = OrhanTextStyles.snippet,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,

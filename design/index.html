@@ -935,16 +935,12 @@ footer b{color:var(--page-ink)}
               <div class="searchrow">
                 <div class="searchfield">
                   <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-                  <span>Search chats, agents, people</span>
+                  <span>Search chats and agents</span>
                 </div>
               </div>
-
-              <div class="chips" role="group" aria-label="Filters">
-                <button class="chip is-on" type="button">All</button>
-                <button class="chip" type="button">Unread</button>
-                <button class="chip" type="button"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg>Agents</button>
-                <button class="chip" type="button">Groups</button>
-              </div>
+              <button class="row" type="button" data-go="chat" style="margin:8px 16px;width:calc(100% - 32px);border-radius:16px;background:var(--brand-soft,#dff5ec)">
+                <span class="rowbody"><span class="rowtop"><span class="rownm">Orhan</span></span><span class="rowsnip"><span class="txt">Your main agent · runs your other agents</span></span></span>
+              </button>
 
               <div class="seclabel"><span>Recent</span></div>
 
@@ -2051,7 +2047,7 @@ footer b{color:var(--page-ink)}
       <div class="note">
         <div class="kicker">Now showing</div>
         <h4 id="noteTitle">Home / Chats</h4>
-        <p id="noteBody">Top bar with the real Orhan lockup, search and settings. Recent chats mix agents (mint spark + presence dot) with people and groups. Bottom nav uses the M3 58×30 active indicator.</p>
+        <p id="noteBody">Top bar with the real Orhan lockup, search and settings. Orhan sits pinned on top as your main agent that runs your other agents; recent chats list below. No All/Unread/Groups filters. Bottom nav uses the M3 58×30 active indicator.</p>
         <ul id="noteList">
           <li><b>4 nav destinations</b> — Chats, Agents, Discover, Profile</li>
           <li><b>Touch targets</b> — every row ≥ 72px tall</li>
@@ -2222,7 +2218,7 @@ footer b{color:var(--page-ink)}
   var railBtns = Array.prototype.slice.call(document.querySelectorAll('.rail [data-go]'));
 
   var NOTES = {
-    home:        ['Home / Chats', 'Top bar with the real Orhan lockup, search and settings. Recent chats mix agents (mint spark + presence dot) with people and groups.', ['<b>4 nav destinations</b> — Chats, Agents, Discover, Profile', '<b>Every row</b> ≥ 72px tall']],
+    home:        ['Home / Chats', 'Top bar with the real Orhan lockup, search and settings. Orhan sits pinned on top as your main agent that runs your other agents; recent chats list below. No All/Unread/Groups filters.', ['<b>4 nav destinations</b> — Chats, Agents, Discover, Profile', '<b>Every row</b> ≥ 72px tall']],
     chat:        ['Chat', 'Agent thread at 14.5px with user and AI bubbles, an inline artifact card, and a composer with attach, mic and send.', ['<b>Send works</b> — type and press send; a reply comes back', '<b>Composer</b> 52px field, 48px send button']],
     agents:      ['Agents', 'Four real agents with status pills, descriptions and an Open CTA that jumps into the chat thread.', ['<b>Open CTA</b> 48px tall', '<b>Create agent</b> dashed row at the end']],
     discover:    ['Discover', 'Featured agent hero on brand green, a trend grid, and a social feed of what people you follow shared.', ['<b>Hero CTA</b> 48px', '<b>2-up cards</b> with tag footer']],
