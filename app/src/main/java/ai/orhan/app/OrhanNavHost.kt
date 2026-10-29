@@ -27,6 +27,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.orhan.design.screens.HomeScreen
 import ai.orhan.design.screens.OrhanChat
 import ai.orhan.data.history.recentChats
+import ai.orhan.data.agents.SavedAgent
+import ai.orhan.data.agents.agentStore
+import ai.orhan.data.agents.mergeWithSamples
+import ai.orhan.data.agents.toInstalledAgent
 import ai.orhan.design.theme.ThemeMode
 import ai.orhan.design.theme.themePreferences
 import ai.orhan.feature.settings.SettingsRoutes
@@ -61,12 +65,15 @@ fun OrhanNavHost(isDark: Boolean) {
     val scope = rememberCoroutineScope()
     val recentRepo = remember(context) { context.recentChats() }
     val recent by recentRepo.recent.collectAsStateWithLifecycle(initialValue = emptyList())
+    val agentStore = remember(context) { context.agentStore() }
+    val savedAgents by agentStore.agents.collectAsStateWithLifecycle(initialValue = emptyList())
 
     NavHost(navController = navController, startDestination = AppRoutes.HOME) {
         composable(AppRoutes.HOME) {
             HomeScreen(
                 isDark = isDark,
                 profile = profile,
+                agents = mergeWithSamples(savedAgents.map { it.toInstalledAgent() }),
                 recentChats = recent.map {
                     OrhanChat(it.title, "Recent chat", relativeTime(it.openedAt), isAgent = true)
                 },
@@ -97,9 +104,14 @@ fun OrhanNavHost(isDark: Boolean) {
         composable(AppRoutes.CREATE_AGENT) {
             CreateAgentScreen(
                 onBack = { navController.popBackStack() },
-                onCreated = { name, _ ->
-                    navController.navigate(AppRoutes.chat(name)) {
-                        popUpTo(AppRoutes.CREATE_AGENT) { inclusive = true }
+                onCreated = { name, blurb ->
+                    scope.launch {
+                        agentStore.upsert(
+                            SavedAgent(name = name, blurb = blurb, createdAt = System.currentTimeMillis()),
+                        )
+                        navController.navigate(AppRoutes.chat(name)) {
+                            popUpTo(AppRoutes.CREATE_AGENT) { inclusive = true }
+                        }
                     }
                 },
             )
