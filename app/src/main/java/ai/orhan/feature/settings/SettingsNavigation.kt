@@ -1,5 +1,6 @@
 package ai.orhan.feature.settings
 
+import ai.orhan.data.history.chatThreads
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
@@ -59,11 +60,13 @@ fun NavGraphBuilder.settingsDetailPages(navController: NavHostController) {
         val context = LocalContext.current.applicationContext
         val recentRepo = remember(context) { context.recentChats() }
         val pinRepo = remember(context) { context.pinnedChats() }
+        val threadStore = remember(context) { context.chatThreads() }
         PrivacyScreen(
             onBack = back,
             onClearChatHistory = {
                 recentRepo.clear()
                 pinRepo.clear()
+                threadStore.clear()
             },
         )
     }
