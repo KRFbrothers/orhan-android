@@ -2,11 +2,8 @@ package ai.orhan.feature.settings.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
@@ -22,17 +19,28 @@ import ai.orhan.design.theme.OrhanTextStyles
 import ai.orhan.design.theme.OrhanTheme
 import kotlinx.coroutines.launch
 
-/** Settings → Storage. Fake numbers; clean-up actions only show a snackbar. */
+private fun countLabel(n: Int?, one: String, many: String): String =
+    when (n) { null -> "…"; 1 -> "1 $one"; else -> "$n $many" }
+
+/**
+ * Settings → Storage. Shows honest on-device counts (artifacts, saved chats).
+ * Clean-up actions are still stubs and only show a snackbar.
+ */
 @Composable
-fun StorageScreen(onBack: () -> Unit) {
+fun StorageScreen(
+    onBack: () -> Unit,
+    artifactCount: Int? = null,
+    chatThreadCount: Int? = null,
+    onOpenArtifacts: () -> Unit = {},
+) {
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val toast: (String) -> Unit = { msg -> scope.launch { snackbar.showSnackbar(msg) } }
-    val used = 3.2f
-    val total = 15f
+    val artifactsLabel = countLabel(artifactCount, "document", "documents")
+    val chatsLabel = countLabel(chatThreadCount, "saved chat", "saved chats")
 
     SettingsDetailScaffold(title = "Storage", onBack = onBack, snackbarHostState = snackbar) {
-        SectionLabel("Usage")
+        SectionLabel("On this device")
         Column(
             Modifier
                 .fillMaxWidth()
@@ -41,40 +49,28 @@ fun StorageScreen(onBack: () -> Unit) {
                 .border(1.dp, OrhanTheme.colors.hairline, OrhanTheme.shapes.card)
                 .padding(16.dp),
         ) {
-            Text("$used GB of ${total.toInt()} GB used", style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface)
-            Box(
-                Modifier
-                    .padding(top = 12.dp)
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(OrhanTheme.shapes.pill)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxWidth(used / total)
-                        .fillMaxHeight()
-                        .clip(OrhanTheme.shapes.pill)
-                        .background(MaterialTheme.colorScheme.primary),
-                )
-            }
+            Text("$artifactsLabel · $chatsLabel", style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                "Stored locally on this phone. Nothing here counts against a cloud quota.",
+                modifier = Modifier.padding(top = 6.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         SectionLabel("Breakdown")
         GroupCard(listOf(
-            { NavRow("Chat media", value = "1.6 GB") },
-            { NavRow("Artifacts", value = "0.9 GB") },
-            { NavRow("Cached previews", value = "0.5 GB") },
-            { NavRow("Agent logs", value = "0.2 GB") },
+            { NavRow("Artifacts", value = artifactsLabel) },
+            { NavRow("Chat history", value = chatsLabel) },
         ))
         SectionLabel("Clean up")
         GroupCard(listOf(
-            { NavRow("Cached previews", "0.5 GB", trailing = { TextButton({ toast("Cleared cached previews") }) { Text("Clear") } }) },
-            { NavRow("Old chat media", "Older than 90 days", trailing = { TextButton({ toast("Removed old chat media") }) { Text("Clear") } }) },
-            { NavRow("Agent logs", "0.2 GB", trailing = { TextButton({ toast("Cleared agent logs") }) { Text("Clear") } }) },
+            { NavRow("Cached previews", "Not available yet", trailing = { TextButton({ toast("Cache clearing isn't available yet") }) { Text("Clear") } }) },
+            { NavRow("Old chat media", "Not available yet", trailing = { TextButton({ toast("Media clean-up isn't available yet") }) { Text("Clear") } }) },
+            { NavRow("Agent logs", "Not available yet", trailing = { TextButton({ toast("Log clearing isn't available yet") }) { Text("Clear") } }) },
         ))
         SectionLabel("Library")
         GroupCard(listOf(
-            { NavRow("Artifact library", "Files and outputs saved by agents", onClick = { toast("Coming soon") }) },
+            { NavRow("Artifact library", if (artifactCount != null && artifactCount > 0) artifactsLabel else "Saved replies", onClick = onOpenArtifacts) },
         ))
     }
 }
