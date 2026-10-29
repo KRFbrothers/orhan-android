@@ -50,7 +50,7 @@ Early / in active development. On `main` today:
 **Not done / limited**
 - Tool chips in Create Agent only guide the model; the engine still gets the full tool set.
 - Storage: "Cached previews", "Old chat media" and "Agent logs" show "Not available yet".
-- No passcode / two-step lock, and no open-source licenses screen in the app (see `THIRD-PARTY-NOTICES.md`).
+- No passcode / two-step lock. Open-source licences: Settings → About → Open-source licences (bundled from `THIRD-PARTY-NOTICES.md` + `licenses/`).
 - A handed-off agent's reply does not stream, and Stop can't cancel it mid-reply.
 - Some unit tests for chat features; no UI tests.
 

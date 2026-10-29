@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 
 /** Settings → About. Links open in the browser. */
 @Composable
-fun AboutScreen(onBack: () -> Unit) {
+fun AboutScreen(onBack: () -> Unit, onOpenLicenses: () -> Unit = {}) {
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -36,6 +36,7 @@ fun AboutScreen(onBack: () -> Unit) {
         GroupCard(listOf(
             { NavRow("Terms of service", onClick = { open("https://orhan.ai/terms") }) },
             { NavRow("Privacy policy", onClick = { open("https://orhan.ai/privacy") }) },
+            { NavRow("Open-source licences", onClick = onOpenLicenses) },
         ))
         SectionLabel("Help")
         GroupCard(listOf(

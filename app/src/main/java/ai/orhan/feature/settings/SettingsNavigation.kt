@@ -22,6 +22,7 @@ import ai.orhan.feature.settings.appearance.AppearanceViewModel
 import ai.orhan.feature.settings.detail.AboutScreen
 import ai.orhan.feature.settings.detail.ChatPreferencesScreen
 import ai.orhan.feature.settings.detail.LanguageScreen
+import ai.orhan.feature.settings.detail.LicensesScreen
 import ai.orhan.feature.settings.detail.NotificationsScreen
 import ai.orhan.feature.settings.detail.PrivacyScreen
 import ai.orhan.feature.settings.detail.StorageScreen
@@ -49,6 +50,7 @@ object SettingsRoutes {
     const val STORAGE = "settings/storage"
     const val LANGUAGE = "settings/language"
     const val ABOUT = "settings/about"
+    const val LICENSES = "settings/about/licenses"
 }
 
 /** Navigate to any Settings sub-route without stacking duplicates. */
@@ -89,7 +91,10 @@ fun NavGraphBuilder.settingsDetailPages(navController: NavHostController) {
         )
     }
     composable(SettingsRoutes.LANGUAGE) { LanguageScreen(onBack = back) }
-    composable(SettingsRoutes.ABOUT) { AboutScreen(onBack = back) }
+    composable(SettingsRoutes.ABOUT) {
+        AboutScreen(onBack = back, onOpenLicenses = { navController.openSettingsPage(SettingsRoutes.LICENSES) })
+    }
+    composable(SettingsRoutes.LICENSES) { LicensesScreen(onBack = back) }
 }
 
 /** Navigate from the Settings list to Appearance. */
