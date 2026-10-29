@@ -808,7 +808,7 @@ private fun ProfileTab(
         OrhanCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(4.dp)) {
                 ProfileRow("Edit profile", "Name, email, avatar", onClick = onEditProfile)
-                ProfileRow("Memory", "Shared context for agents", onClick = onOpenMemory)
+                ProfileRow("Memory", "Context, notes & to-dos", onClick = onOpenMemory)
                 ProfileRow("Artifacts", "Saved replies", onClick = onOpenArtifacts)
                 ProfileRow("Privacy & security", "Passcode, blocked users")
                 ProfileRow("Subscription", "Pro \u00b7 renews 12 Nov")
