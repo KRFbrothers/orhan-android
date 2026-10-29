@@ -51,6 +51,12 @@ import ai.orhan.feature.settings.openAppearance
 import ai.orhan.feature.settings.openSettingsPage
 import ai.orhan.feature.settings.settingsDetailPages
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.time.temporal.ChronoUnit
+import java.util.Locale
 import ai.orhan.data.artifacts.artifactStore
 import ai.orhan.feature.artifacts.ArtifactsScreen
 import ai.orhan.data.workflows.workflowStore
@@ -140,6 +146,9 @@ fun OrhanNavHost(isDark: Boolean) {
                 onOpenArtifacts = {
                     navController.navigate(AppRoutes.ARTIFACTS) { launchSingleTop = true }
                 },
+                artifacts = artifacts,
+                onUpsertArtifact = { item -> scope.launch { artifactStore.upsert(item) } },
+                onDeleteArtifact = { id -> scope.launch { artifactStore.delete(id) } },
                 artifactCount = artifacts.size,
                 onOpenChatPreferences = { navController.openSettingsPage(SettingsRoutes.CHAT_PREFERENCES) },
                 onOpenSettingsPage = { route -> navController.openSettingsPage(route) },
@@ -328,14 +337,19 @@ onOpenAppearance = { navController.openAppearance() },
     }
 }
 
-/** Compact "now / 5m / 3h / 2d" label for a chat-list row. */
+/**
+ * Chat-list date. Within the last six days this is a short weekday ("Tue");
+ * older rows use a numeric month/day/year ("10/21/26").
+ */
 internal fun relativeTime(then: Long, now: Long = System.currentTimeMillis()): String {
-    val m = ((now - then).coerceAtLeast(0)) / 60_000
-    return when {
-        m < 1 -> "now"
-        m < 60 -> "${m}m"
-        m < 1440 -> "${m / 60}h"
-        else -> "${m / 1440}d"
+    val zone = ZoneId.systemDefault()
+    val opened = Instant.ofEpochMilli(then).atZone(zone).toLocalDate()
+    val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val days = ChronoUnit.DAYS.between(opened, today)
+    return if (days in 0..6) {
+        opened.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+    } else {
+        DateTimeFormatter.ofPattern("M/d/yy", Locale.US).format(opened)
     }
 }
 

@@ -59,11 +59,17 @@ private val SECTIONS = listOf("Personal context", "Notes", "To-dos")
 /** Memory: personal context (injected into chats), plus local-only notes and to-dos. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MemoryScreen(onBack: () -> Unit) {
+fun MemoryScreen(onBack: () -> Unit, embedded: Boolean = false) {
     val snackbar = remember { SnackbarHostState() }
     var section by rememberSaveable { mutableIntStateOf(0) }
 
-    SettingsDetailScaffold(title = "Memory", onBack = onBack, snackbarHostState = snackbar) {
+    SettingsDetailScaffold(
+        title = "Memory",
+        onBack = onBack,
+        snackbarHostState = snackbar,
+        showBack = !embedded,
+        applyStatusBarPadding = !embedded,
+    ) {
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
             SECTIONS.forEachIndexed { i, label ->
                 SegmentedButton(

@@ -44,6 +44,8 @@ fun ArtifactsScreen(
     onUpsert: (Artifact) -> Unit,
     onDelete: (String) -> Unit,
     onBack: () -> Unit,
+    /** True when shown under the home tabs, which already inset the status bar. */
+    embedded: Boolean = false,
 ) {
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
     // Id being edited; may be a fresh id not yet in the store (new document).
@@ -56,6 +58,7 @@ fun ArtifactsScreen(
         ArtifactEditor(
             initial = existing,
             onCancel = close,
+            applyStatusBarPadding = !embedded,
             onSave = { title, content ->
                 onUpsert(
                     Artifact(editing, title, content, existing?.createdAt ?: System.currentTimeMillis()),
@@ -74,10 +77,16 @@ fun ArtifactsScreen(
             onBack = { openId = null },
             onEdit = { editId = open.id },
             onDelete = { onDelete(open.id); openId = null },
+            applyStatusBarPadding = !embedded,
         )
         return
     }
-    SettingsDetailScaffold(title = "Artifacts", onBack = onBack) {
+    SettingsDetailScaffold(
+        title = "Artifacts",
+        onBack = onBack,
+        showBack = !embedded,
+        applyStatusBarPadding = !embedded,
+    ) {
         OutlinedButton(
             onClick = { editId = UUID.randomUUID().toString() },
             modifier = Modifier.padding(vertical = 8.dp),
@@ -107,7 +116,13 @@ fun ArtifactsScreen(
 }
 
 @Composable
-private fun ArtifactDetail(a: Artifact, onBack: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun ArtifactDetail(
+    a: Artifact,
+    onBack: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    applyStatusBarPadding: Boolean = true,
+) {
     val context = LocalContext.current
     var confirm by rememberSaveable { mutableStateOf(false) }
     if (confirm) {
@@ -119,7 +134,7 @@ private fun ArtifactDetail(a: Artifact, onBack: () -> Unit, onEdit: () -> Unit, 
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
         )
     }
-    SettingsDetailScaffold(title = a.title, onBack = onBack) {
+    SettingsDetailScaffold(title = a.title, onBack = onBack, applyStatusBarPadding = applyStatusBarPadding) {
         Text(formatDate(a.createdAt), style = OrhanTextStyles.meta,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
@@ -143,10 +158,19 @@ private fun ArtifactDetail(a: Artifact, onBack: () -> Unit, onEdit: () -> Unit, 
 }
 
 @Composable
-private fun ArtifactEditor(initial: Artifact?, onCancel: () -> Unit, onSave: (String, String) -> Unit) {
+private fun ArtifactEditor(
+    initial: Artifact?,
+    onCancel: () -> Unit,
+    onSave: (String, String) -> Unit,
+    applyStatusBarPadding: Boolean = true,
+) {
     var title by rememberSaveable { mutableStateOf(initial?.title.orEmpty()) }
     var content by rememberSaveable { mutableStateOf(initial?.content.orEmpty()) }
-    SettingsDetailScaffold(title = if (initial == null) "New document" else "Edit document", onBack = onCancel) {
+    SettingsDetailScaffold(
+        title = if (initial == null) "New document" else "Edit document",
+        onBack = onCancel,
+        applyStatusBarPadding = applyStatusBarPadding,
+    ) {
         OutlinedTextField(
             value = title,
             onValueChange = { title = it },
