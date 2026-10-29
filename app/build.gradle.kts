@@ -19,8 +19,11 @@ android {
         applicationId = "ai.orhan"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI passes -PbuildNumber=<github.run_number>; local builds default to 1.
+        val buildNumber = (project.findProperty("buildNumber") as String?)?.toIntOrNull()
+            ?: System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = buildNumber
+        versionName = "0.1.$buildNumber"
         buildConfigField("String", "DUA_ENGINE_URL", "\"${localProp("DUA_ENGINE_URL", "https://dua-ai-engine-228305912525.us-central1.run.app")}\"")
         buildConfigField("String", "DUA_API_URL", "\"${localProp("DUA_API_URL", "https://dua-api-228305912525.us-central1.run.app")}\"")
         buildConfigField("String", "DUA_APP_TOKEN", "\"${localProp("DUA_APP_TOKEN")}\"")
