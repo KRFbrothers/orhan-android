@@ -53,7 +53,7 @@ fun SignInScreen(
         Text("Sign in", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Use your Dua (Supabase) account to chat.",
+            "Sign in to your Orhan account to chat.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
