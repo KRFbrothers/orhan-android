@@ -159,6 +159,7 @@ fun OrhanNavHost(isDark: Boolean) {
         composable(AppRoutes.ARTIFACTS) {
             ArtifactsScreen(
                 artifacts = artifacts,
+                onUpsert = { a -> scope.launch { artifactStore.upsert(a) } },
                 onDelete = { id -> scope.launch { artifactStore.delete(id) } },
                 onBack = { navController.popBackStack() },
             )

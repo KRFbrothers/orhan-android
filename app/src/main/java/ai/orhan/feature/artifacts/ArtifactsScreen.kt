@@ -27,6 +27,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ai.orhan.data.artifacts.Artifact
+import ai.orhan.data.artifacts.MAX_ARTIFACT_CONTENT
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.layout.heightIn
+import java.util.UUID
 import ai.orhan.design.theme.OrhanTextStyles
 import ai.orhan.feature.settings.detail.SettingsDetailScaffold
 import java.text.DateFormat
@@ -36,20 +41,50 @@ import java.util.Date
 @Composable
 fun ArtifactsScreen(
     artifacts: List<Artifact>,
+    onUpsert: (Artifact) -> Unit,
     onDelete: (String) -> Unit,
     onBack: () -> Unit,
 ) {
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Id being edited; may be a fresh id not yet in the store (new document).
+    var editId by rememberSaveable { mutableStateOf<String?>(null) }
+    val editing = editId
+    if (editing != null) {
+        val existing = artifacts.firstOrNull { it.id == editing }
+        val close = { editId = null }
+        BackHandler { close() }
+        ArtifactEditor(
+            initial = existing,
+            onCancel = close,
+            onSave = { title, content ->
+                onUpsert(
+                    Artifact(editing, title, content, existing?.createdAt ?: System.currentTimeMillis()),
+                )
+                openId = editing
+                editId = null
+            },
+        )
+        return
+    }
     val open = artifacts.firstOrNull { it.id == openId }
     if (open != null) {
         BackHandler { openId = null }
-        ArtifactDetail(open, onBack = { openId = null }, onDelete = { onDelete(open.id); openId = null })
+        ArtifactDetail(
+            open,
+            onBack = { openId = null },
+            onEdit = { editId = open.id },
+            onDelete = { onDelete(open.id); openId = null },
+        )
         return
     }
     SettingsDetailScaffold(title = "Artifacts", onBack = onBack) {
+        OutlinedButton(
+            onClick = { editId = UUID.randomUUID().toString() },
+            modifier = Modifier.padding(vertical = 8.dp),
+        ) { Text("New document") }
         if (artifacts.isEmpty()) {
             Text(
-                text = "No artifacts yet \u2014 save a reply from chat.",
+                text = "No artifacts yet \u2014 save a reply from chat, or create a document.",
                 style = OrhanTextStyles.snippet,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 24.dp, start = 4.dp),
@@ -72,7 +107,7 @@ fun ArtifactsScreen(
 }
 
 @Composable
-private fun ArtifactDetail(a: Artifact, onBack: () -> Unit, onDelete: () -> Unit) {
+private fun ArtifactDetail(a: Artifact, onBack: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     val context = LocalContext.current
     var confirm by rememberSaveable { mutableStateOf(false) }
     if (confirm) {
@@ -88,6 +123,7 @@ private fun ArtifactDetail(a: Artifact, onBack: () -> Unit, onDelete: () -> Unit
         Text(formatDate(a.createdAt), style = OrhanTextStyles.meta,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+            OutlinedButton(onClick = onEdit) { Text("Edit") }
             OutlinedButton(onClick = {
                 val send = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
@@ -102,6 +138,32 @@ private fun ArtifactDetail(a: Artifact, onBack: () -> Unit, onDelete: () -> Unit
         SelectionContainer {
             Text(a.content, style = OrhanTextStyles.bubble, color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(horizontal = 4.dp))
+        }
+    }
+}
+
+@Composable
+private fun ArtifactEditor(initial: Artifact?, onCancel: () -> Unit, onSave: (String, String) -> Unit) {
+    var title by rememberSaveable { mutableStateOf(initial?.title.orEmpty()) }
+    var content by rememberSaveable { mutableStateOf(initial?.content.orEmpty()) }
+    SettingsDetailScaffold(title = if (initial == null) "New document" else "Edit document", onBack = onCancel) {
+        OutlinedTextField(
+            value = title,
+            onValueChange = { title = it },
+            label = { Text("Title") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        )
+        OutlinedTextField(
+            value = content,
+            onValueChange = { content = it.take(MAX_ARTIFACT_CONTENT) },
+            label = { Text("Content") },
+            supportingText = { Text("${content.length} / $MAX_ARTIFACT_CONTENT") },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 240.dp).padding(vertical = 4.dp),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+            Button(onClick = { onSave(title, content) }, enabled = content.isNotBlank()) { Text("Save") }
+            OutlinedButton(onClick = onCancel) { Text("Cancel") }
         }
     }
 }
