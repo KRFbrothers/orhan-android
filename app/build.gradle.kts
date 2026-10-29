@@ -47,7 +47,18 @@ android {
         compose = true
         buildConfig = true
     }
+    // Ship the repo's license notices as offline assets (Settings → About → Open-source licences).
+    sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("generated/licenseAssets"))
 }
+
+// Single source of truth: THIRD-PARTY-NOTICES.md + licenses/*.txt at repo root are copied
+// into generated assets at build time, so the in-app text can never drift from the repo.
+val copyLicenseAssets by tasks.registering(Copy::class) {
+    from(rootProject.file("THIRD-PARTY-NOTICES.md"))
+    from(rootProject.file("licenses")) { into("licenses") }
+    into(layout.buildDirectory.dir("generated/licenseAssets/oss"))
+}
+tasks.named("preBuild") { dependsOn(copyLicenseAssets) }
 dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose)
