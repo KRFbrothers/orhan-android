@@ -31,6 +31,9 @@ data class RosterAgent(val name: String, val blurb: String, val instructions: St
 /** Visible label prefix on a specialist reply inside the Orhan thread. */
 const val SPECIALIST_PREFIX = "\uD83E\uDD1D "
 
+/** Label line that opens a specialist bubble, e.g. "🤝 Writer\n\n". */
+internal fun specialistHeader(agentName: String): String = "$SPECIALIST_PREFIX$agentName\n\n"
+
 private val HANDOFF_RE = Regex("""^\s*\**HANDOFF\**\s*:\s*(.+?)\s*\|\s*(.+?)\s*$""", setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE))
 
 /** Finds a `HANDOFF: Name | task` line naming a roster agent (case-insensitive). */
@@ -273,7 +276,7 @@ class ChatViewModel(
 
     /**
      * Rewrites Orhan's HANDOFF line into a visible note, then runs a second /api/chat call with the
-     * specialist's own identity + instructions and appends its reply labeled with the agent name.
+     * specialist's own identity + instructions and streams its reply into a bubble labeled with the agent name.
      */
     private suspend fun runHandoff(orhanReplyId: Long, agent: RosterAgent, task: String) {
         _state.update { s ->
@@ -295,12 +298,26 @@ class ChatViewModel(
             }
             add(ChatTurn("user", "Orhan (the main agent) assigned you this task from the user. Do it fully and reply directly to the user:\n$task"))
         }
-        repository.send(turns)
-            .onSuccess { reply ->
-                _state.update { s ->
-                    s.copy(messages = s.messages + ChatMessage(nextId(), ChatRole.Agent, "${SPECIALIST_PREFIX}${agent.name}\n\n$reply", "now"), loading = false, busy = false)
-                }
+        // Stream into a labeled bubble (same SSE path as Orhan). Runs inside streamJob, so stop() cancels it.
+        val bubbleId = nextId()
+        val header = specialistHeader(agent.name)
+        var streamed = false
+        repository.stream(turns) { delta ->
+            streamed = true
+            _state.update { s ->
+                val existing = s.messages.lastOrNull()?.takeIf { it.id == bubbleId }
+                val msgs = if (existing == null) s.messages + ChatMessage(bubbleId, ChatRole.Agent, header + delta, "now")
+                else s.messages.dropLast(1) + existing.copy(text = existing.text + delta)
+                s.copy(messages = msgs, loading = false)
             }
+        }.recoverCatching { e ->
+            if (e is CancellationException) throw e
+            if (streamed || e is ChatRepository.FatalChatException) throw e
+            repository.send(turns).getOrThrow().also { reply ->
+                _state.update { it.copy(messages = it.messages + ChatMessage(bubbleId, ChatRole.Agent, header + reply, "now")) }
+            }
+        }
+            .onSuccess { _state.update { it.copy(loading = false, busy = false) } }
             .onFailure { e ->
                 if (e is CancellationException) throw e
                 _state.update { it.copy(loading = false, busy = false, error = "${agent.name}: ${e.message ?: "Request failed"}") }
