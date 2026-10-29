@@ -1,0 +1,2680 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1110">
+<title>Orhan AI — complete Android app UI (Material 3, dark + light)</title>
+<link rel="icon" href="images/orhan-mark.png">
+<script>
+/* resolve theme before first paint so there is no flash */
+(function(){try{
+  var m=localStorage.getItem('orhan-theme-mode')||'dark';
+  var t=(m==='system')?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):m;
+  document.documentElement.setAttribute('data-theme',t);
+  document.documentElement.setAttribute('data-theme-mode',m);
+}catch(e){}})();
+</script>
+<style>
+/* ============================================================
+   Orhan AI — complete Android app UI
+   Brand values (original source palette CSS):
+     --nv-green-700   #087c45   (primary)
+     --nv-primary-fill gradient 180deg #0b8249 -> #087c45
+     --nv-green-50    #eef8f2 / #183826
+     --nv-neutral-0   #ffffff / #1d2220
+     --nv-neutral-50  #f6f8f5 / #272e2b
+     --nv-neutral-100 #eef2ef / #323b36
+     --nv-neutral-900 #182b23 / #f7f9f7
+     --nv-user-bubble #505752 (dark)   --nv-agent-bubble #303433 (dark)
+     --nv-pane #1f2521eb   --nv-canvas #141816
+     --font-sans: Lato
+  Logo: Orhan AI hexagon orbit-O mark + wordmark (design/images/orhan-*.svg)
+   ============================================================ */
+
+@font-face{font-family:'Lato';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/lato-400.woff2') format('woff2')}
+@font-face{font-family:'Lato';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/lato-700.woff2') format('woff2')}
+@font-face{font-family:'Lato';font-style:normal;font-weight:900;font-display:swap;src:url('fonts/lato-900.woff2') format('woff2')}
+
+/* ---------- theme tokens (light) ---------- */
+[data-theme="light"]{
+  --canvas:#eef2ef;--surface:#ffffff;--surface-2:#f6f8f5;--surface-3:#eef2ef;
+  --line:#dde6e0;--line-soft:#e9efea;
+  --ink:#182b23;--ink-2:#4f6157;--ink-3:#5c6d63;
+  --primary:#087c45;--primary-grad:linear-gradient(180deg,#0b8249 0%,#087c45 100%);
+  --on-primary:#ffffff;--primary-soft:#ddf3e5;--primary-ink:#066a3b;
+  --mint:#42d982;--brand-soft:#cbe7d2;--danger:#a4271e;
+  --user-bubble:#087c45;--user-ink:#ffffff;--agent-bubble:#ffffff;--agent-ink:#182b23;
+  --field:#eef2ef;--field-edge:#d7e2db;
+  --nav-bg:rgba(255,255,255,.94);--scrim:rgba(24,43,35,.10);
+  --shadow:0 1px 2px rgba(24,43,35,.06),0 8px 20px -10px rgba(24,43,35,.18);
+  --shadow-soft:0 1px 2px rgba(24,43,35,.05);
+  --page-bg:#eef2ef;--page-ink:#182b23;--page-ink-2:#4f6157;
+  --page-card:#ffffff;--page-line:#dde6e0;
+  --halo:radial-gradient(900px 420px at 50% -10%,rgba(8,124,69,.10),transparent 70%);
+}
+/* ---------- theme tokens (dark) ---------- */
+[data-theme="dark"]{
+  --canvas:#141816;--surface:#1d2220;--surface-2:#272e2b;--surface-3:#323b36;
+  --line:#3d4842;--line-soft:#2b3330;
+  --ink:#f7f9f7;--ink-2:#c3cdc7;--ink-3:#93a199;
+  --primary:#cbe7d2;--primary-grad:linear-gradient(180deg,#daf0df 0%,#cbe7d2 100%);
+  --on-primary:#17201b;--primary-soft:#235039;--primary-ink:#a6e6b9;
+  --mint:#42d982;--brand-soft:#183826;--danger:#f2b8b5;
+  --user-bubble:#505752;--user-ink:#f7f9f7;--agent-bubble:#303433;--agent-ink:#f7f9f7;
+  --field:#272e2b;--field-edge:#3d4842;
+  --nav-bg:rgba(29,34,32,.95);--scrim:rgba(0,0,0,.45);
+  --shadow:0 1px 2px rgba(0,0,0,.35),0 14px 28px -14px rgba(0,0,0,.8);
+  --shadow-soft:0 1px 2px rgba(0,0,0,.3);
+  --page-bg:#0d1110;--page-ink:#f7f9f7;--page-ink-2:#a9b8ae;
+  --page-card:#161b19;--page-line:#2b3330;
+  --halo:radial-gradient(900px 420px at 50% -10%,rgba(66,217,130,.10),transparent 70%);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:'Lato',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  background:var(--page-bg);background-image:var(--halo);background-repeat:no-repeat;
+  color:var(--page-ink);-webkit-font-smoothing:antialiased;min-height:100vh;
+}
+img{max-width:100%;display:block}
+button{font-family:inherit}
+
+/* ================= PAGE CHROME ================= */
+.wrap{max-width:1360px;margin:0 auto;padding:32px 20px 64px}
+.page-head{display:flex;flex-direction:column;gap:14px;margin-bottom:28px}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:9px;font-size:12.5px;font-weight:700;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--page-ink-2);
+}
+.eyebrow img{width:26px;height:26px;border-radius:8px}
+h1{margin:0;font-size:clamp(26px,4.2vw,38px);line-height:1.1;font-weight:900;letter-spacing:-.02em;max-width:28ch}
+h1 .accent{color:var(--primary)}
+[data-theme="dark"] h1 .accent{color:var(--mint)}
+.sub{margin:0;font-size:15px;line-height:1.55;color:var(--page-ink-2);max-width:70ch}
+.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:4px}
+.seg{
+  display:inline-flex;padding:4px;gap:4px;border-radius:999px;background:var(--page-card);
+  border:1px solid var(--page-line);box-shadow:var(--shadow-soft);
+}
+.seg button{
+  border:0;background:transparent;color:var(--page-ink-2);font-size:13.5px;font-weight:700;
+  min-height:48px;padding:0 18px;border-radius:999px;display:inline-flex;align-items:center;gap:8px;
+  cursor:pointer;transition:background .18s ease,color .18s ease;
+}
+.seg button .ic{width:18px;height:18px}
+.seg button:hover{color:var(--page-ink)}
+.seg button.is-on{background:var(--primary-grad);color:var(--on-primary)}
+.seg button:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+[data-theme="dark"] .seg button:focus-visible{outline-color:var(--mint)}
+.brandsrc{
+  display:inline-flex;align-items:center;gap:10px;min-height:48px;padding:0 18px;border-radius:999px;
+  background:var(--page-card);border:1px solid var(--page-line);font-size:12.5px;
+  color:var(--page-ink-2);box-shadow:var(--shadow-soft);
+}
+.brandsrc b{color:var(--page-ink);font-weight:700}
+.dot-mint{width:9px;height:9px;border-radius:50%;background:var(--mint);flex:none}
+
+/* ================= BOARD / RAIL ================= */
+.board{
+  display:grid;grid-template-columns:250px minmax(0,1fr) 272px;gap:28px;
+  align-items:start;margin-top:24px;
+}
+.rail{
+  position:sticky;top:18px;align-self:start;background:var(--page-card);
+  border:1px solid var(--page-line);border-radius:22px;padding:10px 10px 14px;
+  box-shadow:var(--shadow-soft);max-height:calc(100vh - 40px);overflow-y:auto;
+}
+.rail-h{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:8px 8px 6px;font-size:11px;font-weight:900;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--page-ink-2);
+}
+.rail-h .count{
+  font-size:10.5px;letter-spacing:.04em;background:var(--primary-soft);
+  color:var(--primary-ink);border-radius:999px;padding:2px 8px;
+}
+.rgrp{
+  padding:12px 8px 5px;font-size:10px;font-weight:900;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--page-ink-2);
+}
+.rbtn{
+  display:flex;align-items:center;gap:9px;width:100%;min-height:48px;padding:0 10px;
+  border:0;border-radius:12px;background:transparent;color:var(--page-ink-2);
+  font-size:13.5px;font-weight:700;text-align:left;cursor:pointer;
+  transition:background .15s ease,color .15s ease;
+}
+.rbtn .n{width:20px;flex:none;font-size:10.5px;font-weight:900;color:var(--page-ink-2);opacity:.7;font-variant-numeric:tabular-nums}
+.rbtn:hover{background:var(--surface-2);color:var(--page-ink)}
+.rbtn.is-on{background:var(--primary-soft);color:var(--primary-ink)}
+.rbtn.is-on .n{color:var(--primary-ink);opacity:1}
+.rbtn:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+[data-theme="dark"] .rbtn:focus-visible{outline-color:var(--mint)}
+
+/* notes column */
+.notes{position:sticky;top:18px;align-self:start;display:flex;flex-direction:column;gap:14px}
+.note{
+  background:var(--page-card);border:1px solid var(--page-line);border-radius:20px;
+  padding:18px;box-shadow:var(--shadow-soft);
+}
+.note h4{margin:0 0 2px;font-size:15.5px;font-weight:900;letter-spacing:-.01em}
+.note .kicker{font-size:10.5px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--page-ink-2);margin-bottom:6px}
+.note p{margin:0 0 12px;font-size:12.5px;line-height:1.5;color:var(--page-ink-2)}
+.note ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.note li{display:flex;gap:8px;font-size:12.5px;line-height:1.45;color:var(--page-ink-2)}
+.note li b{color:var(--page-ink);font-weight:700}
+.note li::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--mint);flex:none;margin-top:6px}
+.note .kv{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:5px 0;border-bottom:1px dashed var(--page-line)}
+.note .kv:last-child{border-bottom:0}
+.note .kv b{font-weight:700;color:var(--page-ink);font-variant-numeric:tabular-nums}
+
+/* ================= STAGE / PHONES ================= */
+.stage{display:flex;flex-wrap:wrap;gap:30px 26px;justify-content:center;align-items:flex-start}
+.slot{display:none;flex-direction:column;gap:14px;align-items:center}
+.slot.is-active{display:flex}
+.caption{
+  display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--page-ink-2);
+}
+.caption b{color:var(--primary);font-variant-numeric:tabular-nums}
+[data-theme="dark"] .caption b{color:var(--mint)}
+.phone{
+  width:390px;max-width:100%;border-radius:46px;padding:9px;
+  background:linear-gradient(160deg,#2a302d,#141817 40%,#0a0d0c);
+  box-shadow:0 2px 3px rgba(0,0,0,.4),0 30px 60px -24px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,255,255,.06);
+  flex:none;
+}
+.screen{
+  position:relative;width:100%;height:844px;border-radius:38px;overflow:hidden;
+  background:var(--canvas);color:var(--ink);display:flex;flex-direction:column;isolation:isolate;
+  container-type:inline-size;container-name:phone;
+}
+.statusbar{
+  flex:none;height:36px;padding:0 20px 0 24px;display:flex;align-items:center;
+  justify-content:space-between;font-size:13px;font-weight:700;color:var(--ink);background:var(--canvas);
+}
+.sb-left{display:flex;align-items:center;gap:6px;min-width:0}
+.sb-right{display:flex;align-items:center;gap:7px}
+.sb-right .ic{width:15px;height:15px}
+.camera{
+  position:absolute;top:12px;left:50%;transform:translateX(-50%);width:11px;height:11px;
+  border-radius:50%;background:#050706;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);z-index:3;
+}
+.ic{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* app bar */
+.appbar{flex:none;min-height:60px;padding:6px 8px 6px 14px;display:flex;align-items:center;gap:8px;background:var(--canvas)}
+.brandlock{display:flex;align-items:center;gap:9px;min-width:0;flex:1 1 auto}
+.mark{width:34px;height:34px;border-radius:11px;flex:none;box-shadow:0 2px 6px rgba(8,124,69,.28)}
+.wm{height:21px;width:auto;flex:none}
+.wm-dark{display:none}
+[data-theme="dark"] .wm-light{display:none}
+[data-theme="dark"] .wm-dark{display:block}
+.iconbtn{
+  width:48px;height:48px;flex:none;border:0;border-radius:50%;background:transparent;
+  color:var(--ink-2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+  transition:background .16s ease,color .16s ease;
+}
+.iconbtn:hover{background:var(--surface-2);color:var(--ink)}
+.iconbtn:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+[data-theme="dark"] .iconbtn:focus-visible{outline-color:var(--mint)}
+.theme-btn .i-sun{display:none}
+[data-theme="dark"] .theme-btn .i-moon{display:none}
+[data-theme="dark"] .theme-btn .i-sun{display:block}
+
+/* detail bar (pushed pages) */
+.detailbar{
+  flex:none;display:flex;align-items:center;gap:2px;padding:6px 8px 6px 4px;min-height:64px;
+  background:var(--canvas);border-bottom:1px solid var(--line-soft);
+}
+.detailbar .dt{
+  flex:1 1 auto;min-width:0;font-size:17px;font-weight:700;letter-spacing:-.01em;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.txtbtn{
+  flex:none;min-height:48px;padding:0 12px;border:0;background:transparent;
+  color:var(--primary-ink);font-size:14px;font-weight:700;border-radius:999px;cursor:pointer;
+}
+[data-theme="light"] .txtbtn{color:var(--primary)}
+.txtbtn:hover{background:var(--surface-2)}
+.txtbtn:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+
+/* scroll body */
+.scroll{
+  flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--line) transparent;
+}
+.scroll::-webkit-scrollbar{width:6px}
+.scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+.scroll::-webkit-scrollbar-track{background:transparent}
+
+/* search + chips */
+.searchrow{padding:4px 16px 10px}
+.searchfield{
+  display:flex;align-items:center;gap:11px;height:52px;padding:0 16px;border-radius:999px;
+  background:var(--field);border:1px solid var(--field-edge);color:var(--ink-3);
+}
+.searchfield .ic{width:21px;height:21px}
+.searchfield span{font-size:15px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chips{display:flex;gap:8px;padding:0 16px 14px;flex-wrap:wrap}
+.chip{
+  flex:none;height:48px;padding:0 18px;border-radius:999px;display:inline-flex;align-items:center;
+  gap:7px;background:transparent;border:1px solid var(--line);color:var(--ink-2);
+  font-size:13.5px;font-weight:700;white-space:nowrap;cursor:pointer;
+}
+.chip .ic{width:16px;height:16px}
+.chip.is-on{background:var(--primary-soft);border-color:transparent;color:var(--primary-ink)}
+[data-theme="light"] .chip.is-on{background:#ddf3e5;color:#066a3b}
+
+.seclabel{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 20px 8px;
+  font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);
+}
+.list{padding:0 8px 12px}
+.row{
+  display:flex;align-items:center;gap:13px;width:100%;padding:11px 12px;border-radius:18px;
+  border:0;background:transparent;text-align:left;font:inherit;color:inherit;cursor:pointer;
+  min-height:72px;transition:background .16s ease;
+}
+.row:hover{background:var(--surface-2)}
+.row:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+[data-theme="dark"] .row:focus-visible{outline-color:var(--mint)}
+.ava{position:relative;width:50px;height:50px;border-radius:17px;flex:none;background:var(--surface-3);overflow:hidden}
+.ava img{width:100%;height:100%;object-fit:cover}
+.ava.agent::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1px rgba(66,217,130,.35)}
+.presence{position:absolute;right:-1px;bottom:-1px;width:14px;height:14px;border-radius:50%;background:var(--mint);border:2.5px solid var(--canvas)}
+.rowbody{min-width:0;flex:1 1 auto;display:flex;flex-direction:column;gap:3px}
+.rowtop{display:flex;align-items:baseline;gap:8px}
+.rownm{font-size:15.5px;font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto}
+.rowtime{font-size:11.5px;font-weight:700;color:var(--ink-3);flex:none;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rowsnip{display:flex;align-items:center;gap:6px;font-size:13.5px;color:var(--ink-2);min-width:0}
+.rowsnip .txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto}
+.agentsnip{color:var(--primary-ink);font-weight:700;display:inline-flex;align-items:center;gap:4px;flex:none}
+.agentsnip .ic{width:13px;height:13px}
+.badge{
+  flex:none;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--mint);
+  color:#06291a;font-size:11.5px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;
+}
+.badge.quiet{background:var(--surface-3);color:var(--ink-2)}
+.typingdot{color:var(--primary-ink);font-weight:700}
+
+.fab{
+  position:absolute;right:18px;bottom:96px;z-index:5;width:56px;height:56px;border-radius:19px;border:0;
+  background:var(--primary-grad);color:var(--on-primary);display:inline-flex;align-items:center;
+  justify-content:center;cursor:pointer;
+  box-shadow:0 8px 20px -8px rgba(8,124,69,.65),0 1px 2px rgba(0,0,0,.2);
+  transition:transform .16s ease,box-shadow .16s ease;
+}
+.fab .ic{width:25px;height:25px;stroke-width:2.1}
+.fab:hover{transform:translateY(-1px)}
+.fab:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+
+/* ================= NAVIGATION BAR ================= */
+.navbar{
+  flex:none;position:relative;z-index:6;display:flex;align-items:stretch;height:80px;
+  padding:8px 6px calc(8px + env(safe-area-inset-bottom,0px));background:var(--nav-bg);
+  -webkit-backdrop-filter:blur(18px) saturate(1.2);backdrop-filter:blur(18px) saturate(1.2);
+  border-top:1px solid var(--line-soft);
+}
+.navi{
+  flex:1 1 0;min-width:0;min-height:48px;border:0;background:transparent;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--ink-3);
+  font:inherit;cursor:pointer;padding:2px 0;border-radius:16px;
+}
+.navi:focus-visible{outline:2px solid var(--primary);outline-offset:-4px}
+[data-theme="dark"] .navi:focus-visible{outline-color:var(--mint)}
+.navi .pill{display:flex;align-items:center;justify-content:center;width:58px;height:30px;border-radius:999px;transition:background .18s ease}
+.navi .ic{width:23px;height:23px}
+.navi .lbl{font-size:11px;font-weight:700;letter-spacing:.01em;line-height:1;white-space:nowrap}
+.navi[aria-current="page"]{color:var(--ink)}
+.navi[aria-current="page"] .pill{background:var(--primary-soft)}
+[data-theme="dark"] .navi[aria-current="page"] .pill{background:#2c4a3a}
+.navi[aria-current="page"] .lbl{color:var(--primary-ink)}
+[data-theme="dark"] .navi[aria-current="page"] .lbl{color:#bde9cb}
+.navi .count{
+  position:absolute;transform:translate(15px,-11px);min-width:16px;height:16px;padding:0 4px;
+  border-radius:999px;background:var(--mint);color:#06291a;font-size:10px;font-weight:900;
+  display:inline-flex;align-items:center;justify-content:center;
+}
+.navi .icwrap{position:relative;display:flex}
+
+/* ================= CHAT ================= */
+.chatbar{
+  flex:none;display:flex;align-items:center;gap:6px;padding:6px 8px 6px 4px;min-height:64px;
+  background:var(--canvas);border-bottom:1px solid var(--line-soft);
+}
+.chatid{display:flex;align-items:center;gap:11px;min-width:0;flex:1 1 auto}
+.chatid .ava{width:40px;height:40px;border-radius:14px}
+.chatmeta{min-width:0;display:flex;flex-direction:column;gap:2px}
+.chatnm{font-size:15px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chatst{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:5px}
+.chatst .live{width:7px;height:7px;border-radius:50%;background:var(--mint);flex:none}
+.chatbar .iconbtn{width:48px;height:48px}
+.chatbar .iconbtn .ic{width:22px;height:22px}
+.thread{padding:14px 16px 8px;display:flex;flex-direction:column;gap:10px}
+.daychip{
+  align-self:center;font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--ink-3);background:var(--surface-2);border-radius:999px;padding:5px 12px;margin-bottom:2px;
+}
+.msg{display:flex;gap:8px;align-items:flex-end;max-width:100%}
+.msg .ava{width:28px;height:28px;border-radius:9px}
+.bubble{
+  max-width:78%;padding:11px 14px;border-radius:20px;font-size:14.5px;line-height:1.45;
+  overflow-wrap:anywhere;word-break:break-word;box-shadow:var(--shadow-soft);
+}
+.msg.agent .bubble{background:var(--agent-bubble);color:var(--agent-ink);border-bottom-left-radius:7px;border:1px solid var(--line-soft)}
+[data-theme="dark"] .msg.agent .bubble{border-color:#3a4240}
+.msg.user{justify-content:flex-end}
+.msg.user .bubble{background:var(--user-bubble);color:var(--user-ink);border-bottom-right-radius:7px;box-shadow:0 6px 16px -10px rgba(8,124,69,.7)}
+.mt{display:flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;margin-top:5px;opacity:.78}
+.msg.user .mt{justify-content:flex-end}
+.mt .ic{width:13px;height:13px;stroke-width:2.4}
+.artcard{margin-top:9px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--surface-2)}
+.artthumb{
+  height:84px;
+  background:radial-gradient(120px 60px at 82% 22%,rgba(66,217,130,.55),transparent 70%),linear-gradient(135deg,#0b8249,#06603a 65%,#083f28);
+  display:flex;align-items:flex-end;padding:10px 12px;
+}
+.artthumb .tag{
+  font-size:10px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#eafff2;
+  background:rgba(0,0,0,.30);border-radius:999px;padding:4px 9px;
+}
+.artbody{padding:9px 12px 11px}
+.artbody .t{font-size:13px;font-weight:700;color:var(--ink)}
+.artbody .s{font-size:11.5px;color:var(--ink-3);margin-top:1px}
+.artrow{display:flex;align-items:center;gap:6px;margin-top:8px}
+.artrow .mini{font-size:11.5px;font-weight:700;color:var(--primary-ink);background:var(--primary-soft);border-radius:999px;padding:4px 10px}
+[data-theme="light"] .artrow .mini{color:#066a3b;background:#ddf3e5}
+.typing{display:none;gap:4px;align-items:center;padding:12px 15px}
+.typing i{width:7px;height:7px;border-radius:50%;background:var(--ink-3);display:block;animation:bob 1.1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}
+.typing i:nth-child(3){animation-delay:.3s}
+@keyframes bob{0%,60%,100%{opacity:.35;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+.composer{
+  flex:none;padding:8px 12px calc(10px + env(safe-area-inset-bottom,0px));display:flex;
+  align-items:flex-end;gap:8px;background:var(--canvas);border-top:1px solid var(--line-soft);
+}
+.field{
+  flex:1 1 auto;min-width:0;display:flex;align-items:flex-end;gap:4px;background:var(--field);
+  border:1px solid var(--field-edge);border-radius:28px;padding:4px 4px 4px 2px;min-height:56px;
+}
+.field textarea{
+  flex:1 1 auto;min-width:0;resize:none;border:0;background:transparent;font:inherit;
+  font-size:15px;line-height:1.35;color:var(--ink);padding:16px 4px;max-height:104px;outline:none;
+}
+.field textarea::placeholder{color:var(--ink-3)}
+.field .iconbtn{width:48px;height:48px;color:var(--ink-2)}
+.field .iconbtn .ic{width:21px;height:21px}
+.sendbtn{
+  width:48px;height:48px;flex:none;border:0;border-radius:50%;background:var(--primary-grad);
+  color:var(--on-primary);display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;box-shadow:0 6px 14px -8px rgba(8,124,69,.8);
+}
+.sendbtn .ic{width:22px;height:22px;stroke-width:2}
+.sendbtn:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+
+/* ================= AGENTS ================= */
+.agentlist{padding:2px 12px 16px;display:flex;flex-direction:column;gap:10px}
+.agentcard{
+  display:flex;gap:13px;align-items:flex-start;padding:14px;border-radius:20px;
+  background:var(--surface-2);border:1px solid var(--line-soft);
+}
+.agentcard .ava{width:46px;height:46px;border-radius:15px}
+.ac-body{min-width:0;flex:1 1 auto}
+.ac-name{display:flex;align-items:center;gap:7px;font-size:15px;font-weight:700;color:var(--ink)}
+.ac-name .ic{width:14px;height:14px;color:var(--mint)}
+.ac-desc{font-size:12.5px;line-height:1.4;color:var(--ink-2);margin-top:3px}
+.ac-foot{display:flex;align-items:center;gap:8px;margin-top:9px;flex-wrap:wrap}
+.pilltag{font-size:11px;font-weight:700;padding:4px 9px;border-radius:999px;background:var(--surface-3);color:var(--ink-2)}
+.pilltag.on{background:var(--primary-soft);color:var(--primary-ink)}
+[data-theme="light"] .pilltag.on{background:#ddf3e5;color:#066a3b}
+.minicta{
+  margin-left:auto;align-self:center;flex:none;font-size:12.5px;font-weight:700;
+  color:var(--primary-ink);background:transparent;border:1px solid var(--line);border-radius:999px;
+  padding:0 16px;height:48px;min-width:64px;display:inline-flex;align-items:center;
+  justify-content:center;gap:5px;cursor:pointer;
+}
+.minicta .ic{width:15px;height:15px}
+.newagent{
+  display:flex;align-items:center;gap:12px;width:calc(100% - 24px);margin:0 12px 14px;
+  padding:13px 14px;border-radius:20px;min-height:60px;border:1px dashed var(--line);
+  background:transparent;color:var(--ink);font:inherit;font-size:14px;font-weight:700;cursor:pointer;
+}
+.newagent .plus{
+  width:38px;height:38px;border-radius:50%;background:var(--primary-soft);color:var(--primary-ink);
+  display:inline-flex;align-items:center;justify-content:center;flex:none;
+}
+[data-theme="light"] .newagent .plus{background:#ddf3e5;color:#066a3b}
+
+/* ================= DISCOVER ================= */
+.discover-feature{
+  margin:0 12px 16px;border-radius:22px;overflow:hidden;position:relative;
+  background:linear-gradient(150deg,#0b8249 0%,#087c45 45%,#06512f 100%);
+  color:#eafff2;padding:18px;min-height:176px;display:flex;flex-direction:column;justify-content:space-between;
+}
+.discover-feature::after{
+  content:"";position:absolute;right:-40px;top:-50px;width:200px;height:200px;border-radius:50%;
+  background:radial-gradient(circle,rgba(66,217,130,.55),transparent 65%);
+}
+.df-top{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+.df-top img{width:40px;height:40px;border-radius:13px;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+.df-kicker{font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;opacity:.9}
+.df-title{font-size:19px;font-weight:900;letter-spacing:-.01em;line-height:1.2;margin-top:2px}
+.df-sub{font-size:12.5px;line-height:1.45;margin:12px 0 0;max-width:30ch;position:relative;z-index:1}
+.df-cta{
+  position:relative;z-index:1;align-self:flex-start;margin-top:12px;min-height:48px;padding:0 18px;
+  border-radius:999px;border:0;background:#eafff2;color:#06512f;font-size:13.5px;font-weight:900;
+  display:inline-flex;align-items:center;gap:7px;cursor:pointer;
+}
+.df-cta .ic{width:16px;height:16px}
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 12px 14px}
+.dcard{
+  text-align:left;font:inherit;color:inherit;cursor:pointer;border-radius:18px;
+  border:1px solid var(--line-soft);background:var(--surface);padding:13px;
+  display:flex;flex-direction:column;gap:8px;min-height:136px;
+}
+.dcard:hover{background:var(--surface-2)}
+.dcard .ava{width:40px;height:40px;border-radius:13px}
+.dcard .nm{font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.25}
+.dcard .ds{font-size:11.5px;line-height:1.4;color:var(--ink-3)}
+.dcard .tag{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--primary-ink);margin-top:auto}
+.socialrow{
+  display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:16px;width:100%;
+  border:0;background:transparent;text-align:left;font:inherit;color:inherit;cursor:pointer;min-height:64px;
+}
+.socialrow:hover{background:var(--surface-2)}
+.socialrow .ava{width:38px;height:38px;border-radius:12px}
+.sr-body{min-width:0;flex:1 1 auto}
+.sr-t{font-size:13.5px;color:var(--ink-2);line-height:1.35}
+.sr-t b{color:var(--ink);font-weight:700}
+.sr-s{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+
+/* ================= PROFILE ================= */
+.phero{display:flex;flex-direction:column;align-items:center;gap:7px;padding:10px 20px 16px;text-align:center}
+.pava{
+  position:relative;width:96px;height:96px;border-radius:32px;overflow:hidden;flex:none;
+  background:var(--surface-3);box-shadow:0 8px 22px -12px rgba(8,124,69,.6);
+}
+.pava img{width:100%;height:100%;object-fit:cover}
+.pava .pbadge{
+  position:absolute;right:0;bottom:0;width:28px;height:28px;border-radius:50%;background:var(--mint);
+  color:#06291a;display:flex;align-items:center;justify-content:center;border:3px solid var(--canvas);
+}
+.pava .pbadge .ic{width:14px;height:14px;stroke-width:3}
+.pname{font-size:21px;font-weight:900;letter-spacing:-.02em;color:var(--ink);margin:6px 0 0}
+.pmail{font-size:13.5px;color:var(--ink-3)}
+.prow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:2px}
+.protag{
+  font-size:10.5px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;
+  background:var(--primary-soft);color:var(--primary-ink);border-radius:999px;padding:4px 9px;
+}
+[data-theme="light"] .protag{background:#ddf3e5;color:#066a3b}
+.psince{font-size:11.5px;color:var(--ink-3)}
+.pedit{
+  margin-top:8px;min-height:48px;padding:0 22px;border-radius:999px;border:1px solid var(--line);
+  background:transparent;color:var(--ink);font-size:13.5px;font-weight:700;
+  display:inline-flex;align-items:center;gap:7px;cursor:pointer;
+}
+.pedit:hover{background:var(--surface-2)}
+.pedit .ic{width:16px;height:16px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 16px 14px}
+.stat{background:var(--surface);border:1px solid var(--line-soft);border-radius:18px;padding:12px 8px;text-align:center;min-width:0}
+.stat b{display:block;font-size:20px;font-weight:900;letter-spacing:-.02em;color:var(--ink);font-variant-numeric:tabular-nums}
+.stat span{display:block;margin-top:2px;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.quick{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 16px 16px}
+.q{
+  display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:14px;border-radius:18px;
+  background:var(--surface);border:1px solid var(--line-soft);font:inherit;color:inherit;
+  text-align:left;cursor:pointer;min-height:92px;
+}
+.q:hover{background:var(--surface-2)}
+.q .ic{width:22px;height:22px;color:var(--primary-ink)}
+.q span{font-size:13px;font-weight:700;color:var(--ink);line-height:1.25}
+.q small{font-size:11px;color:var(--ink-3);margin-top:auto}
+
+/* ================= SETTINGS PRIMITIVES ================= */
+.group{margin:0 12px 14px;background:var(--surface);border:1px solid var(--line-soft);border-radius:20px;overflow:hidden}
+.srow{
+  display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:8px 14px;
+  border:0;background:transparent;font:inherit;color:inherit;text-align:left;cursor:pointer;
+}
+.srow + .srow{box-shadow:inset 0 1px 0 var(--line-soft)}
+.srow:hover{background:var(--surface-2)}
+.srow:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+[data-theme="dark"] .srow:focus-visible{outline-color:var(--mint)}
+.sic{
+  width:38px;height:38px;border-radius:12px;flex:none;background:var(--surface-2);
+  color:var(--ink-2);display:inline-flex;align-items:center;justify-content:center;
+}
+.sic .ic{width:20px;height:20px}
+.sic.tint{background:var(--primary-soft);color:var(--primary-ink)}
+[data-theme="light"] .sic.tint{background:#ddf3e5;color:#066a3b}
+.slabel{flex:1 1 auto;min-width:0}
+.slabel .t{display:block;font-size:15px;font-weight:700;color:var(--ink);line-height:1.25}
+.slabel .s{display:block;font-size:12px;color:var(--ink-3);margin-top:2px;line-height:1.35}
+.sval{flex:none;max-width:42%;font-size:13px;color:var(--ink-3);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.schev{width:18px;height:18px;color:var(--ink-3);flex:none}
+.srow.danger .slabel .t{color:var(--danger)}
+.srow.danger .sic{background:rgba(164,39,30,.10);color:var(--danger)}
+[data-theme="dark"] .srow.danger .sic{background:rgba(242,184,181,.12)}
+.sw{flex:none;width:56px;height:48px;border:0;background:transparent;position:relative;cursor:pointer;padding:0}
+.sw .track{
+  position:absolute;top:8px;left:2px;width:52px;height:32px;border-radius:999px;
+  background:var(--surface-3);border:2px solid var(--line);
+  transition:background .18s ease,border-color .18s ease;
+}
+.sw .thumb{
+  position:absolute;top:14px;left:9px;width:16px;height:16px;border-radius:50%;background:var(--ink-3);
+  transition:left .18s ease,width .18s ease,height .18s ease,background .18s ease;
+}
+.sw[aria-checked="true"] .track{background:var(--primary);border-color:var(--primary)}
+.sw[aria-checked="true"] .thumb{left:29px;top:12px;width:20px;height:20px;background:var(--on-primary)}
+.sw:focus-visible{outline:2px solid var(--primary);outline-offset:-6px;border-radius:999px}
+[data-theme="dark"] .sw:focus-visible{outline-color:var(--mint)}
+
+.btn{
+  min-height:52px;border-radius:999px;border:0;font:inherit;font-size:15px;font-weight:700;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 22px;cursor:pointer;
+}
+.btn .ic{width:19px;height:19px}
+.btn-primary{background:var(--primary-grad);color:var(--on-primary);width:100%;box-shadow:0 8px 18px -12px rgba(8,124,69,.8)}
+.btn-outline{background:transparent;border:1px solid var(--line);color:var(--ink);width:100%}
+.btn-ghost{background:var(--surface-2);color:var(--ink);width:100%}
+.btnblock{display:flex;width:calc(100% - 32px);margin:0 16px 14px}
+.btn:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+
+.fwrap{padding:0 16px 6px}
+.fld{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;min-width:0}
+.fld label{font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+.fld input,.fld textarea{
+  width:100%;min-height:52px;border:1px solid var(--field-edge);background:var(--field);
+  border-radius:14px;padding:0 14px;font:inherit;font-size:15px;color:var(--ink);
+}
+.fld textarea{min-height:92px;padding:12px 14px;resize:none;line-height:1.45}
+.fld input:focus,.fld textarea:focus{outline:2px solid var(--primary);outline-offset:-1px;border-color:transparent}
+.fhint{font-size:11.5px;color:var(--ink-3);line-height:1.4}
+.avapick{display:flex;align-items:center;gap:14px;padding:6px 20px 18px}
+.avapick .pava{width:80px;height:80px;border-radius:26px}
+.avapick-col{display:flex;flex-direction:column;gap:5px;min-width:0}
+.avapick-col .t{font-size:14px;font-weight:700;color:var(--ink)}
+.avapick-col .s{font-size:11.5px;color:var(--ink-3)}
+.avatars{display:flex;gap:8px;margin-top:8px}
+.avchip{
+  width:48px;height:48px;border-radius:15px;overflow:hidden;padding:0;border:2px solid transparent;
+  background:var(--surface-2);cursor:pointer;flex:none;
+}
+.avchip img{width:100%;height:100%;object-fit:cover}
+.avchip.is-on{border-color:var(--primary)}
+[data-theme="dark"] .avchip.is-on{border-color:var(--mint)}
+
+.theme-card{
+  display:flex;align-items:center;gap:14px;width:calc(100% - 32px);margin:0 16px 12px;padding:12px 14px;
+  border-radius:20px;border:2px solid var(--line-soft);background:var(--surface);text-align:left;
+  font:inherit;color:inherit;cursor:pointer;min-height:96px;
+}
+.theme-card:hover{border-color:var(--line)}
+.theme-card.is-on{border-color:var(--primary)}
+[data-theme="dark"] .theme-card.is-on{border-color:var(--mint)}
+.theme-card .tc-body{min-width:0;flex:1 1 auto}
+.theme-card .tc-t{font-size:15px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:7px}
+.theme-card .tc-t em{
+  font-style:normal;font-size:9.5px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;
+  background:var(--surface-3);color:var(--ink-2);border-radius:999px;padding:2px 7px;
+}
+.theme-card .tc-s{font-size:12px;color:var(--ink-3);margin-top:3px;line-height:1.4}
+.radio{
+  width:24px;height:24px;border-radius:50%;flex:none;border:2px solid var(--line);
+  display:inline-flex;align-items:center;justify-content:center;color:transparent;
+}
+.radio .ic{width:13px;height:13px;stroke-width:3.2}
+.theme-card.is-on .radio{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.tprev{position:relative;width:56px;height:72px;border-radius:14px;overflow:hidden;flex:none;border:1px solid var(--line)}
+.tprev b{position:absolute;display:block;border-radius:3px}
+.tprev b:nth-child(1){top:9px;left:8px;width:24px;height:5px}
+.tprev b:nth-child(2){top:21px;left:8px;width:40px;height:16px;border-radius:8px 8px 8px 3px}
+.tprev b:nth-child(3){top:44px;right:8px;width:30px;height:13px;border-radius:8px 8px 3px 8px}
+.tprev.light{background:#eef2ef}
+.tprev.light b:nth-child(1){background:#b9ccc2}
+.tprev.light b:nth-child(2){background:#ffffff;box-shadow:inset 0 0 0 1px #dde6e0}
+.tprev.light b:nth-child(3){background:#087c45}
+.tprev.dark{background:#141816}
+.tprev.dark b:nth-child(1){background:#3d4842}
+.tprev.dark b:nth-child(2){background:#303433}
+.tprev.dark b:nth-child(3){background:#cbe7d2}
+.tprev.system{background:linear-gradient(90deg,#eef2ef 0 50%,#141816 50% 100%)}
+.tprev.system b:nth-child(1){background:#7d8f85}
+.tprev.system b:nth-child(2){background:rgba(255,255,255,.85)}
+.tprev.system b:nth-child(3){background:#087c45}
+.segchips{display:flex;gap:8px;padding:4px 16px 14px}
+.segchips button{
+  flex:1 1 0;min-height:48px;border-radius:999px;border:1px solid var(--line);background:transparent;
+  color:var(--ink-2);font:inherit;font-size:13px;font-weight:700;cursor:pointer;
+}
+.segchips button.is-on{background:var(--primary-soft);border-color:transparent;color:var(--primary-ink)}
+[data-theme="light"] .segchips button.is-on{background:#ddf3e5;color:#066a3b}
+.usage{padding:2px 20px 16px}
+.ubar{height:12px;border-radius:999px;overflow:hidden;background:var(--surface-3);display:flex}
+.ubar i{display:block;height:100%}
+.utop{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}
+.utop b{font-size:22px;font-weight:900;letter-spacing:-.02em;color:var(--ink)}
+.utop span{font-size:12.5px;color:var(--ink-3)}
+.ulegend{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.uleg{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-2)}
+.udot{width:10px;height:10px;border-radius:3px;flex:none}
+.uleg b{margin-left:auto;color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+.blocked{display:flex;align-items:center;gap:12px;width:100%;min-height:64px;padding:8px 14px;border:0;background:transparent;text-align:left;font:inherit;color:inherit}
+.blocked + .blocked{box-shadow:inset 0 1px 0 var(--line-soft)}
+.blocked .ava{width:40px;height:40px;border-radius:13px}
+.blocked .bl{flex:1 1 auto;min-width:0}
+.blocked .bl b{display:block;font-size:14px;font-weight:700;color:var(--ink)}
+.blocked .bl span{display:block;font-size:11.5px;color:var(--ink-3);margin-top:1px}
+.unblock{
+  flex:none;min-height:48px;padding:0 16px;border-radius:999px;border:1px solid var(--line);
+  background:transparent;color:var(--ink);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;
+}
+.unblock:hover{background:var(--surface-2)}
+.about-hero{display:flex;flex-direction:column;align-items:center;gap:9px;padding:22px 20px 14px;text-align:center}
+.about-hero img.mark-lg{width:68px;height:68px;border-radius:22px;box-shadow:0 12px 26px -14px rgba(8,124,69,.8)}
+.about-hero .wm-lg{height:26px;width:auto;margin-top:2px}
+.about-hero .wm-lg.dk{display:none}
+[data-theme="dark"] .about-hero .wm-lg.lt{display:none}
+[data-theme="dark"] .about-hero .wm-lg.dk{display:block}
+.about-hero .ver{font-size:12.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.about-hero p{margin:2px 0 0;font-size:12.5px;line-height:1.5;color:var(--ink-2);max-width:30ch}
+.legal{margin:0 20px 18px;font-size:11.5px;line-height:1.6;color:var(--ink-3);text-align:center}
+.langrow{
+  display:flex;align-items:center;gap:12px;width:100%;min-height:58px;padding:8px 14px;border:0;
+  background:transparent;text-align:left;font:inherit;color:inherit;cursor:pointer;
+}
+.langrow + .langrow{box-shadow:inset 0 1px 0 var(--line-soft)}
+.langrow:hover{background:var(--surface-2)}
+.langrow .lt{flex:1 1 auto;font-size:15px;font-weight:700;color:var(--ink)}
+.langrow .ln{font-size:12px;color:var(--ink-3)}
+.langrow .radio.is-on{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.sheet{position:absolute;inset:0;z-index:20;display:none;align-items:flex-end;background:rgba(0,0,0,.46)}
+.sheet.on{display:flex}
+.sheetbox{
+  width:100%;background:var(--surface);border-radius:26px 26px 0 0;
+  padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 40px rgba(0,0,0,.35);
+}
+.sheetbox h4{margin:0 0 6px;font-size:17px;font-weight:900;color:var(--ink)}
+.sheetbox p{margin:0 0 16px;font-size:13px;line-height:1.5;color:var(--ink-2)}
+.sheetbtns{display:flex;flex-direction:column;gap:10px}
+
+/* ================= SPEC ================= */
+.specwrap{margin-top:52px;display:flex;flex-direction:column;gap:16px}
+.spec-title{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--page-ink-2);margin:0}
+.specgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+.card{background:var(--page-card);border:1px solid var(--page-line);border-radius:22px;padding:20px;box-shadow:var(--shadow-soft);min-width:0}
+.card h3{margin:0 0 4px;font-size:16px;font-weight:900;letter-spacing:-.01em}
+.card p{margin:0 0 16px;font-size:13px;line-height:1.5;color:var(--page-ink-2)}
+.navanatomy{display:flex;background:var(--surface-2);border-radius:16px;padding:8px 6px;border:1px solid var(--line-soft)}
+.anat{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px}
+.anat .box{width:48px;height:48px;border-radius:12px;border:1.5px dashed var(--primary);display:flex;align-items:center;justify-content:center;color:var(--ink);position:relative}
+[data-theme="dark"] .anat .box{border-color:var(--mint)}
+.anat .box .ic{width:22px;height:22px}
+.anat .box .sz{position:absolute;bottom:-8px;right:-8px;font-size:9.5px;font-weight:900;background:var(--primary);color:#fff;border-radius:5px;padding:1px 4px}
+[data-theme="dark"] .anat .box .sz{background:var(--mint);color:#06291a}
+.anat .nm{font-size:11.5px;font-weight:700;color:var(--ink-2)}
+.swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px}
+.sw{overflow:hidden;border:1px solid var(--page-line);border-radius:12px;min-width:0}
+.sw .chipc{height:44px}
+.sw .meta{padding:7px 9px;background:var(--surface-2)}
+.sw .nm{font-size:11px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sw .hx{font-size:10.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.toklist{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.toklist li{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12.5px;color:var(--page-ink-2);border-bottom:1px dashed var(--page-line);padding-bottom:7px}
+.toklist li:last-child{border-bottom:0;padding-bottom:0}
+.toklist b{color:var(--page-ink);font-weight:700;text-align:right;overflow-wrap:anywhere}
+.mono{font-variant-numeric:tabular-nums;letter-spacing:.01em}
+footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--page-line);font-size:12px;line-height:1.7;color:var(--page-ink-2)}
+footer b{color:var(--page-ink)}
+.toast{
+  position:fixed;left:50%;bottom:22px;transform:translate(-50%,16px);background:var(--primary-grad);
+  color:var(--on-primary);font-size:13px;font-weight:700;padding:11px 18px;border-radius:999px;
+  box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s ease,transform .2s ease;
+  z-index:99;max-width:calc(100vw - 32px);text-align:center;
+}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ================= RESPONSIVE ================= */
+@media (max-width:1280px){
+  .board{grid-template-columns:220px minmax(0,1fr);gap:22px}
+  .notes{display:none}
+}
+@media (max-width:1080px){
+  .board{grid-template-columns:1fr}
+  .rail{position:static;max-height:none;display:flex;flex-wrap:wrap;gap:6px;padding:10px}
+  .rail-h{width:100%}
+  .rgrp{width:100%;padding:8px 8px 2px}
+  .rbtn{width:auto;flex:0 0 auto;padding:0 12px;border:1px solid var(--page-line);border-radius:999px;min-height:44px}
+  .rbtn .n{display:none}
+}
+@media (max-width:760px){
+  html,body{height:100%}
+  body{overflow:hidden;background:var(--canvas);background-image:none}
+  .wrap{height:100dvh;max-width:none;padding:0;display:flex;flex-direction:column;min-height:0}
+  .page-head{display:none}
+  .rail{display:none}
+  .board{display:flex;flex:1 1 auto;min-height:0;margin:0;gap:0;grid-template-columns:none}
+  .stage{flex:1 1 auto;min-height:0;display:block;overflow:hidden;gap:0}
+  .slot{display:none;width:100%;height:100%;gap:0;min-height:0}
+  .slot.is-active{display:flex}
+  .phone{width:100%;height:100%;padding:0;border-radius:0;background:none;box-shadow:none}
+  .screen{height:100%;min-height:0;border-radius:0}
+  .caption{display:none}
+  .fab{display:none}
+  .list,.agentlist{padding-bottom:24px}
+  .specwrap,footer{display:none}
+}
+/* Container query, not a viewport media query: in the desktop showcase the
+   viewport is 1440px while the phone frame is still 390px, so a viewport rule
+   never fired and the chat title clipped by 45px. */
+@container phone (max-width:400px){
+  .chatbar .iconbtn[aria-label="Video call"]{display:none}
+}
+@media (max-width:380px){
+  .appbar{padding-left:10px;gap:2px}
+  .wm{height:19px}
+  .navi .lbl{font-size:10px}
+  .navi .pill{width:52px}
+  .bubble{max-width:82%}
+  .row{padding:10px 8px;gap:11px}
+  .ava{width:46px;height:46px;border-radius:15px}
+  .eyebrow{font-size:10px}
+  .srow{padding:8px 11px;gap:10px}
+  .sic{width:34px;height:34px;border-radius:10px}
+  .slabel .t{font-size:14.5px}
+  .quick{gap:8px;margin:0 12px 14px}
+  .stats{gap:8px;margin:0 12px 14px}
+  .stat b{font-size:18px}
+  .theme-card{width:calc(100% - 24px);margin:0 12px 10px;padding:12px;gap:12px}
+  .tprev{width:48px;height:64px}
+  .group{margin:0 10px 12px}
+  .btnblock{width:calc(100% - 24px);margin:0 12px 14px}
+  .fwrap{padding:0 12px 6px}
+  .phero{padding:8px 16px 14px}
+  .pava{width:84px;height:84px;border-radius:28px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+}
+@media (forced-colors:active){
+  .navbar,.card,.phone,.group{border:1px solid CanvasText}
+}
+</style>
+</head>
+<body data-screen="home">
+
+<!-- icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L20 8l-4-4L4 16z"/><path d="M14.5 5.5 18.5 9.5"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-attach" viewBox="0 0 24 24"><path d="M20.5 11.5 11.3 20.7a5.4 5.4 0 0 1-7.6-7.6l9.2-9.2a3.6 3.6 0 1 1 5.1 5.1l-9.2 9.2a1.8 1.8 0 0 1-2.6-2.6l8.3-8.3"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M4.2 11.4 20.3 4.4a.6.6 0 0 1 .8.8l-7 16.1a.6.6 0 0 1-1.1-.05l-2.6-6.2-6.2-2.6a.6.6 0 0 1 0-1.1z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M20 12H4M10 6l-6 6 6 6"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="7" width="12" height="10" rx="3"/><path d="M15 11.2 21 8v8l-6-3.2z"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.2 13.9 8.4 19 10.3 13.9 12.2 12 17.4 10.1 12.2 5 10.3 10.1 8.4z" fill="currentColor" stroke="none"/><path d="M18.4 15.6 19.2 18 21.5 18.8 19.2 19.6 18.4 22 17.6 19.6 15.3 18.8 17.6 18z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-chats" viewBox="0 0 24 24"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v6a2.5 2.5 0 0 1-2.5 2.5H9.5L4 20z"/></symbol>
+    <symbol id="i-agents" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.1"/><path d="M3.4 19.2c0-3.1 2.5-5.2 5.6-5.2s5.6 2.1 5.6 5.2"/><circle cx="17.2" cy="9.4" r="2.4"/><path d="M16.4 14.2c2.4.2 4.2 2 4.2 4.4"/></symbol>
+    <symbol id="i-discover" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M15.6 8.4 13.7 13.7 8.4 15.6 10.3 10.3z"/></symbol>
+    <symbol id="i-profile" viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.9"/><path d="M4.6 20.4c0-3.7 3.3-6 7.4-6s7.4 2.3 7.4 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.6 9 17.5 20 6.6"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.6v2M12 19.4v2M2.6 12h2M19.4 12h2M5.4 5.4l1.4 1.4M17.2 17.2l1.4 1.4M18.6 5.4l-1.4 1.4M6.8 17.2l-1.4 1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.4 14.8A8.6 8.6 0 0 1 9.2 3.6a8.6 8.6 0 1 0 11.2 11.2z"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></symbol>
+    <symbol id="i-signal" viewBox="0 0 24 24"><path d="M4 17.5v-2M9 17.5v-5M14 17.5v-8M19 17.5V6" stroke-width="2.6"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3.5 8.8a13 13 0 0 1 17 0M6.6 12.2a8.6 8.6 0 0 1 10.8 0M9.8 15.6a4 4 0 0 1 4.4 0"/><circle cx="12" cy="19" r="1.3" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-batt" viewBox="0 0 24 24"><rect x="2.5" y="8" width="16" height="8" rx="2.4"/><path d="M21 10.6v2.8"/><rect x="4.6" y="10.1" width="9.4" height="3.8" rx="1" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.1"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8.6a6 6 0 1 0-12 0c0 6-2.4 7.4-2.4 7.4h16.8S18 14.6 18 8.6z"/><path d="M13.7 19.6a2 2 0 0 1-3.4 0"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 20.6a8.6 8.6 0 1 1 8.6-8.6c0 2.4-1.9 3.4-3.6 3.4h-1.9a2.1 2.1 0 0 0-1.5 3.5 1.6 1.6 0 0 1-1.2 1.7z"/><circle cx="7.6" cy="12.4" r="1.2" fill="currentColor" stroke="none"/><circle cx="10.2" cy="8.1" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="8.1" r="1.2" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.6" y="10.4" width="14.8" height="10.2" rx="2.6"/><path d="M8.2 10.4V7.8a3.8 3.8 0 0 1 7.6 0v2.6"/></symbol>
+    <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7.4" ry="2.9"/><path d="M4.6 6v12c0 1.6 3.3 2.9 7.4 2.9s7.4-1.3 7.4-2.9V6"/><path d="M4.6 12c0 1.6 3.3 2.9 7.4 2.9s7.4-1.3 7.4-2.9"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.2 2.4 3.4 5.4 3.4 8.6S14.2 18.2 12 20.6c-2.2-2.4-3.4-5.4-3.4-8.6S9.8 5.8 12 3.4z"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M12 11v5.4M12 7.9v.1"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14.4 20.4H6.6a2.2 2.2 0 0 1-2.2-2.2V5.8a2.2 2.2 0 0 1 2.2-2.2h7.8"/><path d="M15.6 15.6 20 12l-4.4-3.6M20 12H9.4"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.2 20 6v6c0 4.6-3.3 7.6-8 9-4.7-1.4-8-4.4-8-9V6z"/><path d="M8.8 12.2 11.3 14.7 15.6 10.4"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8.6h2.6L8.4 6h7.2l1.8 2.6H20a1.6 1.6 0 0 1 1.6 1.6v8a1.6 1.6 0 0 1-1.6 1.6H4a1.6 1.6 0 0 1-1.6-1.6v-8A1.6 1.6 0 0 1 4 8.6z"/><circle cx="12" cy="14" r="3.4"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.4 6.8h15.2M9.4 6.8V4.6h5.2v2.2M6.4 6.8l.9 13a1.6 1.6 0 0 0 1.6 1.5h6.2a1.6 1.6 0 0 0 1.6-1.5l.9-13"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v10.6M7.6 10.4 12 14.8l4.4-4.4M4.6 19.4h14.8"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5.6" width="18" height="12.8" rx="2.4"/><path d="M3.6 6.6 12 12.8l8.4-6.2"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15.6" r="4.2"/><path d="M11.2 13 20 4.2M17 7.2l2.4 2.4M14.6 9.6 17 12"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M13.6 3.4H7.4a2 2 0 0 0-2 2v13.2a2 2 0 0 0 2 2h9.2a2 2 0 0 0 2-2V8.4z"/><path d="M13.6 3.4v5h5"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.4" y="4.6" width="17.2" height="14.8" rx="2.4"/><circle cx="8.8" cy="9.6" r="1.7"/><path d="M4 17.4 9.4 12l3.6 3.6 2.6-2.4 4.4 4.2"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.7.3-1 .9-1 1.6v.4M12 17v.1"/></symbol>
+    <symbol id="i-type" viewBox="0 0 24 24"><path d="M4.6 6.4h14.8M12 6.4v13.2M8.6 19.6h6.8"/></symbol>
+    <symbol id="i-userplus" viewBox="0 0 24 24"><circle cx="9.6" cy="8.2" r="3.7"/><path d="M3.4 19.6c0-3.4 2.8-5.6 6.2-5.6 1.5 0 2.9.4 4 1.2"/><path d="M17.4 13.6v6M14.4 16.6h6"/></symbol>
+    <symbol id="i-filetext" viewBox="0 0 24 24"><path d="M13.6 3.4H7.4a2 2 0 0 0-2 2v13.2a2 2 0 0 0 2 2h9.2a2 2 0 0 0 2-2V8.4z"/><path d="M13.6 3.4v5h5M8.4 12.6h7M8.4 16h5"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13.4 2.6 5.4 13.4h5.2l-1 8 8.2-11h-5.2z"/></symbol>
+    <symbol id="i-chatpref" viewBox="0 0 24 24"><path d="M4 7.4A2.4 2.4 0 0 1 6.4 5h11.2A2.4 2.4 0 0 1 20 7.4v6.2a2.4 2.4 0 0 1-2.4 2.4H9.6L4 20z"/><path d="M8.4 9.6h7.2M8.4 12.6h4.4"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+
+  <header class="page-head">
+    <div class="eyebrow"><img src="images/orhan-mark.png" alt="">Orhan AI<span> &middot; Android app &middot; 14 screens</span></div>
+    <h1>Orhan AI Android — <span class="accent">complete</span> app with Profile &amp; Settings</h1>
+    <p class="sub">Material&nbsp;3, mobile-first at a 390px base. Every screen is real markup driven by the same brand tokens as v1 — primary <span class="mono">#087c45</span>, dark canvas <span class="mono">#141816</span>, light canvas <span class="mono">#eef2ef</span>, Lato, and the real Orhan logo. Day and night mode both work on every screen, and the Appearance selector changes the actual theme.</p>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Theme mode">
+        <button type="button" data-mode-btn="system" aria-pressed="false">System</button>
+        <button type="button" data-mode-btn="light" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-sun"/></svg>Day</button>
+        <button type="button" data-mode-btn="dark" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-moon"/></svg>Night</button>
+      </div>
+      <div class="brandsrc"><span class="dot-mint"></span>Orhan AI brand palette &middot; #087c45 &middot; Lato</div>
+    </div>
+  </header>
+
+  <div class="board">
+
+    <!-- ============ SCREEN RAIL ============ -->
+    <aside class="rail" aria-label="Screens">
+      <div class="rail-h"><span>Screens</span><span class="count">14</span></div>
+
+      <div class="rgrp">Main</div>
+      <button class="rbtn is-on" type="button" data-go="home"><span class="n">01</span>Home / Chats</button>
+      <button class="rbtn" type="button" data-go="chat"><span class="n">02</span>Chat</button>
+      <button class="rbtn" type="button" data-go="agents"><span class="n">03</span>Agents</button>
+      <button class="rbtn" type="button" data-go="discover"><span class="n">04</span>Discover</button>
+      <button class="rbtn" type="button" data-go="profile"><span class="n">05</span>Profile</button>
+
+      <div class="rgrp">Settings</div>
+      <button class="rbtn" type="button" data-go="settings"><span class="n">06</span>Settings</button>
+      <button class="rbtn" type="button" data-go="appearance"><span class="n">07</span>Appearance</button>
+      <button class="rbtn" type="button" data-go="editprofile"><span class="n">08</span>Edit profile</button>
+      <button class="rbtn" type="button" data-go="notifications"><span class="n">09</span>Notifications</button>
+      <button class="rbtn" type="button" data-go="privacy"><span class="n">10</span>Privacy &amp; security</button>
+      <button class="rbtn" type="button" data-go="chatprefs"><span class="n">11</span>Chat preferences</button>
+      <button class="rbtn" type="button" data-go="storage"><span class="n">12</span>Storage</button>
+      <button class="rbtn" type="button" data-go="language"><span class="n">13</span>Language</button>
+      <button class="rbtn" type="button" data-go="about"><span class="n">14</span>About</button>
+    </aside>
+
+    <div class="stage">
+
+      <!-- ==================== 01 · HOME / CHATS ==================== -->
+      <div class="slot is-active" id="p-home">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="appbar">
+              <div class="brandlock">
+                <img class="mark" src="images/orhan-mark.png" alt="Orhan AI logo">
+                <img class="wm wm-light" src="images/orhan-wordmark.png" alt="Orhan AI">
+                <img class="wm wm-dark" src="images/orhan-wordmark-dark.png" alt="" aria-hidden="true">
+              </div>
+              <button class="iconbtn" type="button" aria-label="Search"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></button>
+              <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
+                <svg class="ic i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+                <svg class="ic i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+              </button>
+              <button class="iconbtn" type="button" aria-label="Open settings" data-go="settings"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
+            </div>
+
+            <div class="scroll">
+              <div class="searchrow">
+                <div class="searchfield">
+                  <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+                  <span>Search chats, agents, people</span>
+                </div>
+              </div>
+
+              <div class="chips" role="group" aria-label="Filters">
+                <button class="chip is-on" type="button">All</button>
+                <button class="chip" type="button">Unread</button>
+                <button class="chip" type="button"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg>Agents</button>
+                <button class="chip" type="button">Groups</button>
+              </div>
+
+              <div class="seclabel"><span>Recent</span><span>4 pinned</span></div>
+
+              <div class="list">
+                <button class="row" type="button" data-go="chat">
+                  <span class="ava agent"><img src="images/agent-webpage.png" alt=""><span class="presence"></span></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">Webpage Developer</span><span class="rowtime">2m</span></span>
+                    <span class="rowsnip">
+                      <span class="agentsnip"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg>Agent</span>
+                      <span class="txt">Landing page draft is ready — want me to publish it?</span>
+                      <span class="badge">3</span>
+                    </span>
+                  </span>
+                </button>
+
+                <button class="row" type="button" data-go="chat">
+                  <span class="ava"><img src="images/user-alice.png" alt=""></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">Design Team · 5</span><span class="rowtime">12m</span></span>
+                    <span class="rowsnip"><span class="txt">Alice: the new M3 tokens look great</span><span class="badge quiet">2</span></span>
+                  </span>
+                </button>
+
+                <button class="row" type="button" data-go="chat">
+                  <span class="ava agent"><img src="images/agent-slides.png" alt=""><span class="presence"></span></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">Slides Assistant</span><span class="rowtime">1h</span></span>
+                    <span class="rowsnip">
+                      <span class="agentsnip"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg>Agent</span>
+                      <span class="txt">Q4 deck exported — 12 slides, brand theme applied</span>
+                    </span>
+                  </span>
+                </button>
+
+                <button class="row" type="button" data-go="chat">
+                  <span class="ava"><img src="images/user-david.png" alt=""></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">David Park</span><span class="rowtime">3h</span></span>
+                    <span class="rowsnip"><span class="txt">Sent you the repo link for review</span></span>
+                  </span>
+                </button>
+
+                <button class="row" type="button" data-go="chat">
+                  <span class="ava agent"><img src="images/agent-market.png" alt=""><span class="presence"></span></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">Market Research</span><span class="rowtime">Yesterday</span></span>
+                    <span class="rowsnip">
+                      <span class="agentsnip"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg>Agent</span>
+                      <span class="txt">Competitor brief finished — 8 sources cited</span>
+                    </span>
+                  </span>
+                </button>
+
+                <button class="row" type="button" data-go="chat">
+                  <span class="ava agent"><img src="images/agent-accounting.png" alt=""><span class="presence"></span></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">Accounting Assistant</span><span class="rowtime">Yesterday</span></span>
+                    <span class="rowsnip">
+                      <span class="agentsnip"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg>Agent</span>
+                      <span class="txt">Invoice #2211 flagged for your review</span>
+                    </span>
+                  </span>
+                </button>
+
+                <button class="row" type="button" data-go="chat">
+                  <span class="ava"><img src="images/user-alex.png" alt=""></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">Family · 8</span><span class="rowtime">Sun</span></span>
+                    <span class="rowsnip"><span class="txt">Mum: dinner at 8? Alex is bringing dessert</span></span>
+                  </span>
+                </button>
+
+                <button class="row" type="button" data-go="chat">
+                  <span class="ava"><img src="images/user-alice.png" alt=""></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">Alice Chen</span><span class="rowtime">Sun</span></span>
+                    <span class="rowsnip"><span class="typingdot">typing…</span></span>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <button class="fab" type="button" aria-label="New chat" data-toast="New chat sheet would open here">
+              <svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg>
+            </button>
+
+            <nav class="navbar" aria-label="Primary">
+              <button class="navi" type="button" data-go="home" aria-current="page">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-chats"/></svg><span class="count">3</span></span></span>
+                <span class="lbl">Chats</span>
+              </button>
+              <button class="navi" type="button" data-go="agents">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span>
+                <span class="lbl">Agents</span>
+              </button>
+              <button class="navi" type="button" data-go="discover">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
+                <span class="lbl">Discover</span>
+              </button>
+              <button class="navi" type="button" data-go="profile">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
+                <span class="lbl">Profile</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+        <div class="caption"><b>01</b> Home · Chats</div>
+      </div>
+
+      <!-- ==================== 02 · CHAT ==================== -->
+      <div class="slot" id="p-chat">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="chatbar">
+              <button class="iconbtn" type="button" aria-label="Back" data-go="home"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+              <div class="chatid">
+                <span class="ava agent"><img src="images/agent-webpage.png" alt=""></span>
+                <span class="chatmeta">
+                  <span class="chatnm">Webpage Developer</span>
+                  <span class="chatst"><span class="live"></span>Agent · always on</span>
+                </span>
+              </div>
+              <button class="iconbtn" type="button" aria-label="Video call"><svg class="ic" aria-hidden="true"><use href="#i-video"/></svg></button>
+              <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
+                <svg class="ic i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+                <svg class="ic i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+              </button>
+              <button class="iconbtn" type="button" aria-label="More options"><svg class="ic" aria-hidden="true"><use href="#i-more"/></svg></button>
+            </div>
+
+            <div class="scroll" id="threadScroll">
+              <div class="thread" aria-live="polite" id="thread">
+                <div class="daychip">Today</div>
+
+                <div class="msg user">
+                  <div class="bubble">
+                    Draft a landing page for our AI meetup in Palo Alto — dark hero, teal accent, one CTA.
+                    <div class="mt"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>9:38 AM</div>
+                  </div>
+                </div>
+
+                <div class="msg agent">
+                  <span class="ava"><img src="images/agent-webpage.png" alt=""></span>
+                  <div class="bubble">
+                    On it. I’ll use the Orhan green (#087c45) so it stays on-brand, keep one primary CTA, and make it mobile-first.
+                    <div class="artcard">
+                      <div class="artthumb"><span class="tag">Preview</span></div>
+                      <div class="artbody">
+                        <div class="t">meetup-landing · v1</div>
+                        <div class="s">Responsive · 12 sections · Lato</div>
+                        <div class="artrow"><span class="mini">Open preview</span><span class="mini">Publish</span></div>
+                      </div>
+                    </div>
+                    <div class="mt"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg>9:38 AM</div>
+                  </div>
+                </div>
+
+                <div class="msg user">
+                  <div class="bubble">
+                    Looks right. Make the hero headline bigger and add the speaker line-up.
+                    <div class="mt"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>9:40 AM</div>
+                  </div>
+                </div>
+
+                <div class="msg agent">
+                  <span class="ava"><img src="images/agent-webpage.png" alt=""></span>
+                  <div class="bubble">
+                    Done — headline is now 56/60 with the mint accent, and the line-up is a 3-up card row that stacks on small screens. Draft is ready to publish.
+                    <div class="mt"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg>9:41 AM</div>
+                  </div>
+                </div>
+
+                <div class="msg agent" id="typing" style="display:none">
+                  <span class="ava"><img src="images/agent-webpage.png" alt=""></span>
+                  <div class="bubble" style="padding:0"><div class="typing" style="display:flex"><i></i><i></i><i></i></div></div>
+                </div>
+              </div>
+            </div>
+
+            <form class="composer" id="composer" aria-label="Message composer">
+              <div class="field">
+                <button class="iconbtn" type="button" aria-label="Attach file" data-toast="Attach: photo, file or agent">
+                  <svg class="ic" aria-hidden="true"><use href="#i-attach"/></svg>
+                </button>
+                <label for="msg" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Message</label>
+                <textarea id="msg" rows="1" placeholder="Message Orhan…"></textarea>
+                <button class="iconbtn" type="button" aria-label="Voice message" data-toast="Hold to record a voice note">
+                  <svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg>
+                </button>
+              </div>
+              <button class="sendbtn" type="submit" aria-label="Send message">
+                <svg class="ic" aria-hidden="true"><use href="#i-send"/></svg>
+              </button>
+            </form>
+          </div>
+        </div>
+        <div class="caption"><b>02</b> Chat · agent thread</div>
+      </div>
+
+      <!-- ==================== 03 · AGENTS ==================== -->
+      <div class="slot" id="p-agents">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="appbar">
+              <div class="brandlock">
+                <img class="mark" src="images/orhan-mark.png" alt="Orhan AI logo">
+                <img class="wm wm-light" src="images/orhan-wordmark.png" alt="Orhan AI">
+                <img class="wm wm-dark" src="images/orhan-wordmark-dark.png" alt="" aria-hidden="true">
+              </div>
+              <button class="iconbtn" type="button" aria-label="Search agents"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></button>
+              <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
+                <svg class="ic i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+                <svg class="ic i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+              </button>
+              <button class="iconbtn" type="button" aria-label="Open settings" data-go="settings"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
+            </div>
+
+            <div class="scroll">
+              <div class="seclabel" style="padding-top:2px"><span>Your agents</span><span>4 active</span></div>
+
+              <div class="agentlist">
+                <div class="agentcard">
+                  <span class="ava agent"><img src="images/agent-webpage.png" alt=""></span>
+                  <div class="ac-body">
+                    <div class="ac-name">Webpage Developer <svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg></div>
+                    <div class="ac-desc">Builds and publishes landing pages, docs and dashboards from a single prompt.</div>
+                    <div class="ac-foot"><span class="pilltag on">Working</span><span class="pilltag">Web</span></div>
+                  </div>
+                  <button class="minicta" type="button" data-go="chat">Open</button>
+                </div>
+
+                <div class="agentcard">
+                  <span class="ava agent"><img src="images/agent-slides.png" alt=""></span>
+                  <div class="ac-body">
+                    <div class="ac-name">Slides Assistant <svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg></div>
+                    <div class="ac-desc">Turns a chat into a branded deck — outline, design and export in minutes.</div>
+                    <div class="ac-foot"><span class="pilltag on">Working</span><span class="pilltag">Slides</span></div>
+                  </div>
+                  <button class="minicta" type="button" data-toast="Slides Assistant opened">Open</button>
+                </div>
+
+                <div class="agentcard">
+                  <span class="ava agent"><img src="images/agent-market.png" alt=""></span>
+                  <div class="ac-body">
+                    <div class="ac-name">Market Research <svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg></div>
+                    <div class="ac-desc">Researches competitors with cited sources and keeps the brief up to date.</div>
+                    <div class="ac-foot"><span class="pilltag">Idle</span><span class="pilltag">Research</span></div>
+                  </div>
+                  <button class="minicta" type="button" data-toast="Market Research opened">Open</button>
+                </div>
+
+                <div class="agentcard">
+                  <span class="ava agent"><img src="images/agent-accounting.png" alt=""></span>
+                  <div class="ac-body">
+                    <div class="ac-name">Accounting Assistant <svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg></div>
+                    <div class="ac-desc">Reconciles invoices and flags anything that needs a human decision.</div>
+                    <div class="ac-foot"><span class="pilltag">Idle</span><span class="pilltag">Finance</span></div>
+                  </div>
+                  <button class="minicta" type="button" data-toast="Accounting Assistant opened">Open</button>
+                </div>
+              </div>
+
+              <button class="newagent" type="button" data-toast="Create agent: name it, give it tools, done">
+                <span class="plus"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></span>
+                Create a new agent
+              </button>
+            </div>
+
+            <nav class="navbar" aria-label="Primary">
+              <button class="navi" type="button" data-go="home">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-chats"/></svg><span class="count">3</span></span></span>
+                <span class="lbl">Chats</span>
+              </button>
+              <button class="navi" type="button" data-go="agents" aria-current="page">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span>
+                <span class="lbl">Agents</span>
+              </button>
+              <button class="navi" type="button" data-go="discover">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
+                <span class="lbl">Discover</span>
+              </button>
+              <button class="navi" type="button" data-go="profile">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
+                <span class="lbl">Profile</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+        <div class="caption"><b>03</b> Agents tab</div>
+      </div>
+
+      <!-- ==================== 04 · DISCOVER ==================== -->
+      <div class="slot" id="p-discover">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="appbar">
+              <div class="brandlock">
+                <img class="mark" src="images/orhan-mark.png" alt="Orhan AI logo">
+                <img class="wm wm-light" src="images/orhan-wordmark.png" alt="Orhan AI">
+                <img class="wm wm-dark" src="images/orhan-wordmark-dark.png" alt="" aria-hidden="true">
+              </div>
+              <button class="iconbtn" type="button" aria-label="Search community"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></button>
+              <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
+                <svg class="ic i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+                <svg class="ic i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+              </button>
+              <button class="iconbtn" type="button" aria-label="Open settings" data-go="settings"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
+            </div>
+
+            <div class="scroll">
+              <div class="discover-feature">
+                <div class="df-top">
+                  <img src="images/orhan-mark.png" alt="">
+                  <div>
+                    <div class="df-kicker">Featured agent</div>
+                    <div class="df-title">Webpage Developer</div>
+                  </div>
+                </div>
+                <p class="df-sub">Prompt a full landing page and get a published link in under two minutes.</p>
+                <button class="df-cta" type="button" data-go="chat">
+                  Start a chat <svg class="ic" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>Trending in community</span><span>24</span></div>
+
+              <div class="dgrid">
+                <button class="dcard" type="button" data-toast="Slides Assistant added to your agents">
+                  <span class="ava agent"><img src="images/agent-slides.png" alt=""></span>
+                  <span class="nm">Slides Assistant</span>
+                  <span class="ds">Deck in 5 prompts · 2.1k users</span>
+                  <span class="tag">Productivity</span>
+                </button>
+                <button class="dcard" type="button" data-toast="Market Research added to your agents">
+                  <span class="ava agent"><img src="images/agent-market.png" alt=""></span>
+                  <span class="nm">Market Research</span>
+                  <span class="ds">Cited briefs · 1.4k users</span>
+                  <span class="tag">Research</span>
+                </button>
+                <button class="dcard" type="button" data-toast="Accounting Assistant added to your agents">
+                  <span class="ava agent"><img src="images/agent-accounting.png" alt=""></span>
+                  <span class="nm">Accounting Assistant</span>
+                  <span class="ds">Invoice triage · 980 users</span>
+                  <span class="tag">Finance</span>
+                </button>
+                <button class="dcard" type="button" data-toast="Design Critic added to your agents">
+                  <span class="ava" style="background:linear-gradient(135deg,#0b8249,#06512f);display:flex;align-items:center;justify-content:center;color:#eafff2">
+                    <svg class="ic" style="width:20px;height:20px" aria-hidden="true"><use href="#i-palette"/></svg>
+                  </span>
+                  <span class="nm">Design Critic</span>
+                  <span class="ds">M3 + a11y review · 760 users</span>
+                  <span class="tag">Design</span>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>From people you follow</span></div>
+              <div style="padding:0 8px 16px">
+                <button class="socialrow" type="button" data-toast="Alice shared Webpage Developer">
+                  <span class="ava"><img src="images/user-alice.png" alt=""></span>
+                  <span class="sr-body">
+                    <span class="sr-t"><b>Alice Chen</b> shared Webpage Developer with the Design Team</span>
+                    <span class="sr-s">12 minutes ago · 3 replies</span>
+                  </span>
+                </button>
+                <button class="socialrow" type="button" data-toast="David published a research agent">
+                  <span class="ava"><img src="images/user-david.png" alt=""></span>
+                  <span class="sr-body">
+                    <span class="sr-t"><b>David Park</b> published a research agent with web + arXiv tools</span>
+                    <span class="sr-s">3 hours ago · 41 installs</span>
+                  </span>
+                </button>
+                <button class="socialrow" type="button" data-toast="Alex rated Slides Assistant">
+                  <span class="ava"><img src="images/user-alex.png" alt=""></span>
+                  <span class="sr-body">
+                    <span class="sr-t"><b>Alex Rivera</b> rated Slides Assistant 5 stars</span>
+                    <span class="sr-s">Yesterday · “deck looked on-brand in one shot”</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <nav class="navbar" aria-label="Primary">
+              <button class="navi" type="button" data-go="home">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-chats"/></svg><span class="count">3</span></span></span>
+                <span class="lbl">Chats</span>
+              </button>
+              <button class="navi" type="button" data-go="agents">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span>
+                <span class="lbl">Agents</span>
+              </button>
+              <button class="navi" type="button" data-go="discover" aria-current="page">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
+                <span class="lbl">Discover</span>
+              </button>
+              <button class="navi" type="button" data-go="profile">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
+                <span class="lbl">Profile</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+        <div class="caption"><b>04</b> Discover tab</div>
+      </div>
+
+      <!-- ==================== 05 · PROFILE ==================== -->
+      <div class="slot" id="p-profile">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="appbar">
+              <div class="brandlock">
+                <img class="mark" src="images/orhan-mark.png" alt="Orhan AI logo">
+                <img class="wm wm-light" src="images/orhan-wordmark.png" alt="Orhan AI">
+                <img class="wm wm-dark" src="images/orhan-wordmark-dark.png" alt="" aria-hidden="true">
+              </div>
+              <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
+                <svg class="ic i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+                <svg class="ic i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+              </button>
+              <button class="iconbtn" type="button" aria-label="Settings" data-go="settings"><svg class="ic" aria-hidden="true"><use href="#i-settings"/></svg></button>
+            </div>
+
+            <div class="scroll">
+              <div class="phero">
+                <div class="pava">
+                  <img src="images/user-alex.png" alt="Fareed Khan avatar" id="profileAva">
+                  <span class="pbadge"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span>
+                </div>
+                <h2 class="pname" id="profileName">Fareed Khan</h2>
+                <div class="pmail" id="profileEmail">fareed.khan@gmail.com</div>
+                <div class="prow">
+                  <span class="protag">Orhan Pro</span>
+                  <span class="psince">Member since Mar 2024</span>
+                </div>
+                <button class="pedit" type="button" data-go="editprofile">
+                  <svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg>Edit profile
+                </button>
+              </div>
+
+              <div class="stats">
+                <div class="stat"><b>128</b><span>Chats</span></div>
+                <div class="stat"><b>4</b><span>Agents</span></div>
+                <div class="stat"><b>37</b><span>Artifacts</span></div>
+              </div>
+
+              <div class="seclabel"><span>Quick actions</span></div>
+              <div class="quick">
+                <button class="q" type="button" data-go="agents">
+                  <svg class="ic" aria-hidden="true"><use href="#i-userplus"/></svg>
+                  <span>Add an agent</span>
+                  <small>4 active</small>
+                </button>
+                <button class="q" type="button" data-go="appearance">
+                  <svg class="ic" aria-hidden="true"><use href="#i-palette"/></svg>
+                  <span>Appearance</span>
+                  <small id="qaTheme">Night mode</small>
+                </button>
+                <button class="q" type="button" data-go="storage">
+                  <svg class="ic" aria-hidden="true"><use href="#i-db"/></svg>
+                  <span>Storage</span>
+                  <small>On this device</small>
+                </button>
+                <button class="q" type="button" data-go="notifications">
+                  <svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg>
+                  <span>Notifications</span>
+                  <small>5 of 7 on</small>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>Account</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-go="editprofile">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
+                  <span class="slabel"><span class="t">Personal information</span><span class="s">Name, email, avatar</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-go="privacy">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span>
+                  <span class="slabel"><span class="t">Privacy &amp; security</span><span class="s">Passcode, blocked users</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-toast="Orhan Free · on this device 2026">
+                  <span class="sic tint"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg></span>
+                  <span class="slabel"><span class="t">Subscription</span><span class="s">Free · on this device</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-go="settings">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-settings"/></svg></span>
+                  <span class="slabel"><span class="t">All settings</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+
+              <button class="btn btn-outline btnblock" type="button" data-sheet="1">
+                <svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg>Sign out
+              </button>
+              <div style="height:10px"></div>
+            </div>
+
+            <div class="sheet" id="signoutSheet">
+              <div class="sheetbox">
+                <h4>Sign out of Orhan AI?</h4>
+                <p>Your chats and artifacts stay on your account. You’ll need to sign in again on this phone.</p>
+                <div class="sheetbtns">
+                  <button class="btn btn-primary" type="button" data-close-sheet="1" data-toast="Signed out (demo)">Sign out</button>
+                  <button class="btn btn-ghost" type="button" data-close-sheet="1">Cancel</button>
+                </div>
+              </div>
+            </div>
+
+            <nav class="navbar" aria-label="Primary">
+              <button class="navi" type="button" data-go="home">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-chats"/></svg><span class="count">3</span></span></span>
+                <span class="lbl">Chats</span>
+              </button>
+              <button class="navi" type="button" data-go="agents">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span>
+                <span class="lbl">Agents</span>
+              </button>
+              <button class="navi" type="button" data-go="discover">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
+                <span class="lbl">Discover</span>
+              </button>
+              <button class="navi" type="button" data-go="profile" aria-current="page">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
+                <span class="lbl">Profile</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+        <div class="caption"><b>05</b> Profile</div>
+      </div>
+
+      <!-- ==================== 06 · SETTINGS ==================== -->
+      <div class="slot" id="p-settings">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="detailbar">
+              <button class="iconbtn" type="button" aria-label="Back" data-go="profile"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+              <div class="dt">Settings</div>
+              <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
+                <svg class="ic i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+                <svg class="ic i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+              </button>
+            </div>
+
+            <div class="scroll">
+              <div class="seclabel" style="padding-top:10px"><span>Account</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-go="editprofile">
+                  <span class="ava" style="width:44px;height:44px;border-radius:14px"><img src="images/user-alex.png" alt="" id="setAva"></span>
+                  <span class="slabel"><span class="t" id="setName">Fareed Khan</span><span class="s" id="setEmail">fareed.khan@gmail.com</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-toast="Orhan Free · on this device 2026">
+                  <span class="sic tint"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg></span>
+                  <span class="slabel"><span class="t">Subscription</span><span class="s">Free · on this device</span></span>
+                  <span class="sval">Renews 12 Nov</span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>Look &amp; feel</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-go="appearance">
+                  <span class="sic tint"><svg class="ic" aria-hidden="true"><use href="#i-palette"/></svg></span>
+                  <span class="slabel"><span class="t">Appearance</span><span class="s">System, light or dark theme</span></span>
+                  <span class="sval" id="setThemeVal">Night</span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-toast="Text size: Default (Lato 14.5px)">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-type"/></svg></span>
+                  <span class="slabel"><span class="t">Text size</span><span class="s">Chat and list font size</span></span>
+                  <span class="sval">Default</span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-go="language">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg></span>
+                  <span class="slabel"><span class="t">Language</span></span>
+                  <span class="sval" id="setLangVal">English (US)</span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>Messages</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-go="notifications">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg></span>
+                  <span class="slabel"><span class="t">Notifications</span><span class="s">Push, email, per-agent alerts</span></span>
+                  <span class="sval">5 of 7 on</span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-go="chatprefs">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-chatpref"/></svg></span>
+                  <span class="slabel"><span class="t">Chat preferences</span><span class="s">Send with Enter, typing indicators</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-go="privacy">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span>
+                  <span class="slabel"><span class="t">Privacy &amp; security</span><span class="s">App lock, blocked users, data</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>Data</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-go="storage">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-db"/></svg></span>
+                  <span class="slabel"><span class="t">Storage</span><span class="s">Documents and chat history</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-toast="Auto-download: Wi-Fi only">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg></span>
+                  <span class="slabel"><span class="t">Media auto-download</span></span>
+                  <span class="sval">Wi-Fi only</span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>Support</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-toast="Help centre opened">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-help"/></svg></span>
+                  <span class="slabel"><span class="t">Help centre</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-go="about">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg></span>
+                  <span class="slabel"><span class="t">About Orhan AI</span><span class="s">Version, terms, licenses</span></span>
+                  <span class="sval">1.8.2</span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+
+              <button class="btn btn-outline btnblock" type="button" data-sheet="1">
+                <svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg>Sign out
+              </button>
+              <div class="legal">Orhan AI 1.8.2 (build 1820) · Made with Lato</div>
+            </div>
+
+            <div class="sheet" id="signoutSheet2">
+              <div class="sheetbox">
+                <h4>Sign out of Orhan AI?</h4>
+                <p>Your chats and artifacts stay on your account. You’ll need to sign in again on this phone.</p>
+                <div class="sheetbtns">
+                  <button class="btn btn-primary" type="button" data-close-sheet="1" data-toast="Signed out (demo)">Sign out</button>
+                  <button class="btn btn-ghost" type="button" data-close-sheet="1">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>06</b> Settings</div>
+      </div>
+
+      <!-- ==================== 07 · APPEARANCE ==================== -->
+      <div class="slot" id="p-appearance">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="detailbar">
+              <button class="iconbtn" type="button" aria-label="Back" data-go="settings"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+              <div class="dt">Appearance</div>
+            </div>
+
+            <div class="scroll">
+              <div class="seclabel" style="padding-top:10px"><span>Theme</span><span id="apCurrent">Night</span></div>
+
+              <button class="theme-card" type="button" data-set-mode="system" aria-pressed="false">
+                <span class="tprev system" aria-hidden="true"><b></b><b></b><b></b></span>
+                <span class="tc-body">
+                  <span class="tc-t">System default <em>Auto</em></span>
+                  <span class="tc-s">Follows your Android dark theme setting and switches at sunset.</span>
+                </span>
+                <span class="radio"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span>
+              </button>
+
+              <button class="theme-card is-on" type="button" data-set-mode="dark" aria-pressed="true">
+                <span class="tprev dark" aria-hidden="true"><b></b><b></b><b></b></span>
+                <span class="tc-body">
+                  <span class="tc-t">Night <em>Dark</em></span>
+                  <span class="tc-s">Deep charcoal canvas #141816 — the Orhan app default.</span>
+                </span>
+                <span class="radio"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span>
+              </button>
+
+              <button class="theme-card" type="button" data-set-mode="light" aria-pressed="false">
+                <span class="tprev light" aria-hidden="true"><b></b><b></b><b></b></span>
+                <span class="tc-body">
+                  <span class="tc-t">Day <em>Light</em></span>
+                  <span class="tc-s">Bright canvas #eef2ef with the same green primary for full daylight.</span>
+                </span>
+                <span class="radio"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span>
+              </button>
+
+              <div class="seclabel"><span>Live preview</span></div>
+              <div style="padding:0 16px 18px">
+                <div style="border-radius:20px;border:1px solid var(--line-soft);background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:9px">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <span class="ava agent" style="width:34px;height:34px;border-radius:11px"><img src="images/agent-webpage.png" alt=""></span>
+                    <div style="min-width:0">
+                      <div style="font-size:13px;font-weight:700;color:var(--ink)">Webpage Developer</div>
+                      <div style="font-size:11px;color:var(--ink-3)">Preview of the current theme</div>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:7px;align-items:flex-start">
+                    <div style="background:var(--agent-bubble);border:1px solid var(--line-soft);color:var(--agent-ink);border-radius:14px 14px 14px 5px;padding:9px 12px;font-size:12.5px;line-height:1.4;max-width:230px">Draft is ready — shall I publish it?</div>
+                  </div>
+                  <div style="display:flex;justify-content:flex-end">
+                    <div style="background:var(--user-bubble);color:var(--user-ink);border-radius:14px 14px 5px 14px;padding:9px 12px;font-size:12.5px;line-height:1.4;max-width:200px">Yes, publish it.</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:7px;padding-top:2px">
+                    <span style="flex:1 1 auto;height:34px;border-radius:999px;background:var(--field);border:1px solid var(--field-edge);display:flex;align-items:center;padding:0 12px;font-size:11.5px;color:var(--ink-3)">Message Orhan…</span>
+                    <span style="width:34px;height:34px;border-radius:50%;background:var(--primary-grad);color:var(--on-primary);display:flex;align-items:center;justify-content:center;flex:none">
+                      <svg class="ic" style="width:15px;height:15px" aria-hidden="true"><use href="#i-send"/></svg>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="seclabel"><span>Text size</span></div>
+              <div class="segchips" role="group" aria-label="Text size">
+                <button type="button" data-toast="Text size: Small">Small</button>
+                <button class="is-on" type="button" data-toast="Text size: Default">Default</button>
+                <button type="button" data-toast="Text size: Large">Large</button>
+              </div>
+              <div class="legal" style="text-align:left;margin:0 20px 20px">Changing the theme applies instantly across every screen and is remembered on this device.</div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>07</b> Appearance / theme</div>
+      </div>
+
+      <!-- ==================== 08 · EDIT PROFILE ==================== -->
+      <div class="slot" id="p-editprofile">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="detailbar">
+              <button class="iconbtn" type="button" aria-label="Back" data-go="profile"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+              <div class="dt">Edit profile</div>
+              <button class="txtbtn" type="button" id="saveProfile">Save</button>
+            </div>
+
+            <div class="scroll">
+              <div class="avapick">
+                <div class="pava"><img src="images/user-alex.png" alt="Current avatar" id="editAva"></div>
+                <div class="avapick-col">
+                  <span class="t">Profile photo</span>
+                  <span class="s">Tap a face below or upload</span>
+                  <div class="avatars" role="group" aria-label="Choose avatar">
+                    <button class="avchip is-on" type="button" data-avatar="images/user-alex.png" aria-label="Avatar 1"><img src="images/user-alex.png" alt=""></button>
+                    <button class="avchip" type="button" data-avatar="images/user-alice.png" aria-label="Avatar 2"><img src="images/user-alice.png" alt=""></button>
+                    <button class="avchip" type="button" data-avatar="images/user-david.png" aria-label="Avatar 3"><img src="images/user-david.png" alt=""></button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="fwrap">
+                <div class="fld">
+                  <label for="edName">Full name</label>
+                  <input id="edName" type="text" value="Fareed Khan" autocomplete="name">
+                  <span class="fhint">Shown to people and agents you chat with.</span>
+                </div>
+                <div class="fld">
+                  <label for="edEmail">Email</label>
+                  <input id="edEmail" type="email" value="fareed.khan@gmail.com" autocomplete="email">
+                  <span class="fhint">Used for sign-in and receipts. We’ll send a code to confirm a change.</span>
+                </div>
+                <div class="fld">
+                  <label for="edHandle">Orhan ID</label>
+                  <input id="edHandle" type="text" value="@fareed" autocomplete="off">
+                  <span class="fhint">Your handle is unique — 30 days between changes.</span>
+                </div>
+                <div class="fld">
+                  <label for="edBio">About you</label>
+                  <textarea id="edBio">Building AI agents at Orhan. Mostly on Android, always in dark mode.</textarea>
+                </div>
+              </div>
+
+              <button class="btn btn-primary btnblock" type="button" id="saveProfile2">
+                <svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Save changes
+              </button>
+              <button class="btn btn-ghost btnblock" type="button" data-go="profile">Cancel</button>
+              <div style="height:14px"></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>08</b> Edit profile</div>
+      </div>
+
+      <!-- ==================== 09 · NOTIFICATIONS ==================== -->
+      <div class="slot" id="p-notifications">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="detailbar">
+              <button class="iconbtn" type="button" aria-label="Back" data-go="settings"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+              <div class="dt">Notifications</div>
+            </div>
+
+            <div class="scroll">
+              <div class="seclabel" style="padding-top:10px"><span>Push</span></div>
+              <div class="group">
+                <div class="srow">
+                  <span class="sic tint"><svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg></span>
+                  <span class="slabel"><span class="t">Push notifications</span><span class="s">Master switch for this device</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="true" aria-label="Push notifications"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-chats"/></svg></span>
+                  <span class="slabel"><span class="t">Direct messages</span><span class="s">People and group chats</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="true" aria-label="Direct messages"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span>
+                  <span class="slabel"><span class="t">Agent replies</span><span class="s">When a running agent finishes a task</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="true" aria-label="Agent replies"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg></span>
+                  <span class="slabel"><span class="t">Agent suggestions</span><span class="s">Proactive ideas in chat</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="false" aria-label="Agent suggestions"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
+                  <span class="slabel"><span class="t">Community activity</span><span class="s">Installs, ratings and mentions</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="true" aria-label="Community activity"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+              </div>
+
+              <div class="seclabel"><span>Email</span></div>
+              <div class="group">
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg></span>
+                  <span class="slabel"><span class="t">Weekly digest</span><span class="s">Chats, artifacts and agent usage</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="true" aria-label="Weekly digest"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg></span>
+                  <span class="slabel"><span class="t">Product news</span><span class="s">New agents and features</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="false" aria-label="Product news"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+              </div>
+
+              <div class="seclabel"><span>Behaviour</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-toast="Quiet hours: 22:00 – 07:00">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg></span>
+                  <span class="slabel"><span class="t">Quiet hours</span><span class="s">Silence everything overnight</span></span>
+                  <span class="sval">22:00 – 07:00</span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-toast="Sound: Orhan chime">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span>
+                  <span class="slabel"><span class="t">Sound</span></span>
+                  <span class="sval">Orhan chime</span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+              <div class="legal">Turn off agent replies and you’ll only see finished tasks in the chat list.</div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>09</b> Notifications</div>
+      </div>
+
+      <!-- ==================== 10 · PRIVACY & SECURITY ==================== -->
+      <div class="slot" id="p-privacy">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="detailbar">
+              <button class="iconbtn" type="button" aria-label="Back" data-go="settings"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+              <div class="dt">Privacy &amp; security</div>
+            </div>
+
+            <div class="scroll">
+              <div class="seclabel" style="padding-top:10px"><span>Security</span></div>
+              <div class="group">
+                <div class="srow">
+                  <span class="sic tint"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></span>
+                  <span class="slabel"><span class="t">App lock</span><span class="s">Fingerprint or PIN to open Orhan</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="true" aria-label="App lock"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+                <button class="srow" type="button" data-toast="Change passcode">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-key"/></svg></span>
+                  <span class="slabel"><span class="t">Change passcode</span><span class="s">6-digit PIN</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span>
+                  <span class="slabel"><span class="t">Two-step verification</span><span class="s">Code required at new sign-ins</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="true" aria-label="Two-step verification"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+              </div>
+
+              <div class="seclabel"><span>Privacy</span></div>
+              <div class="group">
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg></span>
+                  <span class="slabel"><span class="t">Read receipts</span><span class="s">Let others see when you’ve read</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="true" aria-label="Read receipts"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span>
+                  <span class="slabel"><span class="t">Share chat history with agents</span><span class="s">Agents can use earlier context</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="true" aria-label="Share chat history with agents"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span>
+                  <span class="slabel"><span class="t">Help improve Orhan</span><span class="s">Share anonymised diagnostics</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="false" aria-label="Help improve Orhan"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+              </div>
+
+              <div class="seclabel"><span>Blocked users</span><span>2</span></div>
+              <div class="group">
+                <div class="blocked">
+                  <span class="ava"><img src="images/user-david.png" alt=""></span>
+                  <span class="bl"><b>David Park</b><span>Blocked 3 October 2026</span></span>
+                  <button class="unblock" type="button" data-toast="David Park unblocked">Unblock</button>
+                </div>
+                <div class="blocked">
+                  <span class="ava" style="background:linear-gradient(135deg,#5c6d63,#3d4842);display:flex;align-items:center;justify-content:center;color:#eafff2">
+                    <svg class="ic" style="width:20px;height:20px" aria-hidden="true"><use href="#i-profile"/></svg>
+                  </span>
+                  <span class="bl"><b>+1 415 ··· 8802</b><span>Unknown contact · blocked 18 Sept 2026</span></span>
+                  <button class="unblock" type="button" data-toast="Number unblocked">Unblock</button>
+                </div>
+              </div>
+
+              <div class="seclabel"><span>Your data</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-toast="Export requested — we’ll email you within 24h">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg></span>
+                  <span class="slabel"><span class="t">Download my data</span><span class="s">Chats, artifacts and profile</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow danger" type="button" data-toast="Recent + pinned chats and saved messages cleared (demo)">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></span>
+                  <span class="slabel"><span class="t">Clear chat history</span><span class="s">Removes recent + pinned chats and their saved messages from this device. Agents, memory and artifacts are kept.</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+              <div style="height:12px"></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>10</b> Privacy &amp; security</div>
+      </div>
+
+      <!-- ==================== 11 · CHAT PREFERENCES ==================== -->
+      <div class="slot" id="p-chatprefs">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="detailbar">
+              <button class="iconbtn" type="button" aria-label="Back" data-go="settings"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+              <div class="dt">Chat preferences</div>
+            </div>
+
+            <div class="scroll">
+              <div class="seclabel" style="padding-top:10px"><span>Composer</span></div>
+              <div class="group">
+                <div class="srow">
+                  <span class="sic tint"><svg class="ic" aria-hidden="true"><use href="#i-send"/></svg></span>
+                  <span class="slabel"><span class="t">Send with Enter</span><span class="s">Off means Enter adds a new line</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="true" aria-label="Send with Enter"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></span>
+                  <span class="slabel"><span class="t">Hold to record voice</span><span class="s">Mic button records instead of dictating</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="true" aria-label="Hold to record voice"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-attach"/></svg></span>
+                  <span class="slabel"><span class="t">Preview before sending</span><span class="s">Confirm links and files first</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="false" aria-label="Preview before sending"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+              </div>
+
+              <div class="seclabel"><span>Thread</span></div>
+              <div class="group">
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-chatpref"/></svg></span>
+                  <span class="slabel"><span class="t">Typing indicators</span><span class="s">Show when an agent is responding</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="true" aria-label="Typing indicators"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg></span>
+                  <span class="slabel"><span class="t">Auto-play media</span><span class="s">GIFs and video previews in chat</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="false" aria-label="Auto-play media"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+                <div class="srow">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg></span>
+                  <span class="slabel"><span class="t">Agent activity cards</span><span class="s">Inline artifact previews in replies</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="true" aria-label="Agent activity cards"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+              </div>
+
+              <div class="seclabel"><span>Default for new chats</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-toast="Default agent: Webpage Developer">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span>
+                  <span class="slabel"><span class="t">Default agent</span></span>
+                  <span class="sval">Webpage Developer</span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-toast="Archived chats: after 30 days">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg></span>
+                  <span class="slabel"><span class="t">Auto-archive chats</span></span>
+                  <span class="sval">After 30 days</span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+              <div style="height:12px"></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>11</b> Chat preferences</div>
+      </div>
+
+      <!-- ==================== 12 · STORAGE ==================== -->
+      <div class="slot" id="p-storage">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="detailbar">
+              <button class="iconbtn" type="button" aria-label="Back" data-go="settings"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+              <div class="dt">Storage</div>
+            </div>
+
+            <div class="scroll">
+              <div class="usage">
+                <div class="utop"><b>On this device</b><span>37 documents · 12 saved chats</span></div>
+                <div class="ubar" aria-hidden="true">
+                  <i style="width:76%;background:#42d982"></i>
+                  <i style="width:24%;background:#087c45"></i>
+                </div>
+                <div class="ulegend">
+                  <div class="uleg"><span class="udot" style="background:#42d982"></span>Artifacts<b>37</b></div>
+                  <div class="uleg"><span class="udot" style="background:#087c45"></span>Chat history<b>12</b></div>
+                </div>
+                <div class="legal" style="padding:8px 0 0">Stored locally on this phone.</div>
+              </div>
+
+              <div class="seclabel"><span>Clean up</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-toast="Cached previews · not available yet">
+                  <span class="sic tint"><svg class="ic" aria-hidden="true"><use href="#i-db"/></svg></span>
+                  <span class="slabel"><span class="t">Cached previews</span><span class="s">Not available yet</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-toast="Old chat media · not available yet">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg></span>
+                  <span class="slabel"><span class="t">Old chat media</span><span class="s">Not available yet</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-toast="Agent logs · not available yet">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-filetext"/></svg></span>
+                  <span class="slabel"><span class="t">Agent logs</span><span class="s">Not available yet</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>Artifact library</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-toast="37 documents · Saved replies">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-file"/></svg></span>
+                  <span class="slabel"><span class="t">All artifacts</span><span class="s">37 documents · Saved replies</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+              <div class="legal">Everything here lives only on this phone. Nothing is synced to the cloud or other devices.</div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>12</b> Storage</div>
+      </div>
+
+      <!-- ==================== 13 · LANGUAGE ==================== -->
+      <div class="slot" id="p-language">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="detailbar">
+              <button class="iconbtn" type="button" aria-label="Back" data-go="settings"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+              <div class="dt">Language</div>
+            </div>
+
+            <div class="scroll">
+              <div class="seclabel" style="padding-top:10px"><span>App language</span><span id="langCurrent">English (US)</span></div>
+              <div class="group" role="radiogroup" aria-label="App language">
+                <button class="langrow" type="button" data-set-lang="English (US)" aria-checked="true">
+                  <span class="lt">English <span class="ln">(United States)</span></span>
+                  <span class="radio is-on"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span>
+                </button>
+                <button class="langrow" type="button" data-set-lang="English (UK)" aria-checked="false">
+                  <span class="lt">English <span class="ln">(United Kingdom)</span></span>
+                  <span class="radio"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span>
+                </button>
+                <button class="langrow" type="button" data-set-lang="हिन्दी" aria-checked="false">
+                  <span class="lt">हिन्दी <span class="ln">Hindi</span></span>
+                  <span class="radio"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span>
+                </button>
+                <button class="langrow" type="button" data-set-lang="Español" aria-checked="false">
+                  <span class="lt">Español <span class="ln">Spanish</span></span>
+                  <span class="radio"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span>
+                </button>
+                <button class="langrow" type="button" data-set-lang="日本語" aria-checked="false">
+                  <span class="lt">日本語 <span class="ln">Japanese</span></span>
+                  <span class="radio"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span>
+                </button>
+                <button class="langrow" type="button" data-set-lang="العربية" aria-checked="false">
+                  <span class="lt">العربية <span class="ln">Arabic</span></span>
+                  <span class="radio"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>Agent replies</span></div>
+              <div class="group">
+                <div class="srow">
+                  <span class="sic tint"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg></span>
+                  <span class="slabel"><span class="t">Always reply in app language</span><span class="s">Agents will match your language choice</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="true" aria-label="Always reply in app language"><span class="track"></span><span class="thumb"></span></button>
+                </div>
+                <button class="srow" type="button" data-toast="Reply language: Auto-detect">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg></span>
+                  <span class="slabel"><span class="t">Agent language</span></span>
+                  <span class="sval">Auto-detect</span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+              <div class="legal">Some agents and community posts may still appear in their original language.</div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>13</b> Language</div>
+      </div>
+
+      <!-- ==================== 14 · ABOUT ==================== -->
+      <div class="slot" id="p-about">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="detailbar">
+              <button class="iconbtn" type="button" aria-label="Back" data-go="settings"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+              <div class="dt">About</div>
+            </div>
+
+            <div class="scroll">
+              <div class="about-hero">
+                <img class="mark-lg" src="images/orhan-mark.png" alt="Orhan AI logo">
+                <img class="wm-lg lt" src="images/orhan-wordmark.png" alt="Orhan AI">
+                <img class="wm-lg dk" src="images/orhan-wordmark-dark.png" alt="" aria-hidden="true">
+                <div class="ver">Version 1.8.2 · build 1820</div>
+                <p>A messenger where people and AI agents work in the same threads.</p>
+              </div>
+
+              <div class="seclabel"><span>Legal</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-toast="Opening Terms of Service">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-filetext"/></svg></span>
+                  <span class="slabel"><span class="t">Terms of service</span><span class="s">Effective 1 August 2026</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-toast="Opening Privacy policy">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span>
+                  <span class="slabel"><span class="t">Privacy policy</span><span class="s">How your chats are stored and processed</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-toast="Opening open-source licenses">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-file"/></svg></span>
+                  <span class="slabel"><span class="t">Open-source licenses</span><span class="s">Lato, Material 3 and 42 libraries</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>Support</span></div>
+              <div class="group">
+                <button class="srow" type="button" data-toast="support@orhan.ai (domain soon)">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg></span>
+                  <span class="slabel"><span class="t">Contact support</span></span>
+                  <span class="sval">support@orhan.ai (domain soon)</span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+                <button class="srow" type="button" data-toast="Check for updates — you’re on the latest build">
+                  <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg></span>
+                  <span class="slabel"><span class="t">Check for updates</span><span class="s">Last checked today</span></span>
+                  <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
+                </button>
+              </div>
+
+              <div class="legal">
+                Orhan AI · made with Lato<br>
+                © 2026 Orhan Labs. All rights reserved.<br>
+                Package aiorhan.android · 1.8.2 (1820)
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption"><b>14</b> About</div>
+      </div>
+
+    </div><!-- /stage -->
+
+    <!-- ============ NOTES COLUMN ============ -->
+    <aside class="notes" aria-label="Screen notes">
+      <div class="note">
+        <div class="kicker">Now showing</div>
+        <h4 id="noteTitle">Home / Chats</h4>
+        <p id="noteBody">Top bar with the real Orhan lockup, search and settings. Recent chats mix agents (mint spark + presence dot) with people and groups. Bottom nav uses the M3 58×30 active indicator.</p>
+        <ul id="noteList">
+          <li><b>4 nav destinations</b> — Chats, Agents, Discover, Profile</li>
+          <li><b>Touch targets</b> — every row ≥ 72px tall</li>
+        </ul>
+      </div>
+
+      <div class="note">
+        <div class="kicker">Brand tokens · unchanged from v1</div>
+        <div class="kv"><span>Primary</span><b>#087c45</b></div>
+        <div class="kv"><span>Logo mint</span><b>#42d982</b></div>
+        <div class="kv"><span>Dark canvas</span><b>#141816</b></div>
+        <div class="kv"><span>Light canvas</span><b>#eef2ef</b></div>
+        <div class="kv"><span>Typeface</span><b>Lato 400/700/900</b></div>
+      </div>
+
+      <div class="note">
+        <div class="kicker">Navigation map</div>
+        <ul>
+          <li>Nav: Chats → Home, Agents → Agents, Discover, Profile</li>
+          <li>Profile → Edit profile / Settings / Privacy</li>
+          <li>Settings → Appearance, Notifications, Chat prefs, Privacy, Storage, Language, About</li>
+          <li>Every detail screen has a working back arrow</li>
+        </ul>
+      </div>
+    </aside>
+
+  </div><!-- /board -->
+
+  <!-- ==================== SPEC ==================== -->
+  <section class="specwrap" aria-labelledby="spec-h">
+    <h2 class="spec-title" id="spec-h">Design system</h2>
+    <div class="specgrid">
+
+      <div class="card">
+        <h3>Bottom navigation</h3>
+        <p>4 destinations, 80px bar, one 48px+ target per item, M3 active indicator pill — present on all 5 main screens.</p>
+        <div class="navanatomy">
+          <div class="anat"><div class="box"><svg class="ic" aria-hidden="true"><use href="#i-chats"/></svg><span class="sz">48</span></div><div class="nm">Chats</div></div>
+          <div class="anat"><div class="box"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg><span class="sz">48</span></div><div class="nm">Agents</div></div>
+          <div class="anat"><div class="box"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg><span class="sz">48</span></div><div class="nm">Discover</div></div>
+          <div class="anat"><div class="box"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg><span class="sz">48</span></div><div class="nm">Profile</div></div>
+        </div>
+        <ul class="toklist" style="margin-top:18px">
+          <li><span>Bar height</span><b class="mono">80px + safe area</b></li>
+          <li><span>Active indicator</span><b class="mono">58 × 30 pill</b></li>
+          <li><span>Settings row</span><b class="mono">60px · 38px icon tile</b></li>
+          <li><span>Switch target</span><b class="mono">56 × 48 (52×32 track)</b></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Brand palette</h3>
+        <p>Identical to v1 — values read from Orhan’s production CSS, not approximated.</p>
+        <div class="swatches">
+          <div class="sw"><div class="chipc" style="background:#087c45"></div><div class="meta"><div class="nm">Primary</div><div class="hx">#087c45</div></div></div>
+          <div class="sw"><div class="chipc" style="background:#42d982"></div><div class="meta"><div class="nm">Logo mint</div><div class="hx">#42d982</div></div></div>
+          <div class="sw"><div class="chipc" style="background:#cbe7d2"></div><div class="meta"><div class="nm">Brand soft</div><div class="hx">#cbe7d2</div></div></div>
+          <div class="sw"><div class="chipc" style="background:#182b23"></div><div class="meta"><div class="nm">Ink</div><div class="hx">#182b23</div></div></div>
+          <div class="sw"><div class="chipc" style="background:#141816"></div><div class="meta"><div class="nm">Dark canvas</div><div class="hx">#141816</div></div></div>
+          <div class="sw"><div class="chipc" style="background:#eef2ef"></div><div class="meta"><div class="nm">Light canvas</div><div class="hx">#eef2ef</div></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Theme model</h3>
+        <p>One resolver, three modes — System, Day, Night — persisted and reflected in Settings and Appearance.</p>
+        <ul class="toklist">
+          <li><span>Storage key</span><b class="mono">orhan-theme-mode</b></li>
+          <li><span>System mode</span><b>prefers-color-scheme</b></li>
+          <li><span>App bar toggle</span><b class="mono">Sun / moon</b></li>
+          <li><span>Appearance radios</span><b>change real theme</b></li>
+          <li><span>Contrast</span><b>AA on all text pairs</b></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Type &amp; shape</h3>
+        <p>Lato is the brand typeface — self-hosted here at 400 / 700 / 900.</p>
+        <ul class="toklist">
+          <li><span>Display / profile name</span><b>Lato 900 · 21px</b></li>
+          <li><span>Screen title</span><b class="mono">Lato 700 · 17px</b></li>
+          <li><span>Row title</span><b class="mono">Lato 700 · 15px</b></li>
+          <li><span>Body / bubble</span><b class="mono">Lato 400 · 14.5px</b></li>
+          <li><span>Settings group</span><b class="mono">20px radius</b></li>
+          <li><span>Touch target</span><b class="mono">≥ 48px</b></li>
+        </ul>
+      </div>
+
+    </div>
+  </section>
+
+  <footer>
+    <b>Orhan AI — complete Android UI mockup.</b> Material 3, mobile-first at a 390px base, 14 screens.<br>
+    Brand palette — green-700 <span class="mono">#087c45</span>, brand soft <span class="mono">#cbe7d2</span>, dark canvas <span class="mono">#141816</span>, light canvas <span class="mono">#eef2ef</span>, <span class="mono">--font-sans: Lato</span>. Logo: Orhan AI hexagon orbit-O mark + wordmark.
+  </footer>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var THEME_KEY = 'orhan-theme-mode';
+
+  /* ---------------- theme engine ---------------- */
+  var MODE_LABEL = { system: 'System', light: 'Day', dark: 'Night' };
+
+  function systemTheme() {
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  function getMode() {
+    try { return localStorage.getItem(THEME_KEY) || 'dark'; } catch (e) { return 'dark'; }
+  }
+  function resolveTheme(mode) { return mode === 'system' ? systemTheme() : mode; }
+
+  function paintChrome(mode) {
+    var theme = resolveTheme(mode);
+    root.setAttribute('data-theme', theme);
+    root.setAttribute('data-theme-mode', mode);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0d1110' : '#eef2ef');
+
+    /* page-level segmented control */
+    Array.prototype.forEach.call(document.querySelectorAll('[data-mode-btn]'), function (b) {
+      var on = b.getAttribute('data-mode-btn') === mode;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    /* Appearance radio cards */
+    Array.prototype.forEach.call(document.querySelectorAll('[data-set-mode]'), function (c) {
+      var on = c.getAttribute('data-set-mode') === mode;
+      c.classList.toggle('is-on', on);
+      c.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    /* labels that echo the mode */
+    var t = MODE_LABEL[mode] + (mode === 'system' ? ' (follows device)' : '');
+    ['setThemeVal', 'qaTheme', 'apCurrent'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = id === 'apCurrent' ? MODE_LABEL[mode] : (MODE_LABEL[mode] === 'System' ? 'System default' : MODE_LABEL[mode] + ' mode');
+    });
+  }
+
+  function setMode(mode) {
+    try { localStorage.setItem(THEME_KEY, mode); } catch (e) {}
+    paintChrome(mode);
+  }
+
+  paintChrome(getMode());
+
+  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', function () {
+    if (getMode() === 'system') paintChrome('system');
+  });
+
+  /* ---------------- toast ---------------- */
+  var toastEl = document.getElementById('toast');
+  var toastTimer = null;
+  function toast(msg) {
+    if (!toastEl) return;
+    toastEl.textContent = msg;
+    toastEl.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('on'); }, 2300);
+  }
+
+  /* ---------------- navigation ---------------- */
+  var isNarrow = function () { return window.matchMedia('(max-width:760px)').matches; };
+  var slots = Array.prototype.slice.call(document.querySelectorAll('.slot'));
+  var railBtns = Array.prototype.slice.call(document.querySelectorAll('.rail [data-go]'));
+
+  var NOTES = {
+    home:        ['Home / Chats', 'Top bar with the real Orhan lockup, search and settings. Recent chats mix agents (mint spark + presence dot) with people and groups.', ['<b>4 nav destinations</b> — Chats, Agents, Discover, Profile', '<b>Every row</b> ≥ 72px tall']],
+    chat:        ['Chat', 'Agent thread at 14.5px with user and AI bubbles, an inline artifact card, and a composer with attach, mic and send.', ['<b>Send works</b> — type and press send; a reply comes back', '<b>Composer</b> 52px field, 48px send button']],
+    agents:      ['Agents', 'Four real agents with status pills, descriptions and an Open CTA that jumps into the chat thread.', ['<b>Open CTA</b> 48px tall', '<b>Create agent</b> dashed row at the end']],
+    discover:    ['Discover', 'Featured agent hero on brand green, a trend grid, and a social feed of what people you follow shared.', ['<b>Hero CTA</b> 48px', '<b>2-up cards</b> with tag footer']],
+    profile:     ['Profile', 'Avatar with verified badge, name and email, a 3-up stats row, four quick actions and an account section. Sign out opens a real bottom sheet.', ['<b>Stats</b> Chats / Agents / Artifacts', '<b>Sign out</b> → confirm sheet']],
+    settings:    ['Settings', 'Full list grouped by Account, Look & feel, Messages, Data and Support. Every row opens a real screen or shows a value.', ['<b>Appearance</b> shows the live mode', '<b>Sign out</b> at the bottom']],
+    appearance:  ['Appearance / Theme', 'Three radio cards with hand-drawn theme previews — System, Night, Day. Tapping one switches the whole app immediately, and a live preview block below shows the result.', ['<b>Persisted</b> in localStorage', '<b>Preview block</b> uses real tokens']],
+    editprofile: ['Edit profile', 'Avatar picker with three faces, name, email, handle and bio fields, and a Save action in the app bar plus a primary button.', ['<b>Save</b> updates Profile and Settings', '<b>Inputs</b> 52px, focus ring on green']],
+    notifications: ['Notifications', 'Per-type switches: push master, DMs, agent replies, suggestions, community, plus email and behaviour rows.', ['<b>7 switches</b> · master + 5 types + digest', '<b>Switch</b> 56×48 target']],
+    privacy:     ['Privacy & security', 'App lock, passcode, 2FA, read receipts, agent history sharing, a blocked-users list with unblock actions and data controls.', ['<b>Blocked users</b> with Unblock CTAs', '<b>Danger row</b> in red for clearing history']],
+    chatprefs:   ['Chat preferences', 'Composer and thread behaviour — send with Enter, hold to record, typing indicators, auto-play and agent activity cards.', ['<b>3 composer</b> + <b>3 thread</b> toggles', '<b>Defaults</b> for new chats']],
+    storage:     ['Storage', 'On-device summary (37 documents · 12 saved chats) with Artifacts and Chat history counts. Clean-up rows are placeholders marked Not available yet; no cloud quota.', ['<b>Local only</b> — stored on this phone', '<b>Counts</b>, not fake GB']],
+    language:    ['Language', 'Six languages as radio rows, plus an "always reply in app language" switch. Picking one updates the value shown on Settings.', ['<b>Radio rows</b> 58px tall', '<b>Syncs</b> back to Settings']],
+    about:       ['About', 'Real Orhan mark and wordmark, version and build, legal rows for terms, privacy and open-source licenses, and support contacts.', ['<b>Version</b> 1.8.2 (1820)', '<b>3 legal</b> rows + support']]
+  };
+
+  function go(screen) {
+    document.body.setAttribute('data-screen', screen);
+    slots.forEach(function (s) { s.classList.toggle('is-active', s.id === 'p-' + screen); });
+    railBtns.forEach(function (b) {
+      b.classList.toggle('is-on', b.getAttribute('data-go') === screen);
+    });
+    var n = NOTES[screen];
+    if (n) {
+      var t = document.getElementById('noteTitle');
+      var b = document.getElementById('noteBody');
+      var l = document.getElementById('noteList');
+      if (t) t.textContent = n[0];
+      if (b) b.textContent = n[1];
+      if (l) l.innerHTML = n[2].map(function (x) { return '<li>' + x + '</li>'; }).join('');
+    }
+    if (isNarrow()) {
+      var sc = document.querySelector('#p-' + screen + ' .scroll');
+      if (sc) sc.scrollTop = 0;
+    }
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  /* ---------------- global click delegation ---------------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+
+    var modeBtn = t.closest && t.closest('[data-mode-btn]');
+    if (modeBtn) { setMode(modeBtn.getAttribute('data-mode-btn')); return; }
+
+    var setModeBtn = t.closest && t.closest('[data-set-mode]');
+    if (setModeBtn) {
+      var m = setModeBtn.getAttribute('data-set-mode');
+      setMode(m);
+      toast('Theme: ' + (m === 'system' ? 'System default' : MODE_LABEL[m] + ' mode'));
+      return;
+    }
+
+    var themeToggle = t.closest && t.closest('[data-theme-toggle]');
+    if (themeToggle) {
+      var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      setMode(next);
+      toast('Switched to ' + MODE_LABEL[next] + ' mode');
+      return;
+    }
+
+    var sw = t.closest && t.closest('[role="switch"]');
+    if (sw) {
+      var on = sw.getAttribute('aria-checked') === 'true';
+      sw.setAttribute('aria-checked', on ? 'false' : 'true');
+      return;
+    }
+
+    var langRow = t.closest && t.closest('[data-set-lang]');
+    if (langRow) {
+      var lang = langRow.getAttribute('data-set-lang');
+      Array.prototype.forEach.call(document.querySelectorAll('.langrow'), function (r) {
+        var isOn = r === langRow;
+        r.setAttribute('aria-checked', isOn ? 'true' : 'false');
+        var rad = r.querySelector('.radio');
+        if (rad) rad.classList.toggle('is-on', isOn);
+      });
+      var lc = document.getElementById('langCurrent');
+      if (lc) lc.textContent = lang;
+      var sl = document.getElementById('setLangVal');
+      if (sl) sl.textContent = lang;
+      toast('Language: ' + lang);
+      return;
+    }
+
+    var av = t.closest && t.closest('[data-avatar]');
+    if (av) {
+      var src = av.getAttribute('data-avatar');
+      Array.prototype.forEach.call(document.querySelectorAll('.avchip'), function (c) { c.classList.toggle('is-on', c === av); });
+      var pa = document.getElementById('editAva');
+      if (pa) pa.src = src;
+      return;
+    }
+
+    var closeSheet = t.closest && t.closest('[data-close-sheet]');
+    if (closeSheet) {
+      Array.prototype.forEach.call(document.querySelectorAll('.sheet'), function (s) { s.classList.remove('on'); });
+      var msg = closeSheet.getAttribute('data-toast');
+      if (msg) toast(msg);
+      return;
+    }
+
+    var sheetBtn = t.closest && t.closest('[data-sheet]');
+    if (sheetBtn) {
+      var phone = sheetBtn.closest('.screen');
+      var sheet = phone && phone.querySelector('.sheet');
+      if (sheet) sheet.classList.add('on');
+      return;
+    }
+
+    var elg = t.closest && t.closest('[data-go],[data-toast]');
+    if (!elg) return;
+    if (elg.hasAttribute('data-go')) {
+      e.preventDefault();
+      go(elg.getAttribute('data-go'));
+      return;
+    }
+    var m2 = elg.getAttribute('data-toast');
+    if (m2) toast(m2);
+  });
+
+  /* Esc closes sheets */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      Array.prototype.forEach.call(document.querySelectorAll('.sheet'), function (s) { s.classList.remove('on'); });
+    }
+  });
+
+  /* ---------------- composer ---------------- */
+  var form = document.getElementById('composer');
+  var input = document.getElementById('msg');
+  var thread = document.getElementById('thread');
+  var scroller = document.getElementById('threadScroll');
+  var typing = document.getElementById('typing');
+
+  function stamp() {
+    var d = new Date(); var h = d.getHours(); var m = d.getMinutes();
+    var ap = h >= 12 ? 'PM' : 'AM'; h = h % 12; if (h === 0) h = 12;
+    return h + ':' + (m < 10 ? '0' + m : m) + ' ' + ap;
+  }
+  function scrollDown() { if (scroller) scroller.scrollTop = scroller.scrollHeight; }
+
+  function addMsg(text, isUser) {
+    var wrap = document.createElement('div');
+    wrap.className = 'msg ' + (isUser ? 'user' : 'agent');
+    if (!isUser) {
+      var ava = document.createElement('span');
+      ava.className = 'ava';
+      var img = document.createElement('img');
+      img.src = 'images/agent-webpage.png'; img.alt = '';
+      ava.appendChild(img); wrap.appendChild(ava);
+    }
+    var b = document.createElement('div');
+    b.className = 'bubble';
+    b.appendChild(document.createTextNode(text));
+    var mt = document.createElement('div');
+    mt.className = 'mt';
+    mt.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#' + (isUser ? 'i-check' : 'i-spark') + '"/></svg>';
+    mt.appendChild(document.createTextNode(stamp()));
+    b.appendChild(mt);
+    wrap.appendChild(b);
+    thread.insertBefore(wrap, typing);
+    scrollDown();
+  }
+
+  if (input) {
+    input.addEventListener('input', function () {
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 104) + 'px';
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (form) form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', { cancelable: true }));
+      }
+    });
+  }
+
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!input) return;
+      var v = input.value.trim();
+      if (!v) return;
+      addMsg(v, true);
+      input.value = ''; input.style.height = 'auto';
+      if (typing) typing.style.display = 'flex';
+      scrollDown();
+      setTimeout(function () {
+        if (typing) typing.style.display = 'none';
+        addMsg('Got it — I’m on that now. I’ll reply in this thread as soon as the draft is ready.', false);
+      }, 1100);
+    });
+  }
+
+  scrollDown();
+
+  /* ---------------- save profile ---------------- */
+  function saveProfile() {
+    var nm = document.getElementById('edName');
+    var em = document.getElementById('edEmail');
+    var av = document.getElementById('editAva');
+    if (nm) {
+      var n1 = document.getElementById('profileName'); if (n1) n1.textContent = nm.value || 'Fareed Khan';
+      var n2 = document.getElementById('setName'); if (n2) n2.textContent = nm.value || 'Fareed Khan';
+    }
+    if (em) {
+      var e1 = document.getElementById('profileEmail'); if (e1) e1.textContent = em.value || 'fareed.khan@gmail.com';
+      var e2 = document.getElementById('setEmail'); if (e2) e2.textContent = em.value || 'fareed.khan@gmail.com';
+    }
+    if (av) {
+      var p1 = document.getElementById('profileAva'); if (p1) p1.src = av.src;
+      var s1 = document.getElementById('setAva'); if (s1) s1.src = av.src;
+    }
+    toast('Profile updated');
+    go('profile');
+  }
+  ['saveProfile', 'saveProfile2'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', saveProfile);
+  });
+
+  /* initial notes */
+  go(document.body.getAttribute('data-screen') || 'home');
+})();
+</script>
+</body>
+</html>
