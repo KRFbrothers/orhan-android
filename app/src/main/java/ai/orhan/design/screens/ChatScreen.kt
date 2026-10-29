@@ -283,14 +283,18 @@ fun ChatScreen(
     fun send() {
         val text = input.trim()
         if (text.isEmpty() && attachment == null) return
-        if (previewBeforeSending && attachment == null) pendingPreview = text else deliver(text)
+        if (previewBeforeSending) pendingPreview = text else deliver(text)
     }
 
     pendingPreview?.let { draft ->
         AlertDialog(
             onDismissRequest = { pendingPreview = null },
             title = { Text("Send this message?") },
-            text = { Text(draft) },
+            text = {
+                val file = attachment
+                val label = file?.let { "\uD83D\uDCCE ${it.name} (${formatSize(it.sizeBytes)})" }
+                Text(listOfNotNull(label, draft.takeIf { it.isNotBlank() }).joinToString("\n\n"))
+            },
             confirmButton = {
                 TextButton(onClick = {
                     pendingPreview = null

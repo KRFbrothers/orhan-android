@@ -12,6 +12,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
+import java.security.MessageDigest
 
 private class FakeStore : DataStore<AppLockPrefs> {
     val state = MutableStateFlow(AppLockPrefs())
@@ -57,10 +59,54 @@ class AppLockStoreTest {
     }
 
     @Test fun serializerRoundTrip() = runBlocking {
-        val p = AppLockPrefs(true, "ab", "cd")
+        val p = AppLockPrefs(true, "ab", "cd", 3, 12345L)
         val out = ByteArrayOutputStream()
         AppLockPrefsSerializer.writeTo(p, out)
         assertEquals(p, AppLockPrefsSerializer.readFrom(ByteArrayInputStream(out.toByteArray())))
         assertEquals(AppLockPrefs(), AppLockPrefsSerializer.readFrom(ByteArrayInputStream(ByteArray(0))))
+    }
+
+    @Test fun pbkdf2KnownVectorAndNotSha256() {
+        val h = PinHash.hashPin("00112233445566778899aabbccddeeff", "1234")
+        val sha = MessageDigest.getInstance("SHA-256")
+            .digest("00112233445566778899aabbccddeeff1234".toByteArray()).joinToString("") { "%02x".format(it) }
+        assertNotEquals(sha, h)
+        // Reduced iterations give a different key (iterations are actually applied).
+        assertNotEquals(PinHash.hashPin("00112233445566778899aabbccddeeff", "1234", iterations = 1), h)
+    }
+
+    @Test fun legacyV1DataReadsAsDisabled() = runBlocking {
+        val out = ByteArrayOutputStream()
+        DataOutputStream(out).apply { writeInt(1); writeBoolean(true); writeUTF("ab"); writeUTF("cd"); flush() }
+        val p = AppLockPrefsSerializer.readFrom(ByteArrayInputStream(out.toByteArray()))
+        assertEquals(AppLockPrefs(), p)
+        assertFalse(p.enabled && p.hasPin)
+    }
+
+    @Test fun lockoutAfterFiveFailures() = runBlocking {
+        var now = 1_000_000L
+        val fake = FakeStore()
+        val store = AppLockStore(fake) { now }
+        store.setPin("2468")
+        repeat(4) { i -> assertEquals(PinAttempt.Wrong(4 - i), store.attempt("0000")) }
+        assertTrue(store.attempt("0000") is PinAttempt.LockedOut)
+        assertEquals(AppLockStore.LOCKOUT_MS, store.lockoutRemainingMs())
+        // Correct PIN refused during lockout; state persisted in prefs.
+        assertTrue(store.attempt("2468") is PinAttempt.LockedOut)
+        assertEquals(now + AppLockStore.LOCKOUT_MS, fake.state.value.lockoutUntilEpochMs)
+        now += AppLockStore.LOCKOUT_MS
+        assertEquals(0L, store.lockoutRemainingMs())
+        assertEquals(PinAttempt.Success, store.attempt("2468"))
+        assertEquals(0, fake.state.value.failedAttempts)
+    }
+
+    @Test fun successResetsCounter() = runBlocking {
+        val fake = FakeStore()
+        val store = AppLockStore(fake) { 0L }
+        store.setPin("2468")
+        repeat(3) { store.attempt("0000") }
+        assertEquals(3, fake.state.value.failedAttempts)
+        assertEquals(PinAttempt.Success, store.attempt("2468"))
+        assertEquals(PinAttempt.Wrong(4), store.attempt("0000"))
     }
 }

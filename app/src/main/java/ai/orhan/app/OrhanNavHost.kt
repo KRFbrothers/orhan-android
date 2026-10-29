@@ -37,9 +37,12 @@ import ai.orhan.design.screens.HomeScreen
 import ai.orhan.design.screens.OrhanChat
 import ai.orhan.data.history.recentChats
 import ai.orhan.data.history.pinnedChats
+import ai.orhan.data.agents.AgentSaveNav
 import ai.orhan.data.agents.SavedAgent
 import ai.orhan.data.agents.agentStore
 import ai.orhan.data.agents.mergeWithSamples
+import ai.orhan.data.agents.canonicalAgentTitle
+import ai.orhan.data.agents.navigationAfterAgentSave
 import ai.orhan.data.agents.toInstalledAgent
 import ai.orhan.design.theme.ThemeMode
 import ai.orhan.design.theme.themePreferences
@@ -100,6 +103,8 @@ fun OrhanNavHost(isDark: Boolean) {
     val pinnedTitles by pinRepo.pinned.collectAsStateWithLifecycle(initialValue = emptySet())
     val agentStore = remember(context) { context.agentStore() }
     val savedAgents by agentStore.agents.collectAsStateWithLifecycle(initialValue = emptyList())
+    // Canonical names (saved + samples) so "writer" and "Writer" share one thread/recent/pin key.
+    val canon: (String) -> String = { t -> canonicalAgentTitle(t, mergeWithSamples(savedAgents.map { it.toInstalledAgent() }).map { it.name }) }
     val memoryStore = remember(context) { context.memoryStore() }
     val artifactStore = remember(context) { context.artifactStore() }
     val artifacts by artifactStore.artifacts.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -131,8 +136,9 @@ fun OrhanNavHost(isDark: Boolean) {
                     }
                 },
                 onOpenChat = {
-                    scope.launch { recentRepo.recordOpened(it.title) }
-                    navController.navigate(AppRoutes.chat(it.title))
+                    val t = canon(it.title)
+                    scope.launch { recentRepo.recordOpened(t) }
+                    navController.navigate(AppRoutes.chat(t))
                 },
                 onOpenSettings = {
                     navController.navigate(SettingsRoutes.SETTINGS) { launchSingleTop = true }
@@ -164,13 +170,13 @@ fun OrhanNavHost(isDark: Boolean) {
                 } else null,
                 workflows = workflows,
                 onOpenWorkflow = { wf ->
-                    val chatTitle = wf.agentName.ifBlank { wf.title }
+                    val chatTitle = canon(wf.agentName.ifBlank { wf.title })
                     scope.launch { recentRepo.recordOpened(chatTitle) }
                     navController.navigate(AppRoutes.chat(chatTitle, wf.content))
                 },
                 onOpenPlaybook = { pb ->
                     // Chat route resolves saved/sample agent instructions by title, same as workflows.
-                    val chatTitle = pb.agentName.ifBlank { pb.title }
+                    val chatTitle = canon(pb.agentName.ifBlank { pb.title })
                     scope.launch { recentRepo.recordOpened(chatTitle) }
                     navController.navigate(AppRoutes.chat(chatTitle, pb.prompt))
                 },
@@ -252,28 +258,25 @@ fun OrhanNavHost(isDark: Boolean) {
                 existing = existing,
                 takenNames = savedAgents.map { it.name }.toSet(),
                 onCreated = { name, blurb, instructions, tools ->
-                    scope.launch {
-                        val previous = existing
-                        if (previous != null && !previous.name.equals(name, ignoreCase = true)) {
-                            agentStore.delete(previous.name)
+                    val previous = existing
+                    val result = agentStore.replace(
+                        previousName = previous?.name,
+                        agent = SavedAgent(
+                            name = name,
+                            blurb = blurb,
+                            instructions = instructions,
+                            tools = tools,
+                            createdAt = previous?.createdAt ?: System.currentTimeMillis(),
+                        ),
+                    )
+                    when (val nav = navigationAfterAgentSave(previous == null, result)) {
+                        is AgentSaveNav.OpenChat -> navController.navigate(AppRoutes.chat(canon(nav.name))) {
+                            popUpTo(AppRoutes.CREATE_AGENT) { inclusive = true }
                         }
-                        agentStore.upsert(
-                            SavedAgent(
-                                name = name,
-                                blurb = blurb,
-                                instructions = instructions,
-                                tools = tools,
-                                createdAt = previous?.createdAt ?: System.currentTimeMillis(),
-                            ),
-                        )
-                        if (previous == null) {
-                            navController.navigate(AppRoutes.chat(name)) {
-                                popUpTo(AppRoutes.CREATE_AGENT) { inclusive = true }
-                            }
-                        } else {
-                            navController.popBackStack()
-                        }
+                        AgentSaveNav.Close -> navController.popBackStack()
+                        is AgentSaveNav.Stay -> Unit
                     }
+                    result
                 },
             )
         }
@@ -301,7 +304,7 @@ fun OrhanNavHost(isDark: Boolean) {
             }
             val chatViewModel: ChatViewModel = viewModel { ChatViewModel(context as Application) }
             val chat by chatViewModel.state.collectAsStateWithLifecycle()
-            val title = entry.arguments?.getString("title").orEmpty()
+            val title = canon(entry.arguments?.getString("title").orEmpty())
             LaunchedEffect(title) { chatViewModel.loadThread(title) }
             val agent = savedAgents.firstOrNull { it.name.equals(title, ignoreCase = true) }
             chatViewModel.setAgent(agent?.name ?: title, agent?.instructions.orEmpty(), agent?.tools.orEmpty())

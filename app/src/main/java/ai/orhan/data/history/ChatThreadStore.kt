@@ -126,8 +126,14 @@ data class LoadedThread(val messages: List<ChatMessage>, val attachments: Map<Lo
  * so the DataStore file stays small. Pure java.io so it is unit-testable.
  */
 class AttachmentFiles(private val dir: File?, private val maxBytes: Long = MAX_ATTACHMENT_DISK_BYTES) {
+    /** First 16 hex chars of SHA-256(UTF-8 title); avoids 32-bit hashCode collisions. */
+    fun titleHash(threadTitle: String): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest(threadTitle.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }.take(16)
+
     fun fileNameFor(threadTitle: String, messageId: Long) =
-        "a_" + Integer.toHexString(threadTitle.hashCode()) + "_" + messageId + ".bin"
+        "a_" + titleHash(threadTitle) + "_" + messageId + ".bin"
 
     /** Writes the bytes if missing; returns metadata, or null if it could not be stored. */
     fun put(threadTitle: String, messageId: Long, a: ChatAttachment, decode: (String) -> ByteArray): StoredAttachment? {

@@ -85,3 +85,15 @@ class ChatAttachmentPersistenceTest {
         assertEquals(0L to 0, store.attachmentUsage())
     }
 }
+
+class AttachmentFileNameTest {
+    @Test fun collidingHashCodesGetDistinctNames() {
+        org.junit.Assert.assertEquals("Aa".hashCode(), "BB".hashCode())
+        org.junit.Assert.assertNotEquals(AttachmentFiles(null).fileNameFor("Aa", 1), AttachmentFiles(null).fileNameFor("BB", 1))
+    }
+    @Test fun nameIsStable() {
+        assertEquals(AttachmentFiles(null).fileNameFor("Writer", 7), AttachmentFiles(null).fileNameFor("Writer", 7))
+        assertEquals(16, AttachmentFiles(null).titleHash("Writer").length)
+        assertEquals("a_" + AttachmentFiles(null).titleHash("x") + "_7.bin", AttachmentFiles(null).fileNameFor("x", 7))
+    }
+}

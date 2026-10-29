@@ -37,15 +37,27 @@ internal fun specialistHeader(agentName: String): String = "$SPECIALIST_PREFIX$a
 private val HANDOFF_RE = Regex("""^\s*\**HANDOFF\**\s*:\s*(.+?)\s*\|\s*(.+?)\s*$""", setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE))
 
 /** Finds a `HANDOFF: Name | task` line naming a roster agent (case-insensitive). */
+/** Only the last non-blank line may carry HANDOFF (a quoted mid-body line is ignored). */
+private fun lastLine(reply: String): String = reply.trimEnd().lines().lastOrNull { it.isNotBlank() } ?: ""
+
 internal fun parseHandoff(reply: String, roster: List<RosterAgent>): Pair<RosterAgent, String>? {
-    val m = HANDOFF_RE.findAll(reply).lastOrNull() ?: return null
+    val m = HANDOFF_RE.matchEntire(lastLine(reply)) ?: return null
     val name = m.groupValues[1].trim().trim('*', '"', '<', '>')
     val agent = roster.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: return null
     val task = m.groupValues[2].trim()
     return if (task.isEmpty()) null else agent to task
 }
 
-internal fun stripHandoff(reply: String): String = reply.replace(HANDOFF_RE, "").trim()
+internal fun stripHandoff(reply: String): String {
+    val trimmed = reply.trimEnd()
+    val last = lastLine(trimmed)
+    if (!HANDOFF_RE.matches(last)) return reply.trim()
+    return trimmed.substring(0, trimmed.lastIndexOf(last)).trim()
+}
+
+/** Folds preface blocks into one hidden user turn + one model ack (2 turns total). */
+internal fun prefacePair(blocks: List<String>, ack: String): List<ChatTurn> =
+    listOf(ChatTurn("user", blocks.filter { it.isNotBlank() }.joinToString("\n\n---\n\n")), ChatTurn("model", ack))
 
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
@@ -167,27 +179,18 @@ class ChatViewModel(
 
     /** Prepends hidden user/model preface turns (engine only supports those roles); never shown in UI. */
     internal fun withPreface(uiTurns: List<ChatTurn>): List<ChatTurn> {
-        val preface = buildList {
-            add(ChatTurn("user", orhanIdentity(agentName)))
-            add(ChatTurn("model", "Understood. I'm Orhan."))
-            if (personalMemory.isNotBlank()) {
-                add(ChatTurn("user", "Personal context about the user (use when relevant):\n$personalMemory"))
-                add(ChatTurn("model", "Understood. I'll use that context when helpful."))
-            }
-            rosterPreface()?.let {
-                add(ChatTurn("user", it))
-                add(ChatTurn("model", "Understood. I'll delegate with a HANDOFF line when a specialist fits."))
-            }
+        val blocks = buildList {
+            add(orhanIdentity(agentName))
+            if (personalMemory.isNotBlank()) add("Personal context about the user (use when relevant):\n$personalMemory")
+            rosterPreface()?.let { add(it) }
             if (instructions.isNotBlank()) {
-                val toolsLine = "\n\n" + AgentToolGuidance.text(tools)
-                add(ChatTurn("user", "You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions$toolsLine"))
-                add(ChatTurn("model", "Understood. I'll follow those instructions."))
+                add("You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions\n\n" + AgentToolGuidance.text(tools))
             } else if (tools.isNotEmpty()) {
-                add(ChatTurn("user", AgentToolGuidance.text(tools)))
-                add(ChatTurn("model", "Understood. I'll use those tools when helpful."))
+                add(AgentToolGuidance.text(tools))
             }
         }
-        // preface + UI turns = 20, matching ChatRepository's takeLast(20) so the preface is never dropped.
+        val preface = prefacePair(blocks, "Understood. I'm Orhan. I'll follow all of that.")
+        // 2 preface turns + 18 UI turns = 20, matching ChatRepository's takeLast(20) so the preface is never dropped.
         return preface + uiTurns.takeLast(20 - preface.size)
     }
 
@@ -235,9 +238,7 @@ class ChatViewModel(
 
     private fun streamReply() {
         streamJob?.cancel()
-        val turns = withPreface(_state.value.messages.map {
-            ChatTurn(if (it.role == ChatRole.User) "user" else "model", it.text, listOfNotNull(attachmentsById[it.id]))
-        })
+        val turns = withPreface(turnsForApi(_state.value.messages, attachmentsById))
         val replyId = nextId()
         streamJob = viewModelScope.launch {
             var streamed = false
@@ -284,17 +285,16 @@ class ChatViewModel(
                 if (m.id == orhanReplyId) m.copy(text = stripHandoff(m.text) + "\n\n\u21AA Assigned to ${agent.name}: $task") else m
             }, loading = true)
         }
+        val lastUser = turnsForApi(_state.value.messages, attachmentsById).lastOrNull { it.role == "user" }
         val turns = buildList {
-            add(ChatTurn("user", orhanIdentity(agent.name)))
-            add(ChatTurn("model", "Understood. I'm ${agent.name}."))
-            if (personalMemory.isNotBlank()) {
-                add(ChatTurn("user", "Personal context about the user (use when relevant):\n$personalMemory"))
-                add(ChatTurn("model", "Understood."))
-            }
-            if (agent.instructions.isNotBlank()) {
-                val toolsLine = "\n\n" + AgentToolGuidance.text(agent.tools)
-                add(ChatTurn("user", "You are the agent named \"${agent.name}\". Follow these system instructions:\n${agent.instructions}$toolsLine"))
-                add(ChatTurn("model", "Understood. I'll follow those instructions."))
+            addAll(prefacePair(buildList {
+                add(orhanIdentity(agent.name))
+                if (personalMemory.isNotBlank()) add("Personal context about the user (use when relevant):\n$personalMemory")
+                if (agent.instructions.isNotBlank()) add("You are the agent named \"${agent.name}\". Follow these system instructions:\n${agent.instructions}\n\n" + AgentToolGuidance.text(agent.tools))
+            }, "Understood. I'm ${agent.name}."))
+            if (lastUser != null) {
+                add(lastUser) // user's latest message, with its attachment bytes
+                add(ChatTurn("model", "Noted."))
             }
             add(ChatTurn("user", "Orhan (the main agent) assigned you this task from the user. Do it fully and reply directly to the user:\n$task"))
         }
@@ -327,4 +327,19 @@ class ChatViewModel(
     fun clearError() = _state.update { it.copy(error = null) }
 
     private fun nextId() = (_state.value.messages.lastOrNull()?.id ?: 0L) + 1L
+}
+
+/**
+ * Maps UI messages to API turns. Only the latest user turn carries attachment bytes;
+ * older turns keep their `📎 name` text but send no attachments (avoids re-uploading files every message).
+ */
+internal fun turnsForApi(messages: List<ChatMessage>, attachmentsById: Map<Long, ChatAttachment>): List<ChatTurn> {
+    val lastUserId = messages.lastOrNull { it.role == ChatRole.User }?.id
+    return messages.map {
+        ChatTurn(
+            if (it.role == ChatRole.User) "user" else "model",
+            it.text,
+            if (it.id == lastUserId) listOfNotNull(attachmentsById[it.id]) else emptyList(),
+        )
+    }
 }
