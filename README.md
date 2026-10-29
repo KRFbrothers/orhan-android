@@ -4,8 +4,8 @@ Open `index.html` in a browser. It is fully self-contained: the Lato fonts, the 
 every agent/user avatar ship in `fonts/` and `images/`, so it renders with no network access and no build
 step.
 
-Also live at (Orhan preview, hosted on legacy URL):
-**https://static.teamily.ai/sites/a92f0e27-0c1b-40b9-a4fc-6c4aba860bbf/webpages/teamily-android-app_v4/index.html**
+Live on GitHub Pages:
+**https://krfbrothers.github.io/orhan-android/** (M3 gallery: https://krfbrothers.github.io/orhan-android/m3-gallery.html)
 
 ## What the page contains
 
