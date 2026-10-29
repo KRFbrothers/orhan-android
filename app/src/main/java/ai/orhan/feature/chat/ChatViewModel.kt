@@ -25,6 +25,25 @@ import ai.orhan.data.history.ChatThreadStore
 import ai.orhan.data.history.chatThreads
 import kotlinx.coroutines.launch
 
+/** A specialist agent Orhan can delegate to. */
+data class RosterAgent(val name: String, val blurb: String, val instructions: String, val tools: List<String> = emptyList())
+
+/** Visible label prefix on a specialist reply inside the Orhan thread. */
+const val SPECIALIST_PREFIX = "\uD83E\uDD1D "
+
+private val HANDOFF_RE = Regex("""^\s*\**HANDOFF\**\s*:\s*(.+?)\s*\|\s*(.+?)\s*$""", setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE))
+
+/** Finds a `HANDOFF: Name | task` line naming a roster agent (case-insensitive). */
+internal fun parseHandoff(reply: String, roster: List<RosterAgent>): Pair<RosterAgent, String>? {
+    val m = HANDOFF_RE.findAll(reply).lastOrNull() ?: return null
+    val name = m.groupValues[1].trim().trim('*', '"', '<', '>')
+    val agent = roster.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: return null
+    val task = m.groupValues[2].trim()
+    return if (task.isEmpty()) null else agent to task
+}
+
+internal fun stripHandoff(reply: String): String = reply.replace(HANDOFF_RE, "").trim()
+
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val loading: Boolean = false,
@@ -95,6 +114,27 @@ class ChatViewModel(
         agentName = name; this.instructions = instructions.trim(); this.tools = tools
     }
 
+    /** Other agents Orhan may delegate to (only set when chatting as Orhan, not a specialist). */
+    private var roster: List<RosterAgent> = emptyList()
+
+    /** Sets the delegation roster. Pass empty when this chat is itself a specialist agent. Idempotent. */
+    fun setRoster(agents: List<RosterAgent>) {
+        roster = agents.filter { it.name.isNotBlank() && !it.name.equals("Orhan", ignoreCase = true) }
+    }
+
+    /** Hidden preface turn telling Orhan who it controls and how to hand off. */
+    internal fun rosterPreface(): String? {
+        if (roster.isEmpty()) return null
+        val lines = roster.joinToString("\n") { a ->
+            val about = (a.blurb.ifBlank { a.instructions }).replace('\n', ' ').take(160)
+            "- ${a.name}: $about"
+        }
+        return "You are Orhan, the main controller agent. The user has these specialist agents you can assign work to:\n$lines\n" +
+            "Rules: answer simple things yourself. When a task clearly fits one specialist, write one short sentence saying you're handing it off, " +
+            "then on its own last line write exactly: HANDOFF: <AgentName> | <complete task for that agent, including details the user gave>. " +
+            "Use only names from the list. At most one HANDOFF per reply. Never invent results for the specialist; the app runs that agent and shows its reply."
+    }
+
     private var personalMemory: String = ""
 
     /** Display name of the user's chosen reply language, or null to mirror the user's language. */
@@ -130,6 +170,10 @@ class ChatViewModel(
             if (personalMemory.isNotBlank()) {
                 add(ChatTurn("user", "Personal context about the user (use when relevant):\n$personalMemory"))
                 add(ChatTurn("model", "Understood. I'll use that context when helpful."))
+            }
+            rosterPreface()?.let {
+                add(ChatTurn("user", it))
+                add(ChatTurn("model", "Understood. I'll delegate with a HANDOFF line when a specialist fits."))
             }
             if (instructions.isNotBlank()) {
                 val toolsLine = if (tools.isEmpty()) "" else "\nAvailable tools: ${tools.joinToString(", ")}"
@@ -211,13 +255,53 @@ class ChatViewModel(
                     _state.update { it.copy(messages = it.messages + ChatMessage(replyId, ChatRole.Agent, reply, "now")) }
                 }
             }
-            result.onSuccess { _state.update { it.copy(loading = false, busy = false) } }
+            result.onSuccess { full ->
+                val handoff = parseHandoff(full, roster)
+                if (handoff == null) { _state.update { it.copy(loading = false, busy = false) }; return@onSuccess }
+                runHandoff(replyId, handoff.first, handoff.second)
+            }
                 .onFailure { e ->
                     // User cancel (stop()) or scope teardown: state already reset; never surface as error.
                     if (e is CancellationException) return@launch
                     _state.update { it.copy(loading = false, busy = false, error = e.message ?: "Request failed") }
                 }
         }
+    }
+
+    /**
+     * Rewrites Orhan's HANDOFF line into a visible note, then runs a second /api/chat call with the
+     * specialist's own identity + instructions and appends its reply labeled with the agent name.
+     */
+    private suspend fun runHandoff(orhanReplyId: Long, agent: RosterAgent, task: String) {
+        _state.update { s ->
+            s.copy(messages = s.messages.map { m ->
+                if (m.id == orhanReplyId) m.copy(text = stripHandoff(m.text) + "\n\n\u21AA Assigned to ${agent.name}: $task") else m
+            }, loading = true)
+        }
+        val turns = buildList {
+            add(ChatTurn("user", orhanIdentity(agent.name)))
+            add(ChatTurn("model", "Understood. I'm ${agent.name}."))
+            if (personalMemory.isNotBlank()) {
+                add(ChatTurn("user", "Personal context about the user (use when relevant):\n$personalMemory"))
+                add(ChatTurn("model", "Understood."))
+            }
+            if (agent.instructions.isNotBlank()) {
+                val toolsLine = if (agent.tools.isEmpty()) "" else "\nAvailable tools: ${agent.tools.joinToString(", ")}"
+                add(ChatTurn("user", "You are the agent named \"${agent.name}\". Follow these system instructions:\n${agent.instructions}$toolsLine"))
+                add(ChatTurn("model", "Understood. I'll follow those instructions."))
+            }
+            add(ChatTurn("user", "Orhan (the main agent) assigned you this task from the user. Do it fully and reply directly to the user:\n$task"))
+        }
+        repository.send(turns)
+            .onSuccess { reply ->
+                _state.update { s ->
+                    s.copy(messages = s.messages + ChatMessage(nextId(), ChatRole.Agent, "${SPECIALIST_PREFIX}${agent.name}\n\n$reply", "now"), loading = false, busy = false)
+                }
+            }
+            .onFailure { e ->
+                if (e is CancellationException) throw e
+                _state.update { it.copy(loading = false, busy = false, error = "${agent.name}: ${e.message ?: "Request failed"}") }
+            }
     }
 
     fun clearError() = _state.update { it.copy(error = null) }
