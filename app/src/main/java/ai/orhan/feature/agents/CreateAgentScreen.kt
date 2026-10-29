@@ -40,7 +40,7 @@ fun CreateAgentScreen(
         SectionLabel("Identity")
         OutlinedTextField(
             value = name,
-            onValueChange = { name = it; if (it.isNotBlank()) showError = false },
+            onValueChange = { name = it.take(ai.orhan.data.agents.MAX_AGENT_NAME); if (it.isNotBlank()) showError = false },
             label = { Text("Name") },
             singleLine = true,
             isError = showError,
@@ -50,7 +50,7 @@ fun CreateAgentScreen(
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = blurb,
-            onValueChange = { blurb = it },
+            onValueChange = { blurb = it.take(ai.orhan.data.agents.MAX_AGENT_BLURB) },
             label = { Text("Short blurb") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
@@ -58,7 +58,7 @@ fun CreateAgentScreen(
         SectionLabel("Instructions")
         OutlinedTextField(
             value = instructions,
-            onValueChange = { instructions = it },
+            onValueChange = { instructions = it.take(ai.orhan.data.agents.MAX_AGENT_INSTRUCTIONS) },
             label = { Text("System instructions (optional)") },
             minLines = 4,
             modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
@@ -77,7 +77,7 @@ fun CreateAgentScreen(
         Spacer(Modifier.height(24.dp))
         Button(
             onClick = {
-                if (name.isBlank()) showError = true else onCreated(name.trim(), blurb.trim(), instructions.trim(), AgentTools.filter { it in tools })
+                if (name.isBlank()) showError = true else onCreated(name.trim().take(ai.orhan.data.agents.MAX_AGENT_NAME).trim(), blurb.trim().take(ai.orhan.data.agents.MAX_AGENT_BLURB), instructions.trim().take(ai.orhan.data.agents.MAX_AGENT_INSTRUCTIONS), AgentTools.filter { it in tools })
             },
             modifier = Modifier.fillMaxWidth().height(48.dp),
         ) { Text("Create") }
