@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraphBuilder
@@ -87,8 +88,9 @@ fun NavGraphBuilder.settingsDetailPages(navController: NavHostController) {
         val artifacts by artifactRepo.artifacts.collectAsStateWithLifecycle(initialValue = null)
         val threads by threadStore.threads.collectAsStateWithLifecycle(initialValue = null)
         // Recount media whenever threads change (save, delete, or clear).
-        val mediaBytes by androidx.compose.runtime.produceState<Long?>(null, threads) {
-            value = threadStore.attachmentUsage().first
+        var mediaBytes by remember { androidx.compose.runtime.mutableStateOf<Long?>(null) }
+        androidx.compose.runtime.LaunchedEffect(threads) {
+            mediaBytes = threadStore.attachmentUsage().first
         }
         StorageScreen(
             onBack = back,
