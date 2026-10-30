@@ -391,7 +391,7 @@ private fun HomeTopBar(
     ) {
         Image(
             painter = painterResource(profile.safeAvatarResId),
-            contentDescription = profile.name,
+            contentDescription = profile.displayName,
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .align(Alignment.CenterStart)
@@ -867,15 +867,15 @@ private fun ProfileTab(
                     ) {
                         Image(
                             painter = painterResource(profile.safeAvatarResId),
-                            contentDescription = profile.name,
+                            contentDescription = profile.displayName,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(profile.name, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(profile.email, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(profile.displayName, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(profile.displayEmail, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = "Edit profile", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -910,7 +910,7 @@ private fun ProfileTab(
             Column(modifier = Modifier.padding(4.dp)) {
                 ProfileRow("About Orhan", "Version, licences", onClick = { onOpenSettingsPage("settings/about") })
                 if (onSignOut != null) {
-                    ProfileRow("Sign out", profile.email, danger = true, onClick = onSignOut)
+                    ProfileRow("Sign out", profile.email.trim(), danger = true, onClick = onSignOut)
                 }
             }
         }
