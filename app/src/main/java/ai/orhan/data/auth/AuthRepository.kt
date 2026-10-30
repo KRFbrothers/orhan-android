@@ -40,6 +40,7 @@ class AuthRepository private constructor(
     private val context: Context,
     private val supabaseUrl: String = BuildConfig.SUPABASE_URL,
     private val anonKey: String = BuildConfig.SUPABASE_ANON_KEY,
+    private val crypto: TokenCrypto = KeystoreTokenCrypto(),
 ) {
     private val mutex = Mutex()
 
@@ -91,8 +92,8 @@ class AuthRepository private constructor(
 
     private suspend fun save(s: AuthSession) {
         context.authDataStore.edit {
-            it[KEY_ACCESS] = s.accessToken
-            it[KEY_REFRESH] = s.refreshToken
+            it[KEY_ACCESS] = sealToken(crypto, s.accessToken)
+            it[KEY_REFRESH] = sealToken(crypto, s.refreshToken)
             it[KEY_EXPIRES] = s.expiresAt
             if (s.email != null) it[KEY_EMAIL] = s.email else it.remove(KEY_EMAIL)
         }
@@ -135,11 +136,9 @@ class AuthRepository private constructor(
         }
     }
 
-    private fun Preferences.toSession(): AuthSession? {
-        val access = this[KEY_ACCESS] ?: return null
-        val refresh = this[KEY_REFRESH] ?: return null
-        return AuthSession(access, refresh, this[KEY_EXPIRES] ?: 0L, this[KEY_EMAIL])
-    }
+    private fun Preferences.toSession(): AuthSession? = sessionFromStored(
+        crypto, this[KEY_ACCESS], this[KEY_REFRESH], this[KEY_EXPIRES], this[KEY_EMAIL],
+    )
 
     class AuthHttpException(val code: Int, message: String) : Exception(message)
 
@@ -155,4 +154,23 @@ class AuthRepository private constructor(
                 instance ?: AuthRepository(context.applicationContext).also { instance = it }
             }
     }
+}
+
+/**
+ * Encrypt a token for storage. Never fails the save path: if the Keystore is unavailable
+ * the value is stored as legacy plaintext and re-encrypted on the next successful save.
+ */
+internal fun sealToken(crypto: TokenCrypto, plain: String): String =
+    runCatching { crypto.encrypt(plain) }.getOrElse { plain }
+
+/**
+ * Build a session from stored prefs. Legacy plaintext tokens pass through; an undecryptable
+ * token (e.g. Keystore key lost after restore) yields null, i.e. signed out, without crashing.
+ */
+internal fun sessionFromStored(
+    crypto: TokenCrypto, access: String?, refresh: String?, expiresAt: Long?, email: String?,
+): AuthSession? {
+    val a = access?.let { runCatching { crypto.decrypt(it) }.getOrNull() } ?: return null
+    val r = refresh?.let { runCatching { crypto.decrypt(it) }.getOrNull() } ?: return null
+    return AuthSession(a, r, expiresAt ?: 0L, email)
 }
