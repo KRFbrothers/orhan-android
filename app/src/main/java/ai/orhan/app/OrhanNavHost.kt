@@ -26,6 +26,7 @@ import ai.orhan.data.memory.memoryStore
 import ai.orhan.data.memory.memoryPauseStore
 import ai.orhan.data.permissions.askBeforeActingStore
 import ai.orhan.data.prefs.replyStyleStore
+import ai.orhan.data.prefs.toneStore
 import ai.orhan.feature.profile.UserProfile
 import ai.orhan.feature.profile.profilePreferences
 import ai.orhan.feature.settings.detail.ChatPrefs
@@ -120,6 +121,8 @@ fun OrhanNavHost(isDark: Boolean) {
     val askBeforeActing by askBeforeActingStore.enabled.collectAsStateWithLifecycle(initialValue = true)
     val replyStyleStore = remember(context) { context.replyStyleStore() }
     val replyStyle by replyStyleStore.style.collectAsStateWithLifecycle(initialValue = ai.orhan.data.prefs.ReplyStyle.Balanced)
+    val toneStore = remember(context) { context.toneStore() }
+    val agentTone by toneStore.tone.collectAsStateWithLifecycle(initialValue = ai.orhan.data.prefs.AgentTone.Friendly)
 
     NavHost(navController = navController, startDestination = AppRoutes.HOME) {
         composable(AppRoutes.HOME) {
@@ -324,6 +327,7 @@ fun OrhanNavHost(isDark: Boolean) {
             chatViewModel.setPersonalMemory(personalMemory, memoryPaused)
             chatViewModel.setAskBeforeActing(askBeforeActing)
             chatViewModel.setReplyStyle(replyStyle)
+            chatViewModel.setTone(agentTone)
             chatViewModel.setUserProfile(profile.name, profile.bio, profile.role, profile.timezone)
             val languageRepo = remember(context) { context.settingsDetailPreferences() }
             val languagePrefs by languageRepo.language.collectAsStateWithLifecycle(initialValue = LanguagePrefs())

@@ -233,6 +233,14 @@ class ChatViewModel(
         replyStyle = style
     }
 
+    /** Chat preferences → "Tone". Default Friendly. */
+    private var tone: ai.orhan.data.prefs.AgentTone = ai.orhan.data.prefs.AgentTone.Friendly
+
+    /** Sets the agent tone preference. Idempotent; safe on every recomposition. */
+    fun setTone(value: ai.orhan.data.prefs.AgentTone) {
+        tone = value
+    }
+
     /** Identity layer sent on every request so the shared engine never answers as Dua AI or names its model vendor. */
     internal fun orhanIdentity(agent: String): String {
         val custom = agent.isNotBlank() && !agent.equals("Orhan", ignoreCase = true)
@@ -252,6 +260,7 @@ class ChatViewModel(
         personalMemoryBlock(personalMemory, memoryPaused)?.let { add(it) }
         askBeforeActingBlock(askBeforeActing)?.let { add(it) }
         replyStyleBlock(replyStyle)?.let { add(it) }
+        toneBlock(tone)?.let { add(it) }
         rosterPreface()?.let { add(it) }
         if (instructions.isNotBlank()) {
             add("You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions\n\n" + AgentToolGuidance.text(tools))
@@ -376,6 +385,7 @@ class ChatViewModel(
             personalMemoryBlock(personalMemory, memoryPaused)?.let { add(it) }
             askBeforeActingBlock(askBeforeActing)?.let { add(it) }
             replyStyleBlock(replyStyle)?.let { add(it) }
+            toneBlock(tone)?.let { add(it) }
             if (agent.instructions.isNotBlank()) add("You are the agent named \"${agent.name}\". Follow these system instructions:\n${agent.instructions}\n\n" + AgentToolGuidance.text(agent.tools))
         }
         val system = if (USE_SYSTEM_INSTRUCTION) systemInstructionOf(blocks) else null
@@ -443,6 +453,12 @@ internal fun replyStyleBlock(style: ai.orhan.data.prefs.ReplyStyle): String? = w
     ai.orhan.data.prefs.ReplyStyle.Short -> "Keep replies short and concise."
     ai.orhan.data.prefs.ReplyStyle.Detailed -> "Give more detail and explanation in replies."
     ai.orhan.data.prefs.ReplyStyle.Balanced -> null
+}
+
+internal fun toneBlock(tone: ai.orhan.data.prefs.AgentTone): String? = when (tone) {
+    ai.orhan.data.prefs.AgentTone.Direct -> "Keep a direct, no-fluff tone."
+    ai.orhan.data.prefs.AgentTone.Professional -> "Keep a professional, polished tone."
+    ai.orhan.data.prefs.AgentTone.Friendly -> null
 }
 
 internal fun personalMemoryBlock(text: String, paused: Boolean): String? {
