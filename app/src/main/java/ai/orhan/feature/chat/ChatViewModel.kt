@@ -217,6 +217,14 @@ class ChatViewModel(
 
     private var memoryPaused: Boolean = false
 
+    /** Privacy → "Ask before acting". Default ON. */
+    private var askBeforeActing: Boolean = true
+
+    /** Sets the "Ask before acting" preference. Idempotent; safe on every recomposition. */
+    fun setAskBeforeActing(enabled: Boolean) {
+        askBeforeActing = enabled
+    }
+
     /** Identity layer sent on every request so the shared engine never answers as Dua AI or names its model vendor. */
     internal fun orhanIdentity(agent: String): String {
         val custom = agent.isNotBlank() && !agent.equals("Orhan", ignoreCase = true)
@@ -234,6 +242,7 @@ class ChatViewModel(
         add(orhanIdentity(agentName))
         userProfile?.let { add(it) }
         personalMemoryBlock(personalMemory, memoryPaused)?.let { add(it) }
+        askBeforeActingBlock(askBeforeActing)?.let { add(it) }
         rosterPreface()?.let { add(it) }
         if (instructions.isNotBlank()) {
             add("You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions\n\n" + AgentToolGuidance.text(tools))
@@ -356,6 +365,7 @@ class ChatViewModel(
             add(orhanIdentity(agent.name))
             userProfile?.let { add(it) }
             personalMemoryBlock(personalMemory, memoryPaused)?.let { add(it) }
+            askBeforeActingBlock(askBeforeActing)?.let { add(it) }
             if (agent.instructions.isNotBlank()) add("You are the agent named \"${agent.name}\". Follow these system instructions:\n${agent.instructions}\n\n" + AgentToolGuidance.text(agent.tools))
         }
         val system = if (USE_SYSTEM_INSTRUCTION) systemInstructionOf(blocks) else null
@@ -414,6 +424,10 @@ internal fun turnsForApi(messages: List<ChatMessage>, attachmentsById: Map<Long,
 }
 
 /** Hidden personal-memory block for the preface, or null when blank or paused by the user. */
+/** Hidden instruction line for the "Ask before acting" preference; null (omitted) when off. */
+internal fun askBeforeActingBlock(enabled: Boolean): String? =
+    if (enabled) "Ask the user before taking actions on their behalf (opening links, sending messages, changing data)." else null
+
 internal fun personalMemoryBlock(text: String, paused: Boolean): String? {
     val t = text.trim()
     if (paused || t.isBlank()) return null
