@@ -27,7 +27,7 @@ fun NotificationsScreen(onBack: () -> Unit) {
             { SwitchRow("Direct messages", checked = n.dms, onCheckedChange = { save(n.copy(dms = it)) }, enabled = n.push) },
             { SwitchRow("Agent replies", "Saved only; you are not notified", n.agentReplies, { save(n.copy(agentReplies = it)) }, n.push) },
             { SwitchRow("Agent suggestions", checked = n.suggestions, onCheckedChange = { save(n.copy(suggestions = it)) }, enabled = n.push) },
-            { SwitchRow("Community activity", checked = n.community, onCheckedChange = { save(n.copy(community = it)) }, enabled = n.push) },
+            // Community activity row hidden (no social features); `community` pref kept in model for migration safety.
         ))
         SectionLabel("Email · saved; emails not sent yet")
         GroupCard(listOf(

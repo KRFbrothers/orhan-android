@@ -903,10 +903,10 @@ private fun ProfileTab(
         ProfileSectionLabel("Preferences")
         OrhanCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(4.dp)) {
-                ProfileRow("Notifications", "", onClick = { onOpenSettingsPage("settings/notifications") })
+                ProfileRow("Notifications", "Saved on device; push not connected yet", onClick = { onOpenSettingsPage("settings/notifications") })
                 ProfileRow("Appearance", "Theme: System, Light or Dark", onClick = onOpenAppearance)
-                ProfileRow("Language", "", onClick = { onOpenSettingsPage("settings/language") })
-                ProfileRow("All settings", "", onClick = onOpenSettings)
+                ProfileRow("Language", "App language & agent replies", onClick = { onOpenSettingsPage("settings/language") })
+                ProfileRow("All settings", "Appearance, privacy, storage", onClick = onOpenSettings)
             }
         }
 
