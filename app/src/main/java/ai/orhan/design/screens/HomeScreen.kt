@@ -879,6 +879,11 @@ private fun ProfileTab(
                     }
                     Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = "Edit profile", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                ProfileRow(
+                    "About me for Orhan",
+                    profile.role.trim().ifEmpty { "Role, timezone, context" },
+                    onClick = onEditProfile,
+                )
                 ProfileRow("Memory", "What Orhan remembers about you", onClick = onOpenMemory)
                 ProfileRow("Artifacts", if (artifactCount > 0) "$artifactCount saved" else "Saved replies", onClick = onOpenArtifacts)
             }

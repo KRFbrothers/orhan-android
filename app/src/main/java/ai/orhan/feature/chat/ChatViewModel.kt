@@ -60,10 +60,17 @@ internal fun stripHandoff(reply: String): String {
 }
 
 /** Folds preface blocks into one hidden user turn + one model ack (2 turns total). */
-/** Builds the hidden "who the user is" block from profile name/bio; null when both are blank. */
-internal fun userProfileSummary(name: String?, bio: String?): String? {
+/** Builds the hidden "who the user is" block from profile name/bio/role/timezone; null when all blank. */
+internal fun userProfileSummary(
+    name: String?,
+    bio: String?,
+    role: String? = null,
+    timezone: String? = null,
+): String? {
     val lines = buildList {
         name?.trim()?.takeIf { it.isNotEmpty() }?.let { add("User's name: $it") }
+        role?.trim()?.takeIf { it.isNotEmpty() }?.let { add("User's role: $it") }
+        timezone?.trim()?.takeIf { it.isNotEmpty() }?.let { add("User's timezone: $it") }
         bio?.trim()?.takeIf { it.isNotEmpty() }?.let { add("About user: $it") }
     }
     return if (lines.isEmpty()) null else "User profile (use when relevant):\n" + lines.joinToString("\n")
@@ -186,12 +193,12 @@ class ChatViewModel(
 
     private var personalMemory: String = ""
 
-    /** Hidden profile summary (name/bio), or null when unset/blank. */
+    /** Hidden profile summary (name/bio/role/timezone), or null when unset/blank. */
     private var userProfile: String? = null
 
     /** Sets the user's profile summary sent as hidden context. Idempotent; safe on every recomposition. */
-    fun setUserProfile(name: String?, bio: String?) {
-        userProfile = userProfileSummary(name, bio)
+    fun setUserProfile(name: String?, bio: String?, role: String? = null, timezone: String? = null) {
+        userProfile = userProfileSummary(name, bio, role, timezone)
     }
 
     /** Display name of the user's chosen reply language, or null to mirror the user's language. */

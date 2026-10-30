@@ -313,7 +313,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 else savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions, it.tools) },
             )
             chatViewModel.setPersonalMemory(personalMemory)
-            chatViewModel.setUserProfile(profile.name, profile.bio)
+            chatViewModel.setUserProfile(profile.name, profile.bio, profile.role, profile.timezone)
             val languageRepo = remember(context) { context.settingsDetailPreferences() }
             val languagePrefs by languageRepo.language.collectAsStateWithLifecycle(initialValue = LanguagePrefs())
             chatViewModel.setReplyLanguage(if (languagePrefs.agentsUseAppLanguage) languageName(languagePrefs.code) else null)
