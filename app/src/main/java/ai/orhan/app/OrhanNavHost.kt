@@ -119,12 +119,13 @@ fun OrhanNavHost(isDark: Boolean) {
             HomeScreen(
                 isDark = isDark,
                 profile = profile,
+                accountEmail = homeSession?.email,
                 agents = mergeWithSamples(savedAgents.map { it.toInstalledAgent() }),
                 deletableAgentNames = savedAgents.map { it.name }.toSet(),
                 onDeleteAgent = { agent -> scope.launch { agentStore.delete(agent.name) } },
-                recentChats = recent.map {
+                recentChats = remember(recent, threads) { recent.map {
                     val lastText = threads.firstOrNull { t -> t.title == it.title }?.messages?.lastOrNull()?.text
-                    OrhanChat(it.title, previewSnippet(lastText), relativeTime(it.openedAt), isAgent = true)
+                    OrhanChat(it.title, previewSnippet(lastText), relativeTime(it.openedAt), isAgent = true) }
                 },
                 pinnedTitles = pinnedTitles,
                 onTogglePin = { chat -> scope.launch { pinRepo.toggle(chat.title) } },
@@ -396,9 +397,11 @@ internal fun relativeTime(then: Long, now: Long = System.currentTimeMillis()): S
     }
 }
 
+private val WHITESPACE_RE = Regex("\\s+")
+
 /** Single-line preview of a saved message for Home rows; falls back to "Recent chat". */
 internal fun previewSnippet(text: String?, max: Int = 100): String {
-    val clean = text?.replace(Regex("\\s+"), " ")?.trim().orEmpty()
+    val clean = text?.replace(WHITESPACE_RE, " ")?.trim().orEmpty()
     if (clean.isEmpty()) return "Recent chat"
     return if (clean.length <= max) clean else clean.take(max).trimEnd() + "…"
 }

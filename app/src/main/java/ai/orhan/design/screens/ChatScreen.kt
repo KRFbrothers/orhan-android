@@ -210,7 +210,7 @@ fun ChatScreen(
         mutableStateOf(initialThread())
     }
     val messages = messagesOverride ?: localMessages
-    var input by rememberSaveable { mutableStateOf(initialComposerText) }
+    var input by rememberSaveable(initialComposerText) { mutableStateOf(initialComposerText) }
     val listState = rememberLazyListState()
 
     var pendingPreview by rememberSaveable { mutableStateOf<String?>(null) }

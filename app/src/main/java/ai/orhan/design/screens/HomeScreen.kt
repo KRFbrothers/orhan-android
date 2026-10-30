@@ -197,6 +197,7 @@ fun HomeScreen(
     onOpenChatPreferences: () -> Unit = onOpenSettings,
     /** Null when no session exists; Profile then hides the Sign out row. */
     onSignOut: (() -> Unit)? = null,
+    accountEmail: String? = null,
     /** Opens a settings sub-page by route (notifications, language, privacy, about). */
     onOpenSettingsPage: (String) -> Unit = { onOpenSettings() },
     isDark: Boolean = isSystemInDarkTheme(),
@@ -309,6 +310,7 @@ fun HomeScreen(
                         tab = OrhanTab.Agents
                     },
                     onSignOut = onSignOut,
+                    accountEmail = accountEmail,
                     onOpenSettingsPage = onOpenSettingsPage,
                     artifactCount = artifactCount,
                     agentCount = agents.size,
@@ -830,6 +832,7 @@ private fun ProfileTab(
     onOpenChatPreferences: () -> Unit = {},
     onOpenAgents: () -> Unit = {},
     onSignOut: (() -> Unit)? = null,
+    accountEmail: String? = null,
     onOpenSettingsPage: (String) -> Unit = {},
     artifactCount: Int = 0,
     agentCount: Int = 0,
@@ -875,7 +878,7 @@ private fun ProfileTab(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(profile.name, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(profile.email, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(accountEmail?.ifBlank { null } ?: profile.email, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = "Edit profile", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -910,7 +913,7 @@ private fun ProfileTab(
             Column(modifier = Modifier.padding(4.dp)) {
                 ProfileRow("About Orhan", "Version, licences", onClick = { onOpenSettingsPage("settings/about") })
                 if (onSignOut != null) {
-                    ProfileRow("Sign out", profile.email, danger = true, onClick = onSignOut)
+                    ProfileRow("Sign out", accountEmail?.ifBlank { null } ?: profile.email, danger = true, onClick = onSignOut)
                 }
             }
         }
