@@ -67,7 +67,10 @@ class AuthRepository private constructor(
                     JSONObject().put("refresh_token", current.refreshToken))
                 parseSession(json).also { save(it) }.accessToken
             }.getOrElse { e ->
-                if (e is AuthHttpException && e.code in 400..499) clear()
+                // Only wipe the session on definitive auth errors (invalid/revoked refresh token).
+                // Transient 408 (timeout), 429 (rate limit), and 5xx errors preserve the session
+                // so the next request can retry without forcing a re-login.
+                if (e is AuthHttpException && e.code in listOf(400, 401, 403)) clear()
                 null
             }
         }
