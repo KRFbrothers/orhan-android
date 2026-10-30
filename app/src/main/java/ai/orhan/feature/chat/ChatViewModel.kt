@@ -81,6 +81,8 @@ data class ChatUiState(
     val error: String? = null,
     /** True while a reply is in flight (typing indicator or streaming bubble). */
     val busy: Boolean = false,
+    /** Transient status from SSE `thinking`/`progress` events; shown with the typing indicator. */
+    val activityLabel: String? = null,
 )
 
 class ChatViewModel(
@@ -240,7 +242,7 @@ class ChatViewModel(
         val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
         val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString())
         if (attachment != null) attachmentsById[user.id] = attachment
-        _state.update { it.copy(messages = it.messages + user, loading = true, busy = true, error = null) }
+        _state.update { it.copy(messages = it.messages + user, loading = true, activityLabel = null, busy = true, error = null) }
         streamReply()
     }
 
@@ -254,7 +256,7 @@ class ChatViewModel(
         val msgs = s.messages.toMutableList()
         while (msgs.isNotEmpty() && msgs.last().role == ChatRole.Agent) msgs.removeAt(msgs.lastIndex)
         if (msgs.isEmpty()) { clearError(); return }
-        _state.update { it.copy(messages = msgs, loading = true, busy = true, error = null) }
+        _state.update { it.copy(messages = msgs, loading = true, activityLabel = null, busy = true, error = null) }
         streamReply()
     }
 
@@ -264,7 +266,7 @@ class ChatViewModel(
     fun stop() {
         streamJob?.cancel()
         streamJob = null
-        _state.update { it.copy(loading = false, busy = false) }
+        _state.update { it.copy(loading = false, activityLabel = null, busy = false) }
     }
 
     private fun streamReply() {
@@ -273,7 +275,7 @@ class ChatViewModel(
         val replyId = nextId()
         streamJob = viewModelScope.launch {
             var streamed = false
-            val result = repository.stream(turns) { delta ->
+            val result = repository.stream(turns, onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } }) { delta ->
                 streamed = true
                 _state.update { s ->
                     val existing = s.messages.lastOrNull()?.takeIf { it.id == replyId }
@@ -283,7 +285,7 @@ class ChatViewModel(
                         s.messages.dropLast(1) + existing.copy(text = existing.text + delta)
                     }
                     // First delta replaces the typing indicator with the live bubble.
-                    s.copy(messages = msgs, loading = false)
+                    s.copy(messages = msgs, loading = false, activityLabel = null)
                 }
             }.recoverCatching { e ->
                 if (e is CancellationException) throw e
@@ -295,13 +297,13 @@ class ChatViewModel(
             }
             result.onSuccess { full ->
                 val handoff = parseHandoff(full, roster)
-                if (handoff == null) { _state.update { it.copy(loading = false, busy = false) }; return@onSuccess }
+                if (handoff == null) { _state.update { it.copy(loading = false, activityLabel = null, busy = false) }; return@onSuccess }
                 runHandoff(replyId, handoff.first, handoff.second)
             }
                 .onFailure { e ->
                     // User cancel (stop()) or scope teardown: state already reset; never surface as error.
                     if (e is CancellationException) return@launch
-                    _state.update { it.copy(loading = false, busy = false, error = e.message ?: "Request failed") }
+                    _state.update { it.copy(loading = false, activityLabel = null, busy = false, error = e.message ?: "Request failed") }
                 }
         }
     }
@@ -314,7 +316,7 @@ class ChatViewModel(
         _state.update { s ->
             s.copy(messages = s.messages.map { m ->
                 if (m.id == orhanReplyId) m.copy(text = stripHandoff(m.text) + "\n\n\u21AA Assigned to ${agent.name}: $task") else m
-            }, loading = true)
+            }, loading = true, activityLabel = null)
         }
         val lastUser = turnsForApi(_state.value.messages, attachmentsById).lastOrNull { it.role == "user" }
         val turns = buildList {
@@ -334,13 +336,13 @@ class ChatViewModel(
         val bubbleId = nextId()
         val header = specialistHeader(agent.name)
         var streamed = false
-        repository.stream(turns) { delta ->
+        repository.stream(turns, onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } }) { delta ->
             streamed = true
             _state.update { s ->
                 val existing = s.messages.lastOrNull()?.takeIf { it.id == bubbleId }
                 val msgs = if (existing == null) s.messages + ChatMessage(bubbleId, ChatRole.Agent, header + delta, currentTimeString())
                 else s.messages.dropLast(1) + existing.copy(text = existing.text + delta)
-                s.copy(messages = msgs, loading = false)
+                s.copy(messages = msgs, loading = false, activityLabel = null)
             }
         }.recoverCatching { e ->
             if (e is CancellationException) throw e
@@ -349,10 +351,10 @@ class ChatViewModel(
                 _state.update { it.copy(messages = it.messages + ChatMessage(bubbleId, ChatRole.Agent, header + reply, currentTimeString())) }
             }
         }
-            .onSuccess { _state.update { it.copy(loading = false, busy = false) } }
+            .onSuccess { _state.update { it.copy(loading = false, activityLabel = null, busy = false) } }
             .onFailure { e ->
                 if (e is CancellationException) throw e
-                _state.update { it.copy(loading = false, busy = false, error = "${agent.name}: ${e.message ?: "Request failed"}") }
+                _state.update { it.copy(loading = false, activityLabel = null, busy = false, error = "${agent.name}: ${e.message ?: "Request failed"}") }
             }
     }
 
