@@ -270,7 +270,7 @@ class ChatViewModel(
             }.recoverCatching { e ->
                 if (e is CancellationException) throw e
                 // Fall back to non-streaming only if nothing was shown yet and the error isn't fatal (auth).
-                if (streamed || e is ChatRepository.FatalChatException) throw e
+                if (streamed || e !is ChatRepository.FallbackEligibleStreamException) throw e
                 repository.send(turns).getOrThrow().also { reply ->
                     _state.update { it.copy(messages = it.messages + ChatMessage(replyId, ChatRole.Agent, reply, currentTimeString())) }
                 }
@@ -325,7 +325,7 @@ class ChatViewModel(
             }
         }.recoverCatching { e ->
             if (e is CancellationException) throw e
-            if (streamed || e is ChatRepository.FatalChatException) throw e
+            if (streamed || e !is ChatRepository.FallbackEligibleStreamException) throw e
             repository.send(turns).getOrThrow().also { reply ->
                 _state.update { it.copy(messages = it.messages + ChatMessage(bubbleId, ChatRole.Agent, header + reply, currentTimeString())) }
             }
