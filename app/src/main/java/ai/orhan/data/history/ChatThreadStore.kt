@@ -51,10 +51,14 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
             DataInputStream(bytes.inputStream()).use { d ->
                 val version = d.readInt()
                 if (version != THREAD_FORMAT_VERSION && version != THREAD_FORMAT_V1) return defaultValue
-                List(d.readInt()) {
+                val threadCount = d.readInt()
+                if (threadCount < 0 || threadCount > 10_000) throw IOException("corrupt thread count $threadCount")
+                List(threadCount) {
                     val title = d.readUTF()
                     val updatedAt = d.readLong()
-                    val msgs = List(d.readInt()) {
+                    val msgCount = d.readInt()
+                    if (msgCount < 0 || msgCount > 100_000) throw IOException("corrupt message count $msgCount")
+                    val msgs = List(msgCount) {
                         val m = StoredMessage(d.readLong(), d.readUTF(), readLongString(d), d.readUTF())
                         if (version >= 2 && d.readBoolean()) {
                             m.copy(attachment = StoredAttachment(d.readUTF(), d.readUTF(), d.readLong(), d.readUTF()))
@@ -86,7 +90,9 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
         val b = s.toByteArray(Charsets.UTF_8); d.writeInt(b.size); d.write(b)
     }
     private fun readLongString(d: DataInputStream): String {
-        val b = ByteArray(d.readInt()); d.readFully(b); return String(b, Charsets.UTF_8)
+        val n = d.readInt()
+        if (n < 0 || n > 4 * 1024 * 1024) throw IOException("corrupt string length $n")
+        val b = ByteArray(n); d.readFully(b); return String(b, Charsets.UTF_8)
     }
 }
 

@@ -20,10 +20,14 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.FlowPreview
 import ai.orhan.data.history.ChatThreadStore
 import ai.orhan.data.history.chatThreads
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /** A specialist agent Orhan can delegate to. */
 data class RosterAgent(val name: String, val blurb: String, val instructions: String, val tools: List<String> = emptyList())
@@ -59,6 +63,9 @@ internal fun stripHandoff(reply: String): String {
 internal fun prefacePair(blocks: List<String>, ack: String): List<ChatTurn> =
     listOf(ChatTurn("user", blocks.filter { it.isNotBlank() }.joinToString("\n\n---\n\n")), ChatTurn("model", ack))
 
+internal fun currentTimeString(): String =
+    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val loading: Boolean = false,
@@ -87,6 +94,9 @@ class ChatViewModel(
     /**
      * Restores the saved thread for [title] once, then persists message changes (debounced).
      * Only real turns are saved; the design-kit demo thread never flows through this VM.
+     *
+     * Disk writes are gated on `!busy` so partial SSE chunks never trigger mid-stream
+     * serialization. Writes happen only after streaming completes, stops, or errors.
      */
     @OptIn(FlowPreview::class)
     fun loadThread(title: String) {
@@ -99,7 +109,8 @@ class ChatViewModel(
                 saved.attachments.forEach { (id, a) -> attachmentsById.putIfAbsent(id, a) }
                 _state.update { it.copy(messages = saved.messages) }
             }
-            _state.map { it.messages }
+            _state.filter { !it.busy }
+                .map { it.messages }
                 .distinctUntilChanged()
                 .drop(1)
                 .debounce(300)
@@ -107,14 +118,16 @@ class ChatViewModel(
         }
     }
 
-    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
     override fun onCleared() {
-        // Flush the latest messages in case the debounce window hadn't elapsed.
+        // Final flush: save immediately if the debounce window hadn't elapsed.
+        // Uses viewModelScope (already cancelling but not yet cancelled) rather than
+        // GlobalScope, so clearing history while this VM is on the back stack cannot
+        // resurrect a deleted thread.
         val title = threadTitle ?: return
         val store = threadStore ?: return
         val msgs = _state.value.messages
         val atts = attachmentsById.toMap()
-        if (msgs.isNotEmpty()) kotlinx.coroutines.GlobalScope.launch { store.save(title, msgs, atts) }
+        if (msgs.isNotEmpty()) viewModelScope.launch { store.save(title, msgs, atts) }
     }
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -207,7 +220,7 @@ class ChatViewModel(
         val text = raw.trim()
         if ((text.isEmpty() && attachment == null) || _state.value.busy) return
         val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
-        val user = ChatMessage(nextId(), ChatRole.User, shown, "now")
+        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString())
         if (attachment != null) attachmentsById[user.id] = attachment
         _state.update { it.copy(messages = it.messages + user, loading = true, busy = true, error = null) }
         streamReply()
@@ -247,7 +260,7 @@ class ChatViewModel(
                 _state.update { s ->
                     val existing = s.messages.lastOrNull()?.takeIf { it.id == replyId }
                     val msgs = if (existing == null) {
-                        s.messages + ChatMessage(replyId, ChatRole.Agent, delta, "now")
+                        s.messages + ChatMessage(replyId, ChatRole.Agent, delta, currentTimeString())
                     } else {
                         s.messages.dropLast(1) + existing.copy(text = existing.text + delta)
                     }
@@ -259,7 +272,7 @@ class ChatViewModel(
                 // Fall back to non-streaming only if nothing was shown yet and the error isn't fatal (auth).
                 if (streamed || e is ChatRepository.FatalChatException) throw e
                 repository.send(turns).getOrThrow().also { reply ->
-                    _state.update { it.copy(messages = it.messages + ChatMessage(replyId, ChatRole.Agent, reply, "now")) }
+                    _state.update { it.copy(messages = it.messages + ChatMessage(replyId, ChatRole.Agent, reply, currentTimeString())) }
                 }
             }
             result.onSuccess { full ->
@@ -306,7 +319,7 @@ class ChatViewModel(
             streamed = true
             _state.update { s ->
                 val existing = s.messages.lastOrNull()?.takeIf { it.id == bubbleId }
-                val msgs = if (existing == null) s.messages + ChatMessage(bubbleId, ChatRole.Agent, header + delta, "now")
+                val msgs = if (existing == null) s.messages + ChatMessage(bubbleId, ChatRole.Agent, header + delta, currentTimeString())
                 else s.messages.dropLast(1) + existing.copy(text = existing.text + delta)
                 s.copy(messages = msgs, loading = false)
             }
@@ -314,7 +327,7 @@ class ChatViewModel(
             if (e is CancellationException) throw e
             if (streamed || e is ChatRepository.FatalChatException) throw e
             repository.send(turns).getOrThrow().also { reply ->
-                _state.update { it.copy(messages = it.messages + ChatMessage(bubbleId, ChatRole.Agent, header + reply, "now")) }
+                _state.update { it.copy(messages = it.messages + ChatMessage(bubbleId, ChatRole.Agent, header + reply, currentTimeString())) }
             }
         }
             .onSuccess { _state.update { it.copy(loading = false, busy = false) } }
