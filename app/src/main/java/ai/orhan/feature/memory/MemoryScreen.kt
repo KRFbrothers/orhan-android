@@ -62,6 +62,9 @@ import ai.orhan.data.memory.MEMORY_MAX_CHARS
 import ai.orhan.data.memory.MemoryEntry
 import ai.orhan.data.memory.memoryEntriesStore
 import ai.orhan.data.memory.memoryStore
+import ai.orhan.data.memory.memoryPauseStore
+import ai.orhan.feature.settings.detail.SwitchRow
+import androidx.compose.ui.draw.alpha
 import ai.orhan.feature.settings.detail.FootNote
 import ai.orhan.feature.settings.detail.SectionLabel
 import ai.orhan.feature.settings.detail.SettingsDetailScaffold
@@ -111,6 +114,15 @@ private fun PersonalContextSection(snackbar: SnackbarHostState) {
     LaunchedEffect(store) {
         if (!loaded) { text = store.memory.first(); loaded = true }
     }
+    val pauseStore = remember(context) { context.memoryPauseStore() }
+    val paused by pauseStore.paused.collectAsState(initial = false)
+    SwitchRow(
+        title = "Pause memory",
+        subtitle = "When paused, Orhan won't use this context in chats. Your text stays saved.",
+        checked = paused,
+        onCheckedChange = { v -> scope.launch { pauseStore.setPaused(v) } },
+    )
+    if (paused) FootNote("Memory is paused — chats won't include this context until you turn it back on.")
     SectionLabel("What should your agents know?")
     OutlinedTextField(
         value = text,
@@ -118,7 +130,7 @@ private fun PersonalContextSection(snackbar: SnackbarHostState) {
         placeholder = { Text("e.g. I'm a student in Delhi, prefer short answers, vegetarian…") },
         supportingText = { Text("${text.length} / $MEMORY_MAX_CHARS") },
         minLines = 6,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp).alpha(if (paused) 0.6f else 1f),
     )
     Spacer(Modifier.height(12.dp))
     Button(

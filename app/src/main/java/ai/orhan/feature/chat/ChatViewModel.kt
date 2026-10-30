@@ -210,9 +210,12 @@ class ChatViewModel(
     }
 
     /** Sets the user's personal memory sent as hidden context. Idempotent; safe on every recomposition. */
-    fun setPersonalMemory(text: String) {
+    fun setPersonalMemory(text: String, paused: Boolean = false) {
         personalMemory = text.trim()
+        memoryPaused = paused
     }
+
+    private var memoryPaused: Boolean = false
 
     /** Identity layer sent on every request so the shared engine never answers as Dua AI or names its model vendor. */
     internal fun orhanIdentity(agent: String): String {
@@ -230,7 +233,7 @@ class ChatViewModel(
     internal fun contextBlocks(): List<String> = buildList {
         add(orhanIdentity(agentName))
         userProfile?.let { add(it) }
-        if (personalMemory.isNotBlank()) add("Personal context about the user (use when relevant):\n$personalMemory")
+        personalMemoryBlock(personalMemory, memoryPaused)?.let { add(it) }
         rosterPreface()?.let { add(it) }
         if (instructions.isNotBlank()) {
             add("You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions\n\n" + AgentToolGuidance.text(tools))
@@ -352,7 +355,7 @@ class ChatViewModel(
         val blocks = buildList {
             add(orhanIdentity(agent.name))
             userProfile?.let { add(it) }
-            if (personalMemory.isNotBlank()) add("Personal context about the user (use when relevant):\n$personalMemory")
+            personalMemoryBlock(personalMemory, memoryPaused)?.let { add(it) }
             if (agent.instructions.isNotBlank()) add("You are the agent named \"${agent.name}\". Follow these system instructions:\n${agent.instructions}\n\n" + AgentToolGuidance.text(agent.tools))
         }
         val system = if (USE_SYSTEM_INSTRUCTION) systemInstructionOf(blocks) else null
@@ -408,4 +411,11 @@ internal fun turnsForApi(messages: List<ChatMessage>, attachmentsById: Map<Long,
             if (it.id == lastUserId) listOfNotNull(attachmentsById[it.id]) else emptyList(),
         )
     }
+}
+
+/** Hidden personal-memory block for the preface, or null when blank or paused by the user. */
+internal fun personalMemoryBlock(text: String, paused: Boolean): String? {
+    val t = text.trim()
+    if (paused || t.isBlank()) return null
+    return "Personal context about the user (use when relevant):\n$t"
 }
