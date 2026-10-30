@@ -24,6 +24,7 @@ import ai.orhan.feature.profile.EditProfileScreen
 import ai.orhan.feature.memory.MemoryScreen
 import ai.orhan.data.memory.memoryStore
 import ai.orhan.data.memory.memoryPauseStore
+import ai.orhan.data.permissions.askBeforeActingStore
 import ai.orhan.feature.profile.UserProfile
 import ai.orhan.feature.profile.profilePreferences
 import ai.orhan.feature.settings.detail.ChatPrefs
@@ -114,6 +115,8 @@ fun OrhanNavHost(isDark: Boolean) {
     val personalMemory by memoryStore.memory.collectAsStateWithLifecycle(initialValue = "")
     val memoryPauseStore = remember(context) { context.memoryPauseStore() }
     val memoryPaused by memoryPauseStore.paused.collectAsStateWithLifecycle(initialValue = false)
+    val askBeforeActingStore = remember(context) { context.askBeforeActingStore() }
+    val askBeforeActing by askBeforeActingStore.enabled.collectAsStateWithLifecycle(initialValue = true)
 
     NavHost(navController = navController, startDestination = AppRoutes.HOME) {
         composable(AppRoutes.HOME) {
@@ -316,6 +319,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 else savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions, it.tools) },
             )
             chatViewModel.setPersonalMemory(personalMemory, memoryPaused)
+            chatViewModel.setAskBeforeActing(askBeforeActing)
             chatViewModel.setUserProfile(profile.name, profile.bio, profile.role, profile.timezone)
             val languageRepo = remember(context) { context.settingsDetailPreferences() }
             val languagePrefs by languageRepo.language.collectAsStateWithLifecycle(initialValue = LanguagePrefs())
