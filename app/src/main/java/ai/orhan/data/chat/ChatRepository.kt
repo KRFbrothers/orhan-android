@@ -33,7 +33,8 @@ data class ChatAttachment(val name: String, val mimeType: String, val base64: St
  * Response: {"text":"..."} or {"error":"..."}
  *
  * [stream] sends `"stream":true` and parses the engine's SSE events
- * (`event: text` → `{"type":"text","delta":"..."}`, `error`, `done`).
+ * (`event: text` → `{"type":"text","delta":"..."}`, `error`, `done`, plus optional
+ * `thinking` / `progress` activity events surfaced via `onActivity`).
  */
 class ChatRepository(
     private val baseUrl: String = BuildConfig.DUA_ENGINE_URL,
@@ -89,10 +90,15 @@ class ChatRepository(
 
     /**
      * Streams a reply. [onDelta] is called (on IO) with each text chunk. Returns the full text.
+     * [onActivity] receives a short label for `thinking` / `progress` events (no-op if never sent).
      * Fails with [FatalChatException] for auth problems and [FallbackEligibleStreamException] only
      * when the server cannot stream (406/415/non-SSE); every other failure is surfaced as-is.
      */
-    suspend fun stream(turns: List<ChatTurn>, onDelta: suspend (String) -> Unit): Result<String> =
+    suspend fun stream(
+        turns: List<ChatTurn>,
+        onActivity: suspend (String) -> Unit = {},
+        onDelta: suspend (String) -> Unit,
+    ): Result<String> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val conn = open("text/event-stream")
@@ -124,12 +130,18 @@ class ChatRepository(
                                 line.isEmpty() && data.isNotEmpty() -> {
                                     val ev = runCatching { JSONObject(data.toString()) }.getOrNull()
                                     data.setLength(0)
-                                    when (ev?.optString("type")) {
+                                    val type = ev?.optString("type")
+                                    when (type) {
                                         "text" -> ev.optString("delta").takeIf { it.isNotEmpty() }?.let {
                                             out.append(it); onDelta(it)
                                         }
                                         "error" -> error(ev.optString("message").ifBlank { "Stream error" })
                                         "done" -> done = true
+                                        "thinking", "progress" -> SseActivity.label(
+                                            type,
+                                            field = { k -> ev.optString(k) },
+                                            nested = { k -> ev.optJSONObject("data")?.optString(k).orEmpty() },
+                                        )?.let { onActivity(it) }
                                     }
                                 }
                             }

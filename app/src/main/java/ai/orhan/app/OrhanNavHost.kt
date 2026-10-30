@@ -325,6 +325,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 messagesOverride = chat.messages,
                 loading = chat.loading,
                 busy = chat.busy,
+                activityLabel = chat.activityLabel,
                 error = chat.error,
                 onSendMessage = { chatViewModel.send(it) },
                 onSendAttachment = { text, file -> chatViewModel.send(text, file) },
