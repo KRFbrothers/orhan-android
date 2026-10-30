@@ -225,6 +225,14 @@ class ChatViewModel(
         askBeforeActing = enabled
     }
 
+    /** Chat preferences → "Reply style". Default Balanced. */
+    private var replyStyle: ai.orhan.data.prefs.ReplyStyle = ai.orhan.data.prefs.ReplyStyle.Balanced
+
+    /** Sets the reply-style preference. Idempotent; safe on every recomposition. */
+    fun setReplyStyle(style: ai.orhan.data.prefs.ReplyStyle) {
+        replyStyle = style
+    }
+
     /** Identity layer sent on every request so the shared engine never answers as Dua AI or names its model vendor. */
     internal fun orhanIdentity(agent: String): String {
         val custom = agent.isNotBlank() && !agent.equals("Orhan", ignoreCase = true)
@@ -243,6 +251,7 @@ class ChatViewModel(
         userProfile?.let { add(it) }
         personalMemoryBlock(personalMemory, memoryPaused)?.let { add(it) }
         askBeforeActingBlock(askBeforeActing)?.let { add(it) }
+        replyStyleBlock(replyStyle)?.let { add(it) }
         rosterPreface()?.let { add(it) }
         if (instructions.isNotBlank()) {
             add("You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions\n\n" + AgentToolGuidance.text(tools))
@@ -366,6 +375,7 @@ class ChatViewModel(
             userProfile?.let { add(it) }
             personalMemoryBlock(personalMemory, memoryPaused)?.let { add(it) }
             askBeforeActingBlock(askBeforeActing)?.let { add(it) }
+            replyStyleBlock(replyStyle)?.let { add(it) }
             if (agent.instructions.isNotBlank()) add("You are the agent named \"${agent.name}\". Follow these system instructions:\n${agent.instructions}\n\n" + AgentToolGuidance.text(agent.tools))
         }
         val system = if (USE_SYSTEM_INSTRUCTION) systemInstructionOf(blocks) else null
@@ -427,6 +437,13 @@ internal fun turnsForApi(messages: List<ChatMessage>, attachmentsById: Map<Long,
 /** Hidden instruction line for the "Ask before acting" preference; null (omitted) when off. */
 internal fun askBeforeActingBlock(enabled: Boolean): String? =
     if (enabled) "Ask the user before taking actions on their behalf (opening links, sending messages, changing data)." else null
+
+/** Hidden instruction line for the reply-style preference; null (omitted) when Balanced. */
+internal fun replyStyleBlock(style: ai.orhan.data.prefs.ReplyStyle): String? = when (style) {
+    ai.orhan.data.prefs.ReplyStyle.Short -> "Keep replies short and concise."
+    ai.orhan.data.prefs.ReplyStyle.Detailed -> "Give more detail and explanation in replies."
+    ai.orhan.data.prefs.ReplyStyle.Balanced -> null
+}
 
 internal fun personalMemoryBlock(text: String, paused: Boolean): String? {
     val t = text.trim()
