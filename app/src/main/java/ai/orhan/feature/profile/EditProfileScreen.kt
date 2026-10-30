@@ -146,7 +146,7 @@ fun EditProfileScreen(onBack: () -> Unit, onSaved: () -> Unit = onBack) {
             onValueChange = { email = it },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            supportingText = { Text("Used for sign-in and receipts. We'll send a code to confirm a change.") },
+            supportingText = { Text("Shown on your Profile. Saved on this device — no verification email is sent.") },
             modifier = Modifier.fillMaxWidth(),
         )
         // Public handle removed: Orhan is an agent app, not a social network. Stored value is kept as-is.
