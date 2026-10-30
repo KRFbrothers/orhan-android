@@ -2,6 +2,8 @@ package ai.orhan.feature.settings.detail
 
 import ai.orhan.data.prefs.ReplyStyle
 import ai.orhan.data.prefs.replyStyleStore
+import ai.orhan.data.prefs.AgentTone
+import ai.orhan.data.prefs.toneStore
 import ai.orhan.design.theme.OrhanTextStyles
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,6 +42,13 @@ fun ChatPreferencesScreen(onBack: () -> Unit) {
         ReplyStyle.Balanced to "Default length",
         ReplyStyle.Detailed to "More explanation",
     )
+    val toneStore = remember(context) { context.toneStore() }
+    val tone by toneStore.tone.collectAsState(initial = AgentTone.Friendly)
+    val toneOptions = listOf(
+        AgentTone.Friendly to "Warm and conversational",
+        AgentTone.Direct to "Straight to the point",
+        AgentTone.Professional to "Polished and formal",
+    )
 
     SettingsDetailScaffold(title = "Chat preferences", onBack = onBack) {
         SectionLabel("Agent replies · Reply style")
@@ -59,6 +68,27 @@ fun ChatPreferencesScreen(onBack: () -> Unit) {
                             Text(subtitle, style = OrhanTextStyles.snippet, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         RadioButton(selected = style == option, onClick = null)
+                    }
+                }
+            })
+        }
+        SectionLabel("Agent replies · Tone")
+        Column(Modifier.selectableGroup()) {
+            GroupCard(toneOptions.map { (option, subtitle) ->
+                @Composable {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 56.dp)
+                            .selectable(selected = tone == option, role = Role.RadioButton) { scope.launch { toneStore.setTone(option) } }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(option.name, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface)
+                            Text(subtitle, style = OrhanTextStyles.snippet, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        RadioButton(selected = tone == option, onClick = null)
                     }
                 }
             })
