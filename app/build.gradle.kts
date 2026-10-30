@@ -26,17 +26,21 @@ android {
         versionName = "0.1.$buildNumber"
         buildConfigField("String", "DUA_ENGINE_URL", "\"${localProp("DUA_ENGINE_URL", "https://dua-ai-engine-228305912525.us-central1.run.app")}\"")
         buildConfigField("String", "DUA_API_URL", "\"${localProp("DUA_API_URL", "https://dua-api-228305912525.us-central1.run.app")}\"")
-        buildConfigField("String", "DUA_APP_TOKEN", "\"${localProp("DUA_APP_TOKEN")}\"")
         buildConfigField("String", "SUPABASE_URL", "\"${localProp("SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProp("SUPABASE_ANON_KEY")}\"")
     }
     buildTypes {
         release { isMinifyEnabled = false }
-        // Dev-only bearer token; never baked into release builds.
-        debug { buildConfigField("String", "DUA_DEV_JWT", "\"${localProp("DUA_DEV_JWT")}\"") }
+        // Dev-only tokens; never baked into release builds.
+        debug {
+            buildConfigField("String", "DUA_DEV_JWT", "\"${localProp("DUA_DEV_JWT")}\"")
+            buildConfigField("String", "DUA_APP_TOKEN", "\"${localProp("DUA_APP_TOKEN")}\"")
+        }
     }
     defaultConfig {
+        // Release-safe defaults: empty strings so BuildConfig always compiles.
         buildConfigField("String", "DUA_DEV_JWT", "\"\"")
+        buildConfigField("String", "DUA_APP_TOKEN", "\"\"")
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
