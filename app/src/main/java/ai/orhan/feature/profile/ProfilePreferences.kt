@@ -29,15 +29,21 @@ private const val PROFILE_FORMAT_VERSION = 1
 val ProfileAvatars: List<Int> = listOf(R.drawable.user_alex, R.drawable.user_alice, R.drawable.user_david)
 
 data class UserProfile(
-    val name: String = "Fareed Khan",
-    val email: String = "fareed.khan@gmail.com",
-    val handle: String = "@fareed",
-    val bio: String = "Building AI agents at Orhan. Mostly on Android, always in dark mode.",
+    val name: String = "",
+    val email: String = "",
+    val handle: String = "",
+    val bio: String = "",
     @DrawableRes val avatarResId: Int = ProfileAvatars.first(),
 ) {
     /** Avatar guaranteed to be a current drawable (res ids can shift between builds). */
     @get:DrawableRes
     val safeAvatarResId: Int get() = avatarResId.takeIf { it in ProfileAvatars } ?: ProfileAvatars.first()
+
+    /** Name for UI; placeholder when the user has not set one. */
+    val displayName: String get() = name.trim().ifEmpty { "You" }
+
+    /** Email/subtitle for UI; prompt when blank. */
+    val displayEmail: String get() = email.trim().ifEmpty { "Add your name and email in Profile" }
 
     val initials: String
         get() = name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2)
