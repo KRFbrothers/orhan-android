@@ -71,4 +71,5 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     debugImplementation(libs.bundles.compose.debug)
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303") // real org.json for request-shape tests (android.jar stubs throw)
 }

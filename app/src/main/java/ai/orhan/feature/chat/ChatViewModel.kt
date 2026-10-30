@@ -69,6 +69,16 @@ internal fun userProfileSummary(name: String?, bio: String?): String? {
     return if (lines.isEmpty()) null else "User profile (use when relevant):\n" + lines.joinToString("\n")
 }
 
+/**
+ * Send hidden context as top-level `systemInstruction` (Dua-ai #494). Flip to false only for an
+ * engine older than #494; the app then falls back to hidden user/model preface turns.
+ */
+internal const val USE_SYSTEM_INSTRUCTION = true
+
+/** Joins non-blank context blocks into one systemInstruction string. */
+internal fun systemInstructionOf(blocks: List<String>): String =
+    blocks.map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n\n")
+
 internal fun prefacePair(blocks: List<String>, ack: String): List<ChatTurn> =
     listOf(ChatTurn("user", blocks.filter { it.isNotBlank() }.joinToString("\n\n---\n\n")), ChatTurn("model", ack))
 
@@ -209,23 +219,35 @@ class ChatViewModel(
             (replyLanguage?.let { " The user's chosen app language is $it: reply in $it unless they explicitly ask for another language." } ?: "")
     }
 
-    /** Prepends hidden user/model preface turns (engine only supports those roles); never shown in UI. */
-    internal fun withPreface(uiTurns: List<ChatTurn>): List<ChatTurn> {
-        val blocks = buildList {
-            add(orhanIdentity(agentName))
-            userProfile?.let { add(it) }
-            if (personalMemory.isNotBlank()) add("Personal context about the user (use when relevant):\n$personalMemory")
-            rosterPreface()?.let { add(it) }
-            if (instructions.isNotBlank()) {
-                add("You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions\n\n" + AgentToolGuidance.text(tools))
-            } else if (tools.isNotEmpty()) {
-                add(AgentToolGuidance.text(tools))
-            }
+    /** Hidden context blocks (identity, profile, memory, roster, agent instructions + tools) for the main chat. */
+    internal fun contextBlocks(): List<String> = buildList {
+        add(orhanIdentity(agentName))
+        userProfile?.let { add(it) }
+        if (personalMemory.isNotBlank()) add("Personal context about the user (use when relevant):\n$personalMemory")
+        rosterPreface()?.let { add(it) }
+        if (instructions.isNotBlank()) {
+            add("You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions\n\n" + AgentToolGuidance.text(tools))
+        } else if (tools.isNotEmpty()) {
+            add(AgentToolGuidance.text(tools))
         }
-        val preface = prefacePair(blocks, "Understood. I'm Orhan. I'll follow all of that.")
+    }
+
+    /** Top-level `systemInstruction` for /api/chat (Dua-ai #494): all hidden context in one string. */
+    internal fun systemInstruction(): String = systemInstructionOf(contextBlocks())
+
+    /**
+     * Turns sent as `messages`. With [USE_SYSTEM_INSTRUCTION] the full 20-turn window is real chat;
+     * otherwise (legacy engines) hidden user/model preface turns are prepended, never shown in UI.
+     */
+    internal fun withPreface(uiTurns: List<ChatTurn>): List<ChatTurn> {
+        if (USE_SYSTEM_INSTRUCTION) return uiTurns.takeLast(20)
+        val preface = prefacePair(contextBlocks(), "Understood. I'm Orhan. I'll follow all of that.")
         // 2 preface turns + 18 UI turns = 20, matching ChatRepository's takeLast(20) so the preface is never dropped.
         return preface + uiTurns.takeLast(20 - preface.size)
     }
+
+    /** systemInstruction to send alongside [withPreface] turns, or null in legacy preface mode. */
+    private fun systemInstructionOrNull(): String? = if (USE_SYSTEM_INSTRUCTION) systemInstruction() else null
 
     /**
      * File parts by user message id. Persisted to disk via [ChatThreadStore] and restored on load,
@@ -272,10 +294,11 @@ class ChatViewModel(
     private fun streamReply() {
         streamJob?.cancel()
         val turns = withPreface(turnsForApi(_state.value.messages, attachmentsById))
+        val system = systemInstructionOrNull()
         val replyId = nextId()
         streamJob = viewModelScope.launch {
             var streamed = false
-            val result = repository.stream(turns, onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } }) { delta ->
+            val result = repository.stream(turns, system, onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } }) { delta ->
                 streamed = true
                 _state.update { s ->
                     val existing = s.messages.lastOrNull()?.takeIf { it.id == replyId }
@@ -291,7 +314,7 @@ class ChatViewModel(
                 if (e is CancellationException) throw e
                 // Fall back to non-streaming only if nothing was shown yet and the error isn't fatal (auth).
                 if (streamed || e !is ChatRepository.FallbackEligibleStreamException) throw e
-                repository.send(turns).getOrThrow().also { reply ->
+                repository.send(turns, system).getOrThrow().also { reply ->
                     _state.update { it.copy(messages = it.messages + ChatMessage(replyId, ChatRole.Agent, reply, currentTimeString())) }
                 }
             }
@@ -319,13 +342,15 @@ class ChatViewModel(
             }, loading = true, activityLabel = null)
         }
         val lastUser = turnsForApi(_state.value.messages, attachmentsById).lastOrNull { it.role == "user" }
+        val blocks = buildList {
+            add(orhanIdentity(agent.name))
+            userProfile?.let { add(it) }
+            if (personalMemory.isNotBlank()) add("Personal context about the user (use when relevant):\n$personalMemory")
+            if (agent.instructions.isNotBlank()) add("You are the agent named \"${agent.name}\". Follow these system instructions:\n${agent.instructions}\n\n" + AgentToolGuidance.text(agent.tools))
+        }
+        val system = if (USE_SYSTEM_INSTRUCTION) systemInstructionOf(blocks) else null
         val turns = buildList {
-            addAll(prefacePair(buildList {
-                add(orhanIdentity(agent.name))
-                userProfile?.let { add(it) }
-                if (personalMemory.isNotBlank()) add("Personal context about the user (use when relevant):\n$personalMemory")
-                if (agent.instructions.isNotBlank()) add("You are the agent named \"${agent.name}\". Follow these system instructions:\n${agent.instructions}\n\n" + AgentToolGuidance.text(agent.tools))
-            }, "Understood. I'm ${agent.name}."))
+            if (!USE_SYSTEM_INSTRUCTION) addAll(prefacePair(blocks, "Understood. I'm ${agent.name}."))
             if (lastUser != null) {
                 add(lastUser) // user's latest message, with its attachment bytes
                 add(ChatTurn("model", "Noted."))
@@ -336,7 +361,7 @@ class ChatViewModel(
         val bubbleId = nextId()
         val header = specialistHeader(agent.name)
         var streamed = false
-        repository.stream(turns, onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } }) { delta ->
+        repository.stream(turns, system, onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } }) { delta ->
             streamed = true
             _state.update { s ->
                 val existing = s.messages.lastOrNull()?.takeIf { it.id == bubbleId }
@@ -347,7 +372,7 @@ class ChatViewModel(
         }.recoverCatching { e ->
             if (e is CancellationException) throw e
             if (streamed || e !is ChatRepository.FallbackEligibleStreamException) throw e
-            repository.send(turns).getOrThrow().also { reply ->
+            repository.send(turns, system).getOrThrow().also { reply ->
                 _state.update { it.copy(messages = it.messages + ChatMessage(bubbleId, ChatRole.Agent, header + reply, currentTimeString())) }
             }
         }

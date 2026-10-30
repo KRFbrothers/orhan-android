@@ -29,7 +29,8 @@ data class ChatAttachment(val name: String, val mimeType: String, val base64: St
 
 /**
  * Talks to the Dua AI engine: POST {DUA_ENGINE_URL}/api/chat (streaming via [stream]; [send] is the non-stream fallback).
- * Request:  {"stream":false,"mode":"agent","messages":[{"role":"user|model","text":"..."}]}
+ * Request:  {"stream":false,"mode":"agent","systemInstruction":"...","messages":[{"role":"user|model","text":"..."}]}
+ * (`systemInstruction` is optional and omitted when blank.)
  * Response: {"text":"..."} or {"error":"..."}
  *
  * [stream] sends `"stream":true` and parses the engine's SSE events
@@ -56,22 +57,27 @@ class ChatRepository(
 
     companion object {
         fun isFallbackStatus(code: Int): Boolean = code == 406 || code == 415
-    }
 
-    private fun body(turns: List<ChatTurn>, stream: Boolean) = JSONObject()
-        .put("stream", stream)
-        .put("mode", "agent") // always agent pipeline (server uses AGENT_ENGINE=adk when configured)
-        .put("messages", JSONArray().apply {
-            turns.takeLast(20).forEach { turn ->
-                val obj = JSONObject().put("role", turn.role).put("text", turn.text)
-                if (turn.role == "user" && turn.attachments.isNotEmpty()) {
-                    obj.put("attachments", JSONArray().apply {
-                        turn.attachments.forEach { put(JSONObject().put("mimeType", it.mimeType).put("data", it.base64)) }
-                    })
+        /**
+         * Builds the /api/chat JSON. [systemInstruction] is sent as top-level `systemInstruction`
+         * (Dua-ai #494) only when non-blank, so older engines just see the plain messages array.
+         */
+        internal fun body(turns: List<ChatTurn>, stream: Boolean, systemInstruction: String? = null) = JSONObject()
+            .put("stream", stream)
+            .put("mode", "agent") // always agent pipeline (server uses AGENT_ENGINE=adk when configured)
+            .put("messages", JSONArray().apply {
+                turns.takeLast(20).forEach { turn ->
+                    val obj = JSONObject().put("role", turn.role).put("text", turn.text)
+                    if (turn.role == "user" && turn.attachments.isNotEmpty()) {
+                        obj.put("attachments", JSONArray().apply {
+                            turn.attachments.forEach { put(JSONObject().put("mimeType", it.mimeType).put("data", it.base64)) }
+                        })
+                    }
+                    put(obj)
                 }
-                put(obj)
-            }
-        })
+            })
+            .apply { systemInstruction?.trim()?.takeIf { it.isNotEmpty() }?.let { put("systemInstruction", it) } }
+    }
 
     private suspend fun open(accept: String): HttpURLConnection {
         require(baseUrl.isNotBlank()) { "DUA_ENGINE_URL is not set in local.properties" }
@@ -96,6 +102,7 @@ class ChatRepository(
      */
     suspend fun stream(
         turns: List<ChatTurn>,
+        systemInstruction: String? = null,
         onActivity: suspend (String) -> Unit = {},
         onDelta: suspend (String) -> Unit,
     ): Result<String> =
@@ -105,7 +112,7 @@ class ChatRepository(
                 // Blocking SSE reads ignore coroutine cancel; disconnect on cancel so Stop is immediate.
                 val watcher = launch { try { awaitCancellation() } finally { conn.disconnect() } }
                 try {
-                    conn.outputStream.use { it.write(body(turns, true).toString().toByteArray()) }
+                    conn.outputStream.use { it.write(body(turns, true, systemInstruction).toString().toByteArray()) }
                     val code = conn.responseCode
                     if (code == 401) {
                         onUnauthorized()
@@ -156,10 +163,10 @@ class ChatRepository(
             }
         }
 
-    suspend fun send(turns: List<ChatTurn>): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun send(turns: List<ChatTurn>, systemInstruction: String? = null): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val conn = open("application/json")
-            val body = body(turns, false)
+            val body = body(turns, false, systemInstruction)
             try {
                 conn.outputStream.use { it.write(body.toString().toByteArray()) }
                 val code = conn.responseCode
