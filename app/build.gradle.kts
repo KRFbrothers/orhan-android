@@ -79,6 +79,10 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
+// `-PallowUnsignedRelease=true` (or ALLOW_UNSIGNED_RELEASE=true): CI-only opt-out, see whenReady guard below.
+val allowUnsignedRelease = (providers.gradleProperty("allowUnsignedRelease").orNull
+    ?: System.getenv("ALLOW_UNSIGNED_RELEASE") ?: "false").toBoolean()
+
 android {
     namespace = "ai.orhan"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -148,7 +152,17 @@ android {
             )
             // Release artifacts are signed when the keystore is supplied; if it is
             // not, the build fails loudly below instead of emitting an unsigned APK.
-            signingConfig = signingConfigs.getByName("release")
+            // CI unsigned path: with -PallowUnsignedRelease=true and no keystore we
+            // leave signingConfig unset so packageRelease emits an unsigned APK
+            // (R8 + mapping.txt check). Without the flag the whenReady guard fails.
+            val releaseSigning = signingConfigs.getByName("release")
+            val releaseSigningComplete = releaseSigning.storeFile?.exists() == true &&
+                !releaseSigning.storePassword.isNullOrBlank() &&
+                !releaseSigning.keyAlias.isNullOrBlank() &&
+                !releaseSigning.keyPassword.isNullOrBlank()
+            if (releaseSigningComplete || !allowUnsignedRelease) {
+                signingConfig = releaseSigning
+            }
             isDebuggable = false
         }
         // Dev-only tokens; never baked into release builds.
@@ -181,8 +195,7 @@ android {
 // workflow, which only needs `assembleRelease` to prove R8 runs on code nobody
 // ships. Any release build that is meant to be installed fails here instead of
 // quietly emitting an unsigned APK.
-val allowUnsignedRelease = (providers.gradleProperty("allowUnsignedRelease").orNull
-    ?: System.getenv("ALLOW_UNSIGNED_RELEASE") ?: "false").toBoolean()
+// allowUnsignedRelease is declared above the android {} block.
 
 gradle.taskGraph.whenReady {
     if (allowUnsignedRelease) return@whenReady
