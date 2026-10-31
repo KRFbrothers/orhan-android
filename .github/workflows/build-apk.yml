@@ -105,8 +105,9 @@ jobs:
           BT="${ANDROID_HOME}/build-tools/35.0.0"
           "$BT/apksigner" verify --print-certs Orhan-debug.apk | tee apk-certs.txt
           GOT_CERT=$("$BT/apksigner" verify --print-certs Orhan-debug.apk \
-            | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print $2}' | tr -d ' ')
-          WANT_CERT=$(echo "${ORHAN_DEBUG_CERT_SHA256}" | tr -d ' ')
+            | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print $2}' \
+            | tr '[:upper:]' '[:lower:]' | tr -d ' :')
+          WANT_CERT=$(echo "${ORHAN_DEBUG_CERT_SHA256}" | tr '[:upper:]' '[:lower:]' | tr -d ' :')
           echo "APK certificate sha256 : ${GOT_CERT}"
           echo "expected     sha256    : ${WANT_CERT}"
           test "${GOT_CERT}" = "${WANT_CERT}" \
