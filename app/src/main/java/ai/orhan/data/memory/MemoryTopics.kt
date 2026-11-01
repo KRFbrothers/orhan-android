@@ -119,6 +119,13 @@ internal fun allCount(topics: List<MemoryTopic>, query: String, tags: Set<String
  */
 internal fun updatesCount(topics: List<MemoryTopic>): Int = topics.count { it.unread }
 
+/**
+ * Badge text for the Memory tab. The reference showed this unread count on the
+ * tab after memory had loaded, including while Chats was selected. A zero count
+ * was not on screen, so the badge is hidden at zero instead of showing "0".
+ */
+internal fun memoryTabBadge(unread: Int): String? = if (unread > 0) unread.toString() else null
+
 internal data class TopicGroup(val name: String, val topics: List<MemoryTopic>)
 
 internal fun groupTopics(topics: List<MemoryTopic>): List<TopicGroup> =
@@ -126,7 +133,22 @@ internal fun groupTopics(topics: List<MemoryTopic>): List<TopicGroup> =
         .map { (name, items) -> TopicGroup(name, items.sortedByDescending { it.updatedAt }) }
         .sortedByDescending { it.topics.maxOf { topic -> topic.updatedAt } }
 
-/** "about 2 hours ago" for the last day, otherwise the chat-list date. */
+/**
+ * Updates is one flat feed: the reference hid group headers while that filter
+ * was on. All keeps the group headers. A blank group name means "no header".
+ */
+internal fun memoryFeed(topics: List<MemoryTopic>, updatesOnly: Boolean): List<TopicGroup> =
+    if (updatesOnly) {
+        if (topics.isEmpty()) emptyList() else listOf(TopicGroup("", topics))
+    } else {
+        groupTopics(topics)
+    }
+
+/**
+ * "about 2 hours ago" under a day. From one through six days the reference
+ * Memory rows said "1 day ago" / "5 days ago" / "6 days ago", counted in 24-hour
+ * steps. Older than that stays the chat-list date; that range was not on screen.
+ */
 internal fun memoryTimestamp(then: Long, now: Long, older: (Long, Long) -> String): String {
     val delta = now - then
     if (delta < 0) return older(then, now)
@@ -135,6 +157,8 @@ internal fun memoryTimestamp(then: Long, now: Long, older: (Long, Long) -> Strin
     if (minutes < 60) return if (minutes == 1L) "about 1 minute ago" else "about $minutes minutes ago"
     val hours = delta / 3_600_000L
     if (hours < 24) return if (hours == 1L) "about 1 hour ago" else "about $hours hours ago"
+    val days = delta / 86_400_000L
+    if (days in 1..6) return if (days == 1L) "1 day ago" else "$days days ago"
     return older(then, now)
 }
 
