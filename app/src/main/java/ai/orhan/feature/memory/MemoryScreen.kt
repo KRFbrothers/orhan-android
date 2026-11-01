@@ -133,8 +133,9 @@ private val Shortcuts = listOf(
 )
 
 /**
- * Memory tab. Personal context is still the only text sent with chats, and only
- * when Pause memory is off. Topics, to-dos and artifacts stay on the device.
+ * Memory tab. Profile text is sent only while Pause memory is off.
+ * Automatic memory stays off until the user enables it. Topic text is sent
+ * only when "Use topics in chats" is on, and never while memory is paused.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -142,6 +143,7 @@ fun MemoryScreen(
     onBack: () -> Unit,
     embedded: Boolean = false,
     onEditProfile: () -> Unit = {},
+    onOpenSource: (String, Long) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val entries = remember(context) { context.memoryEntriesStore() }
@@ -178,6 +180,7 @@ fun MemoryScreen(
                     entries.upsertTopic(if (creating) null else openTopicId, title, summary, content, group, tags)
                 },
                 onDelete = { id -> entries.deleteTopic(id) },
+                onOpenSource = onOpenSource,
                 snackbar = snackbar,
             )
             page == "overview" -> OverviewPage(topics, onBack = { page = "home" }, onOpen = { openTopicId = it })
@@ -552,16 +555,56 @@ private fun ProfilePage(onBack: () -> Unit, onEditProfile: () -> Unit, snackbar:
         }
         if (pause.unreadable) {
             Text(
-                "Pause setting couldn't be read. Chats won't include this context until it can be read again.",
+                "Pause setting couldn't be read. Chats won't include this context, and automatic memory stays off, until it can be read again.",
                 style = OrhanTextStyles.snippet,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
             )
         } else if (pause.paused) {
             Text(
-                "Memory is paused — chats won't include this context until you turn it back on.",
+                "Memory is paused — chats won't include this context, and new messages won't be saved, until you turn it back on.",
                 style = OrhanTextStyles.snippet,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 8.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("Automatic memory", style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    "Off until you turn it on. Then a durable fact in a message sent after that can be saved. Older chats are left alone.",
+                    style = OrhanTextStyles.snippet,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = pause.automaticEnabled && !pause.unreadable,
+                onCheckedChange = { enabled -> scope.launch { pauseStore.setAutomaticEnabled(enabled) } },
+                enabled = !pause.unreadable,
+                modifier = Modifier.semantics { contentDescription = "Automatic memory" },
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 8.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("Use topics in chats", style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    "Off by default. When on, saved topic titles and summaries are included in chats. Pause memory stops that.",
+                    style = OrhanTextStyles.snippet,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = pause.includeTopics && !pause.unreadable,
+                onCheckedChange = { enabled -> scope.launch { pauseStore.setIncludeTopics(enabled) } },
+                enabled = !pause.unreadable && !pause.paused,
+                modifier = Modifier.semantics { contentDescription = "Use topics in chats" },
+            )
+        }
+        pause.lastError?.let { message ->
+            Text(
+                message,
+                style = OrhanTextStyles.snippet,
+                color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
@@ -589,7 +632,7 @@ private fun ProfilePage(onBack: () -> Unit, onEditProfile: () -> Unit, snackbar:
             enabled = loaded,
             modifier = Modifier.heightIn(min = 48.dp),
         ) { Text("Save") }
-        FootNote("Only this text is sent with chats, and only while Pause memory is off. Topics and to-dos stay on this device.")
+        FootNote("Profile text is sent only while Pause memory is off. Automatic memory does not read older chats. Topics are sent only when Use topics in chats is on, and never while memory is paused.")
     }
 }
 
@@ -749,6 +792,7 @@ private fun TopicEditor(
     onBack: () -> Unit,
     onSave: suspend (String, String, String, String, List<String>) -> Boolean,
     onDelete: suspend (String) -> Boolean,
+    onOpenSource: (String, Long) -> Unit,
     snackbar: SnackbarHostState,
 ) {
     val scope = rememberCoroutineScope()
@@ -858,7 +902,16 @@ private fun TopicEditor(
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
-        FootNote("Topics stay on this device. They are not sent to your agents.")
+        val sourceTitle = topic?.sourceChatTitle.orEmpty()
+        if (sourceTitle.isNotBlank()) {
+            TextButton(
+                onClick = { onOpenSource(sourceTitle, topic?.sourceMessageId ?: 0L) },
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .semantics { contentDescription = "Open source chat" },
+            ) { Text("Open source chat") }
+        }
+        FootNote("Topics stay on this device unless Use topics in chats is on. Pause memory stops that. A source chat opens the message this topic came from.")
     }
     if (confirmDelete && topic != null) {
         ConfirmDelete(

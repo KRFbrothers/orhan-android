@@ -25,7 +25,8 @@ import java.io.OutputStream
  * Local per-chat message threads keyed by chat title (same string as AppRoutes.chat(title)).
  * Device-only; no cloud sync.
  */
-private const val THREAD_FORMAT_VERSION = 2
+private const val THREAD_FORMAT_VERSION = 3
+private const val THREAD_FORMAT_V2 = 2
 private const val THREAD_FORMAT_V1 = 1
 /** Total on-disk budget for persisted chat attachment files; oldest files are pruned beyond it. */
 const val MAX_ATTACHMENT_DISK_BYTES = 40L * 1024 * 1024
@@ -38,6 +39,8 @@ data class StoredAttachment(val name: String, val mimeType: String, val sizeByte
 data class StoredMessage(
     val id: Long, val role: String, val text: String, val time: String,
     val attachment: StoredAttachment? = null,
+    /** Epoch millis when the bubble was created. Zero on threads saved before automatic memory. */
+    val createdAt: Long = 0L,
 )
 data class ChatThread(val title: String, val updatedAt: Long, val messages: List<StoredMessage>)
 
@@ -50,7 +53,9 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
         return try {
             DataInputStream(bytes.inputStream()).use { d ->
                 val version = d.readInt()
-                if (version != THREAD_FORMAT_VERSION && version != THREAD_FORMAT_V1) return defaultValue
+                if (version != THREAD_FORMAT_VERSION && version != THREAD_FORMAT_V2 && version != THREAD_FORMAT_V1) {
+                    return defaultValue
+                }
                 val threadCount = d.readInt()
                 if (threadCount < 0 || threadCount > 10_000) throw IOException("corrupt thread count $threadCount")
                 List(threadCount) {
@@ -59,10 +64,16 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
                     val msgCount = d.readInt()
                     if (msgCount < 0 || msgCount > 100_000) throw IOException("corrupt message count $msgCount")
                     val msgs = List(msgCount) {
-                        val m = StoredMessage(d.readLong(), d.readUTF(), readLongString(d), d.readUTF())
-                        if (version >= 2 && d.readBoolean()) {
-                            m.copy(attachment = StoredAttachment(d.readUTF(), d.readUTF(), d.readLong(), d.readUTF()))
-                        } else m
+                        val id = d.readLong()
+                        val role = d.readUTF()
+                        val text = readLongString(d)
+                        val time = d.readUTF()
+                        val createdAt = if (version >= THREAD_FORMAT_VERSION) d.readLong() else 0L
+                        var message = StoredMessage(id, role, text, time, createdAt = createdAt)
+                        if (version >= THREAD_FORMAT_V2 && d.readBoolean()) {
+                            message = message.copy(attachment = StoredAttachment(d.readUTF(), d.readUTF(), d.readLong(), d.readUTF()))
+                        }
+                        message
                     }
                     ChatThread(title, updatedAt, msgs)
                 }
@@ -76,7 +87,9 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
         d.writeInt(t.size)
         t.forEach { th ->
             d.writeUTF(th.title); d.writeLong(th.updatedAt); d.writeInt(th.messages.size)
-            th.messages.forEach { m -> d.writeLong(m.id); d.writeUTF(m.role); writeLongString(d, m.text); d.writeUTF(m.time)
+            th.messages.forEach { m ->
+                d.writeLong(m.id); d.writeUTF(m.role); writeLongString(d, m.text); d.writeUTF(m.time)
+                d.writeLong(m.createdAt)
                 val a = m.attachment
                 d.writeBoolean(a != null)
                 if (a != null) { d.writeUTF(a.name); d.writeUTF(a.mimeType); d.writeLong(a.sizeBytes); d.writeUTF(a.fileName) }
@@ -102,10 +115,10 @@ val Context.chatThreadsDataStore: DataStore<List<ChatThread>> by dataStore(
 )
 
 internal fun ChatMessage.toStored(attachment: StoredAttachment? = null) =
-    StoredMessage(id, if (role == ChatRole.User) "user" else "agent", text, time, attachment)
+    StoredMessage(id, if (role == ChatRole.User) "user" else "agent", text, time, attachment, createdAt)
 
 internal fun StoredMessage.toUi() =
-    ChatMessage(id, if (role == "user") ChatRole.User else ChatRole.Agent, text, time)
+    ChatMessage(id, if (role == "user") ChatRole.User else ChatRole.Agent, text, time, createdAt = createdAt)
 
 /** Pure helper: upsert a thread, cap messages and thread count (drop oldest by updatedAt). */
 fun List<ChatThread>.withSaved(

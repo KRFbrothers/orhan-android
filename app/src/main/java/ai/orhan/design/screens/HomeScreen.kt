@@ -192,6 +192,8 @@ fun HomeScreen(
     onEditAgent: ((InstalledAgent) -> Unit)? = null,
     onEditProfile: () -> Unit = {},
     onOpenMemory: () -> Unit = {},
+    /** Opens the chat message a memory topic was taken from. */
+    onOpenMemorySource: (String, Long) -> Unit = { _, _ -> },
     onOpenArtifacts: () -> Unit = {},
     artifacts: List<Artifact> = emptyList(),
     onUpsertArtifact: (Artifact) -> Unit = {},
@@ -354,6 +356,7 @@ fun HomeScreen(
                         onBack = { tab = OrhanTab.Chats },
                         embedded = true,
                         onEditProfile = onEditProfile,
+                        onOpenSource = onOpenMemorySource,
                     )
                     OrhanTab.Artifacts -> ArtifactsScreen(
                         artifacts = artifacts,

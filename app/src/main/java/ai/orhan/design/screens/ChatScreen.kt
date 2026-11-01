@@ -89,6 +89,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -130,6 +132,8 @@ data class ChatMessage(
     val text: String,
     val time: String,
     val artifact: ChatArtifact? = null,
+    /** Epoch millis. Zero for bubbles saved before automatic memory existed. */
+    val createdAt: Long = 0L,
 )
 
 /**
@@ -147,6 +151,7 @@ private val ChatThreadSaver: Saver<List<ChatMessage>, ArrayList<String>> = Saver
                     m.time,
                     m.artifact?.name ?: "",
                     m.artifact?.meta ?: "",
+                    m.createdAt.toString(),
                 ).joinToString("\u001f")
             },
         )
@@ -164,6 +169,7 @@ private val ChatThreadSaver: Saver<List<ChatMessage>, ArrayList<String>> = Saver
                 } else {
                     null
                 },
+                createdAt = p.getOrNull(6)?.toLongOrNull() ?: 0L,
             )
         }
     },
@@ -205,6 +211,10 @@ fun ChatScreen(
     onSaveArtifact: ((title: String, content: String) -> Unit)? = null,
     /** Prefills the composer once (e.g. from a workflow). Never auto-sent; a restored draft wins. */
     initialComposerText: String = "",
+    /** Scrolls to this message when opening a memory source. Zero means no source. */
+    focusMessageId: Long = 0L,
+    /** False until the saved thread has been applied, so a missing source is not reported early. */
+    threadRestored: Boolean = true,
     /** Opens Settings → Chat preferences from the overflow menu; hidden when null. */
     onOpenChatPreferences: (() -> Unit)? = null,
 ) {
@@ -214,6 +224,7 @@ fun ChatScreen(
     val messages = messagesOverride ?: localMessages
     var input by rememberSaveable { mutableStateOf(initialComposerText) }
     val listState = rememberLazyListState()
+    var didFocusSource by rememberSaveable { mutableStateOf(false) }
 
     var pendingPreview by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -311,7 +322,19 @@ fun ChatScreen(
 
     // LazyColumn index 0 is the "Today" divider, so messages occupy
     // 1..messages.size and the newest bubble sits at index messages.size.
-    LaunchedEffect(messages.size) {
+    // A memory source scrolls once to that message. Later sends still follow the end.
+    LaunchedEffect(messages.size, threadRestored, focusMessageId) {
+        if (focusMessageId != 0L && !didFocusSource) {
+            if (!threadRestored) return@LaunchedEffect
+            val index = messages.indexOfFirst { it.id == focusMessageId }
+            didFocusSource = true
+            if (index >= 0) {
+                listState.scrollToItem(index + 1)
+            } else {
+                Toast.makeText(context, "That message is no longer in this chat.", Toast.LENGTH_LONG).show()
+            }
+            return@LaunchedEffect
+        }
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size)
         }
@@ -353,7 +376,9 @@ fun ChatScreen(
                 MessageBubble(
                     message = message,
                     agentName = agentName,
-                    selected = message.id == actionMessageId,
+                    selected = message.id == actionMessageId ||
+                        (actionMessageId == null && focusMessageId != 0L && message.id == focusMessageId),
+                    sourceMessage = focusMessageId != 0L && message.id == focusMessageId,
                     showActivityCards = showActivityCards,
                     onLongPress = if (message.text.isNotBlank()) {
                         { actionMessageId = message.id }
@@ -528,6 +553,7 @@ private fun MessageBubble(
     selected: Boolean,
     showActivityCards: Boolean = true,
     onLongPress: (() -> Unit)? = null,
+    sourceMessage: Boolean = false,
 ) {
     val colors = OrhanTheme.colors
     val isUser = message.role == ChatRole.User
@@ -540,7 +566,15 @@ private fun MessageBubble(
     }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (sourceMessage) {
+                    Modifier.semantics { contentDescription = "Source message" }
+                } else {
+                    Modifier
+                },
+            ),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.Top,
     ) {

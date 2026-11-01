@@ -25,6 +25,7 @@ import ai.orhan.feature.memory.MemoryScreen
 import ai.orhan.data.memory.memoryEntriesStore
 import ai.orhan.data.memory.memoryPauseStore
 import ai.orhan.data.memory.memoryStore
+import ai.orhan.data.memory.topicContextBlock
 import ai.orhan.data.memory.updatesCount
 import ai.orhan.data.permissions.askBeforeActingStore
 import ai.orhan.data.prefs.replyStyleStore
@@ -82,9 +83,9 @@ object AppRoutes {
     const val EDIT_PROFILE = "edit_profile"
     const val MEMORY = "memory"
     const val ARTIFACTS = "artifacts"
-    const val CHAT = "chat/{title}?draft={draft}"
-    fun chat(title: String, draft: String = "") =
-        "chat/${Uri.encode(title)}" + if (draft.isNotBlank()) "?draft=${Uri.encode(draft)}" else ""
+    const val CHAT = "chat/{title}?draft={draft}&message={message}"
+    fun chat(title: String, draft: String = "", messageId: Long = 0L) =
+        "chat/${Uri.encode(title)}?draft=${Uri.encode(draft)}&message=$messageId"
     const val WORKFLOW_EDIT = "workflow_edit?id={id}"
     fun workflowEdit(id: String? = null) = if (id == null) "workflow_edit" else "workflow_edit?id=${Uri.encode(id)}"
 }
@@ -123,6 +124,7 @@ fun OrhanNavHost(isDark: Boolean) {
     // read makes [MemoryPauseStore.paused] true so personal context is withheld.
     val memoryPauseStore = remember(context) { context.memoryPauseStore() }
     val memoryPaused by memoryPauseStore.paused.collectAsStateWithLifecycle(initialValue = false)
+    val memoryChoices by memoryPauseStore.state.collectAsStateWithLifecycle(initialValue = ai.orhan.data.memory.MemoryPause())
     val askBeforeActingStore = remember(context) { context.askBeforeActingStore() }
     val askBeforeActing by askBeforeActingStore.enabled.collectAsStateWithLifecycle(initialValue = true)
     val replyStyleStore = remember(context) { context.replyStyleStore() }
@@ -174,6 +176,11 @@ fun OrhanNavHost(isDark: Boolean) {
                 onOpenMemory = {
                     navController.navigate(AppRoutes.MEMORY) { launchSingleTop = true }
                 },
+                onOpenMemorySource = { title, messageId ->
+                    val t = canon(title)
+                    scope.launch { recentRepo.recordOpened(t) }
+                    navController.navigate(AppRoutes.chat(t, messageId = messageId))
+                },
                 onOpenArtifacts = {
                     navController.navigate(AppRoutes.ARTIFACTS) { launchSingleTop = true }
                 },
@@ -221,6 +228,11 @@ fun OrhanNavHost(isDark: Boolean) {
                 onBack = { navController.popBackStack() },
                 onEditProfile = {
                     navController.navigate(AppRoutes.EDIT_PROFILE) { launchSingleTop = true }
+                },
+                onOpenSource = { title, messageId ->
+                    val t = canon(title)
+                    scope.launch { recentRepo.recordOpened(t) }
+                    navController.navigate(AppRoutes.chat(t, messageId = messageId))
                 },
             )
         }
@@ -309,6 +321,7 @@ fun OrhanNavHost(isDark: Boolean) {
             arguments = listOf(
                 navArgument("title") { type = NavType.StringType },
                 navArgument("draft") { type = NavType.StringType; defaultValue = "" },
+                navArgument("message") { type = NavType.StringType; defaultValue = "0" },
             ),
         ) { entry ->
             val auth = remember(context) { AuthRepository.get(context) }
@@ -337,6 +350,13 @@ fun OrhanNavHost(isDark: Boolean) {
                 else savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions, it.tools) },
             )
             chatViewModel.setPersonalMemory(personalMemory, memoryPaused)
+            chatViewModel.setTopicContext(
+                topicContextBlock(
+                    memoryTopics,
+                    include = memoryChoices.includeTopics,
+                    paused = memoryChoices.paused || memoryChoices.unreadable,
+                ),
+            )
             chatViewModel.setAskBeforeActing(askBeforeActing)
             chatViewModel.setReplyStyle(replyStyle)
             chatViewModel.setTone(agentTone)
@@ -366,6 +386,8 @@ fun OrhanNavHost(isDark: Boolean) {
                     scope.launch { artifactStore.upsert(artTitle, content) }
                 },
                 initialComposerText = entry.arguments?.getString("draft").orEmpty(),
+                focusMessageId = entry.arguments?.getString("message")?.toLongOrNull() ?: 0L,
+                threadRestored = chat.threadRestored,
                 onOpenChatPreferences = { navController.openSettingsPage(SettingsRoutes.CHAT_PREFERENCES) },
             )
         }
