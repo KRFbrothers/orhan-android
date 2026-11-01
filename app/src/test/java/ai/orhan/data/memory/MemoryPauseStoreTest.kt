@@ -39,6 +39,8 @@ class MemoryPauseStoreTest {
         val state = MemoryPauseStore(FailingReadPrefs()).state.first()
         assertTrue(state.unreadable)
         assertTrue(state.paused)
+        assertFalse(state.automaticEnabled)
+        assertFalse(state.includeTopics)
         assertNull(personalMemoryBlock("secret pref", state.paused))
     }
 }

@@ -15,7 +15,7 @@ import java.io.OutputStream
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
-/* Local notes, to-dos and topics. On-device only; never sent to the engine. */
+/* Local notes, to-dos and topics. Topic text is sent only when the user opts in. */
 const val MAX_NOTE_CONTENT = 8_000
 const val MAX_TODO_CONTENT = 2_000
 const val MAX_ENTRY_TITLE = 200
@@ -152,6 +152,52 @@ class MemoryEntriesStore(private val dataStore: DataStore<MemoryEntries>) {
             throw cancelled
         } catch (_: Exception) {
             false
+        }
+    }
+
+    /**
+     * Saves one validated statement from a new chat message. The topic is unread
+     * and keeps [chatTitle] plus [messageId]. A duplicate, a rejected statement,
+     * or a failed write does not report success and does not replace saved topics.
+     */
+    suspend fun addAutomaticTopic(
+        userText: String,
+        chatTitle: String,
+        messageId: Long,
+        now: Long = System.currentTimeMillis(),
+    ): AutomaticSaveResult {
+        val extracted = extractDurableStatement(userText) ?: return AutomaticSaveResult.NotUseful
+        if (!isValidExtraction(extracted.content, extracted)) return AutomaticSaveResult.NotUseful
+        val title = chatTitle.trim()
+        if (title.isEmpty() || messageId == 0L) return AutomaticSaveResult.NotUseful
+        return try {
+            var result = AutomaticSaveResult.Saved
+            dataStore.updateData { raw ->
+                val current = raw.withNotesMigrated()
+                if (isDuplicateMemory(current.topics, extracted, title, messageId)) {
+                    result = AutomaticSaveResult.Duplicate
+                    return@updateData current
+                }
+                val topic = MemoryTopic(
+                    id = UUID.randomUUID().toString(),
+                    title = extracted.title,
+                    summary = extracted.summary,
+                    content = extracted.content,
+                    group = AUTOMATIC_TOPIC_GROUP,
+                    tags = listOf(AUTOMATIC_TOPIC_TAG),
+                    unread = true,
+                    createdAt = now,
+                    updatedAt = now,
+                    sourceChatTitle = title,
+                    sourceMessageId = messageId,
+                )
+                current.copy(topics = current.topics.upsertedTopic(topic))
+            }
+            result
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            AutomaticSaveResult.WriteFailed
         }
     }
 

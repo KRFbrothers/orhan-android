@@ -12,10 +12,12 @@ import java.io.OutputStream
  *
  * Version 1 files are notes + to-dos. Notes become topics in the "Notes" group
  * and are not written back, so an older file still opens and is not duplicated.
- * To-dos stay to-dos (Next Actions). Topics are never added to chat context.
+ * To-dos stay to-dos (Next Actions). Topics are sent to a chat only when the
+ * user turns on "Use topics in chats", and never while memory is paused.
  */
 
-const val TOPICS_FORMAT_VERSION = 2
+const val TOPICS_FORMAT_VERSION = 3
+private const val TOPICS_FORMAT_V2 = 2
 const val DEFAULT_TOPIC_GROUP = "General"
 const val MIGRATED_NOTES_GROUP = "Notes"
 const val MAX_SUMMARY = 280
@@ -33,6 +35,10 @@ data class MemoryTopic(
     val unread: Boolean,
     val createdAt: Long,
     val updatedAt: Long,
+    /** Chat title this topic was taken from. Blank for a topic the user typed. */
+    val sourceChatTitle: String = "",
+    /** Message id inside [sourceChatTitle]. Zero when there is no source message. */
+    val sourceMessageId: Long = 0L,
 )
 
 internal fun MemoryEntries.withNotesMigrated(): MemoryEntries {
@@ -88,6 +94,8 @@ internal fun prepareTopic(
         unread = if (changed) false else existing?.unread ?: false,
         createdAt = existing?.createdAt ?: now,
         updatedAt = if (changed) now else existing?.updatedAt ?: now,
+        sourceChatTitle = existing?.sourceChatTitle.orEmpty(),
+        sourceMessageId = existing?.sourceMessageId ?: 0L,
     )
 }
 
@@ -185,10 +193,10 @@ internal fun decodeMemoryEntries(input: InputStream): MemoryEntries {
                     val todos = inputStream.readEntryList()
                     MemoryEntries(notes = notes, todos = todos).withNotesMigrated()
                 }
-                TOPICS_FORMAT_VERSION -> {
+                TOPICS_FORMAT_V2, TOPICS_FORMAT_VERSION -> {
                     val notes = inputStream.readEntryList()
                     val todos = inputStream.readEntryList()
-                    val topics = inputStream.readTopicList()
+                    val topics = inputStream.readTopicList(withSource = version == TOPICS_FORMAT_VERSION)
                     MemoryEntries(notes = notes, todos = todos, topics = topics).withNotesMigrated()
                 }
                 else -> MemoryEntries()
@@ -244,10 +252,12 @@ private fun DataOutputStream.writeTopicList(list: List<MemoryTopic>) {
         writeBoolean(topic.unread)
         writeLong(topic.createdAt)
         writeLong(topic.updatedAt)
+        writeUTF(topic.sourceChatTitle)
+        writeLong(topic.sourceMessageId)
     }
 }
 
-private fun DataInputStream.readTopicList(): List<MemoryTopic> {
+private fun DataInputStream.readTopicList(withSource: Boolean): List<MemoryTopic> {
     val count = readInt()
     if (count < 0 || count > MAX_ENTRIES * 2) throw IOException("bad count")
     return List(count) {
@@ -269,6 +279,8 @@ private fun DataInputStream.readTopicList(): List<MemoryTopic> {
             unread = readBoolean(),
             createdAt = readLong(),
             updatedAt = readLong(),
+            sourceChatTitle = if (withSource) readUTF() else "",
+            sourceMessageId = if (withSource) readLong() else 0L,
         )
     }
 }

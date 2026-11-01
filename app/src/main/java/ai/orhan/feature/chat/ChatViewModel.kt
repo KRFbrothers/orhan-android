@@ -24,6 +24,10 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.FlowPreview
 import ai.orhan.data.history.ChatThreadStore
 import ai.orhan.data.history.chatThreads
+import ai.orhan.data.history.toStored
+import ai.orhan.data.memory.AutomaticMemoryCoordinator
+import ai.orhan.data.memory.memoryEntriesStore
+import ai.orhan.data.memory.memoryPauseStore
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -100,11 +104,14 @@ data class ChatUiState(
     val busy: Boolean = false,
     /** Transient status from SSE `thinking`/`progress` events; shown with the typing indicator. */
     val activityLabel: String? = null,
+    /** True after the saved thread has been applied, including when there was nothing to restore. */
+    val threadRestored: Boolean = false,
 )
 
 class ChatViewModel(
     private val repository: ChatRepository = ChatRepository(),
     private val threadStore: ChatThreadStore? = null,
+    private val automaticMemory: AutomaticMemoryCoordinator? = null,
 ) : ViewModel() {
     /** Uses the signed-in Supabase session; falls back to DUA_DEV_JWT (debug only) when signed out. */
     constructor(app: Application) : this(
@@ -115,6 +122,7 @@ class ChatViewModel(
             )
         },
         app.chatThreads(),
+        AutomaticMemoryCoordinator(app.memoryPauseStore(), app.memoryEntriesStore()),
     )
 
     private var threadTitle: String? = null
@@ -128,21 +136,30 @@ class ChatViewModel(
      */
     @OptIn(FlowPreview::class)
     fun loadThread(title: String) {
-        val store = threadStore ?: return
+        val store = threadStore
         if (threadTitle != null || title.isBlank()) return
         threadTitle = title
+        if (store == null) {
+            _state.update { it.copy(threadRestored = true) }
+            return
+        }
         viewModelScope.launch {
             val saved = store.loadThread(title)
             if (saved.messages.isNotEmpty() && _state.value.messages.isEmpty()) {
                 saved.attachments.forEach { (id, a) -> attachmentsById.putIfAbsent(id, a) }
-                _state.update { it.copy(messages = saved.messages) }
+                _state.update { it.copy(messages = saved.messages, threadRestored = true) }
+            } else {
+                _state.update { it.copy(threadRestored = true) }
             }
             _state.filter { !it.busy }
                 .map { it.messages }
                 .distinctUntilChanged()
                 .drop(1)
                 .debounce(300)
-                .collect { msgs -> store.save(title, msgs, attachmentsById.toMap()) }
+                .collect { msgs ->
+                    store.save(title, msgs, attachmentsById.toMap())
+                    automaticMemory?.onMessagesSaved(title, msgs.map { it.toStored() })
+                }
         }
     }
 
@@ -155,7 +172,10 @@ class ChatViewModel(
         val store = threadStore ?: return
         val msgs = _state.value.messages
         val atts = attachmentsById.toMap()
-        if (msgs.isNotEmpty()) viewModelScope.launch { store.save(title, msgs, atts) }
+        if (msgs.isNotEmpty()) viewModelScope.launch {
+            store.save(title, msgs, atts)
+            automaticMemory?.onMessagesSaved(title, msgs.map { it.toStored() })
+        }
     }
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -217,6 +237,14 @@ class ChatViewModel(
 
     private var memoryPaused: Boolean = false
 
+    /** Pre-built topic block, or null when topics must not be sent. */
+    private var topicContext: String? = null
+
+    /** Sets topic text for the prompt. Null omits it. Idempotent; safe on every recomposition. */
+    fun setTopicContext(block: String?) {
+        topicContext = block?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
     /** Privacy → "Ask before acting". Default ON. */
     private var askBeforeActing: Boolean = true
 
@@ -258,6 +286,7 @@ class ChatViewModel(
         add(orhanIdentity(agentName))
         userProfile?.let { add(it) }
         personalMemoryBlock(personalMemory, memoryPaused)?.let { add(it) }
+        topicContext?.let { add(it) }
         askBeforeActingBlock(askBeforeActing)?.let { add(it) }
         replyStyleBlock(replyStyle)?.let { add(it) }
         toneBlock(tone)?.let { add(it) }
@@ -299,7 +328,7 @@ class ChatViewModel(
         val text = raw.trim()
         if ((text.isEmpty() && attachment == null) || _state.value.busy) return
         val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
-        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString())
+        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis())
         if (attachment != null) attachmentsById[user.id] = attachment
         _state.update { it.copy(messages = it.messages + user, loading = true, activityLabel = null, busy = true, error = null) }
         streamReply()
@@ -383,6 +412,7 @@ class ChatViewModel(
             add(orhanIdentity(agent.name))
             userProfile?.let { add(it) }
             personalMemoryBlock(personalMemory, memoryPaused)?.let { add(it) }
+            topicContext?.let { add(it) }
             askBeforeActingBlock(askBeforeActing)?.let { add(it) }
             replyStyleBlock(replyStyle)?.let { add(it) }
             toneBlock(tone)?.let { add(it) }
