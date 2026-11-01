@@ -22,8 +22,8 @@ import ai.orhan.design.screens.ChatScreen
 import ai.orhan.feature.agents.CreateAgentScreen
 import ai.orhan.feature.profile.EditProfileScreen
 import ai.orhan.feature.memory.MemoryScreen
-import ai.orhan.data.memory.memoryStore
 import ai.orhan.data.memory.memoryPauseStore
+import ai.orhan.data.memory.memoryStore
 import ai.orhan.data.permissions.askBeforeActingStore
 import ai.orhan.data.prefs.replyStyleStore
 import ai.orhan.data.prefs.toneStore
@@ -115,6 +115,8 @@ fun OrhanNavHost(isDark: Boolean) {
     val workflowStore = remember(context) { context.workflowStore() }
     val workflows by workflowStore.workflows.collectAsStateWithLifecycle(initialValue = emptyList())
     val personalMemory by memoryStore.memory.collectAsStateWithLifecycle(initialValue = "")
+    // Missing key stays not-paused, matching the installed preference. A failed
+    // read makes [MemoryPauseStore.paused] true so personal context is withheld.
     val memoryPauseStore = remember(context) { context.memoryPauseStore() }
     val memoryPaused by memoryPauseStore.paused.collectAsStateWithLifecycle(initialValue = false)
     val askBeforeActingStore = remember(context) { context.askBeforeActingStore() }
@@ -210,7 +212,12 @@ fun OrhanNavHost(isDark: Boolean) {
             EditProfileScreen(onBack = { navController.popBackStack() })
         }
         composable(AppRoutes.MEMORY) {
-            MemoryScreen(onBack = { navController.popBackStack() })
+            MemoryScreen(
+                onBack = { navController.popBackStack() },
+                onEditProfile = {
+                    navController.navigate(AppRoutes.EDIT_PROFILE) { launchSingleTop = true }
+                },
+            )
         }
         composable(AppRoutes.ARTIFACTS) {
             ArtifactsScreen(
