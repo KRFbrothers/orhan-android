@@ -8,15 +8,12 @@ import androidx.datastore.dataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
-import java.io.DataInputStream
-import java.io.DataOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
 
-/* Local notes and to-dos for the Memory screen. On-device only; never sent to the engine. */
-private const val ENTRIES_FORMAT_VERSION = 1
+/* Local notes, to-dos and topics. On-device only; never sent to the engine. */
 const val MAX_NOTE_CONTENT = 8_000
 const val MAX_TODO_CONTENT = 2_000
 const val MAX_ENTRY_TITLE = 200
@@ -33,6 +30,7 @@ data class MemoryEntry(
 data class MemoryEntries(
     val notes: List<MemoryEntry> = emptyList(),
     val todos: List<MemoryEntry> = emptyList(),
+    val topics: List<MemoryTopic> = emptyList(),
 )
 
 object MemoryEntriesSerializer : Serializer<MemoryEntries> {
@@ -41,44 +39,12 @@ object MemoryEntriesSerializer : Serializer<MemoryEntries> {
     override suspend fun readFrom(input: InputStream): MemoryEntries {
         val bytes = try { input.readBytes() } catch (e: IOException) { throw CorruptionException("read", e) }
         if (bytes.isEmpty()) return defaultValue
-        return try {
-            DataInputStream(bytes.inputStream()).use { d ->
-                if (d.readInt() != ENTRIES_FORMAT_VERSION) return defaultValue
-                MemoryEntries(notes = d.readList(), todos = d.readList())
-            }
-        } catch (e: IOException) { defaultValue }
+        return decodeMemoryEntries(bytes.inputStream())
     }
 
     override suspend fun writeTo(t: MemoryEntries, output: OutputStream) {
-        val d = DataOutputStream(output)
-        d.writeInt(ENTRIES_FORMAT_VERSION)
-        d.writeList(t.notes); d.writeList(t.todos)
-        d.flush()
+        encodeMemoryEntries(t, output)
     }
-}
-
-private fun DataInputStream.readList(): List<MemoryEntry> {
-    val n = readInt()
-    if (n < 0 || n > MAX_ENTRIES * 2) throw IOException("bad count")
-    return List(n) {
-        MemoryEntry(readUTF(), readUTF(), readStr(), readBoolean(), readLong())
-    }
-}
-
-private fun DataOutputStream.writeList(list: List<MemoryEntry>) {
-    writeInt(list.size)
-    list.forEach { e ->
-        writeUTF(e.id); writeUTF(e.title.take(MAX_ENTRY_TITLE))
-        val b = e.content.toByteArray(Charsets.UTF_8); writeInt(b.size); write(b)
-        writeBoolean(e.done); writeLong(e.createdAt)
-    }
-}
-
-private fun DataInputStream.readStr(): String {
-    val n = readInt()
-    if (n < 0 || n > MAX_NOTE_CONTENT * 4) throw IOException("bad length")
-    val b = ByteArray(n); readFully(b)
-    return String(b, Charsets.UTF_8)
 }
 
 private val Context.memoryEntriesDataStore: DataStore<MemoryEntries> by dataStore(
@@ -95,6 +61,7 @@ class MemoryEntriesStore(private val dataStore: DataStore<MemoryEntries>) {
 
     val notes: Flow<List<MemoryEntry>> = data.map { d -> d.notes.sortedByDescending { it.createdAt } }
     val todos: Flow<List<MemoryEntry>> = data.map { d -> d.todos.sortedByDescending { it.createdAt } }
+    val topics: Flow<List<MemoryTopic>> = data.map { d -> d.withNotesMigrated().topics.sortedByDescending { it.updatedAt } }
 
     /** Upsert a note; title required. Returns false if rejected. */
     suspend fun upsertNote(id: String?, title: String, content: String): Boolean {
@@ -130,6 +97,53 @@ class MemoryEntriesStore(private val dataStore: DataStore<MemoryEntries>) {
     suspend fun deleteTodo(id: String) {
         dataStore.updateData { d -> d.copy(todos = d.todos.filterNot { it.id == id }) }
     }
+
+    /** Insert or replace a topic. Returns false when the title is blank. */
+    suspend fun upsertTopic(
+        id: String?,
+        title: String,
+        summary: String,
+        content: String,
+        group: String,
+        tags: List<String>,
+    ): Boolean {
+        if (title.trim().isEmpty()) return false
+        dataStore.updateData { raw ->
+            val current = raw.withNotesMigrated()
+            val existing = current.topics.firstOrNull { it.id == id }
+            val topic = prepareTopic(
+                existing = existing,
+                title = title,
+                summary = summary,
+                content = content,
+                group = group,
+                tags = tags,
+                now = System.currentTimeMillis(),
+                newId = UUID.randomUUID().toString(),
+            ) ?: return@updateData current
+            current.copy(topics = current.topics.upsertedTopic(topic))
+        }
+        return true
+    }
+
+    suspend fun deleteTopic(id: String) {
+        dataStore.updateData { raw ->
+            val current = raw.withNotesMigrated()
+            current.copy(topics = current.topics.filterNot { it.id == id })
+        }
+    }
+
+    /** Opening a topic clears its unread flag without changing the edited time. */
+    suspend fun markTopicRead(id: String) {
+        dataStore.updateData { raw ->
+            val current = raw.withNotesMigrated()
+            current.copy(topics = current.topics.map { if (it.id == id && it.unread) it.copy(unread = false) else it })
+        }
+    }
 }
+
+private fun List<MemoryTopic>.upsertedTopic(topic: MemoryTopic): List<MemoryTopic> =
+    if (any { it.id == topic.id }) map { if (it.id == topic.id) topic else it }
+    else (listOf(topic) + this).take(MAX_ENTRIES)
 
 fun Context.memoryEntriesStore(): MemoryEntriesStore = MemoryEntriesStore(applicationContext.memoryEntriesDataStore)

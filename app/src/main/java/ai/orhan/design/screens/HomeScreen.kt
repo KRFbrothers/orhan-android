@@ -347,6 +347,7 @@ fun HomeScreen(
                     OrhanTab.Memory -> MemoryScreen(
                         onBack = { tab = OrhanTab.Chats },
                         embedded = true,
+                        onEditProfile = onEditProfile,
                     )
                     OrhanTab.Artifacts -> ArtifactsScreen(
                         artifacts = artifacts,

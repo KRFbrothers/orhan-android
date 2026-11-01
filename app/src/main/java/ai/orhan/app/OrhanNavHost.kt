@@ -22,6 +22,9 @@ import ai.orhan.design.screens.ChatScreen
 import ai.orhan.feature.agents.CreateAgentScreen
 import ai.orhan.feature.profile.EditProfileScreen
 import ai.orhan.feature.memory.MemoryScreen
+import ai.orhan.data.memory.MemoryPause
+import ai.orhan.data.memory.chatPersonalContext
+import ai.orhan.data.memory.memoryPauseStore
 import ai.orhan.data.memory.memoryStore
 import ai.orhan.feature.profile.UserProfile
 import ai.orhan.feature.profile.profilePreferences
@@ -111,6 +114,10 @@ fun OrhanNavHost(isDark: Boolean) {
     val workflowStore = remember(context) { context.workflowStore() }
     val workflows by workflowStore.workflows.collectAsStateWithLifecycle(initialValue = emptyList())
     val personalMemory by memoryStore.memory.collectAsStateWithLifecycle(initialValue = "")
+    // Stay withheld until the on-device pause flag is read. Default is paused so a
+    // saved pause cannot leak on the first frame. Topics and to-dos are not passed in.
+    val pauseStore = remember(context) { context.memoryPauseStore() }
+    val memoryPause by pauseStore.state.collectAsStateWithLifecycle(initialValue = MemoryPause())
 
     NavHost(navController = navController, startDestination = AppRoutes.HOME) {
         composable(AppRoutes.HOME) {
@@ -198,7 +205,12 @@ fun OrhanNavHost(isDark: Boolean) {
             EditProfileScreen(onBack = { navController.popBackStack() })
         }
         composable(AppRoutes.MEMORY) {
-            MemoryScreen(onBack = { navController.popBackStack() })
+            MemoryScreen(
+                onBack = { navController.popBackStack() },
+                onEditProfile = {
+                    navController.navigate(AppRoutes.EDIT_PROFILE) { launchSingleTop = true }
+                },
+            )
         }
         composable(AppRoutes.ARTIFACTS) {
             ArtifactsScreen(
@@ -312,7 +324,9 @@ fun OrhanNavHost(isDark: Boolean) {
                 if (agent != null) emptyList()
                 else savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions, it.tools) },
             )
-            chatViewModel.setPersonalMemory(personalMemory)
+            chatViewModel.setPersonalMemory(
+                chatPersonalContext(personalMemory, memoryPause.loaded, memoryPause.paused),
+            )
             val languageRepo = remember(context) { context.settingsDetailPreferences() }
             val languagePrefs by languageRepo.language.collectAsStateWithLifecycle(initialValue = LanguagePrefs())
             chatViewModel.setReplyLanguage(if (languagePrefs.agentsUseAppLanguage) languageName(languagePrefs.code) else null)
