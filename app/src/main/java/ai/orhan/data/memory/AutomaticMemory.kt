@@ -10,8 +10,9 @@ import kotlin.coroutines.cancellation.CancellationException
  * Enabling records [MemoryPause.automaticEnabledAt]. Only a user message saved
  * after that instant is eligible. Older chats are not scanned. Pause, or a
  * preference file that cannot be read, stops extraction and stops topic text
- * from being added to a chat. Topics are still omitted unless the user also
- * turns on "Use topics in chats".
+ * from being added to a chat. A message saved while paused stays unsaved after
+ * pause is turned off. Topics are still omitted unless the user also turns on
+ * "Use topics in chats".
  */
 
 const val AUTOMATIC_TOPIC_GROUP = "Chats"
@@ -123,11 +124,12 @@ internal fun isDuplicateMemory(
 const val AUTOMATIC_SAVE_ERROR = "Couldn't save a memory from this chat. It was not added."
 
 /**
- * Runs after a chat thread is saved. Does nothing unless automatic memory is on,
- * pause is off, and the preference file was read. Each eligible message is
- * marked processed after a decision so a restart does not extract it again.
- * A failed write is left unmarked so a later save can retry, and it records
- * [AUTOMATIC_SAVE_ERROR] instead of reporting success.
+ * Runs after a chat thread is saved. Does nothing unless automatic memory is on
+ * and the preference file was read. While pause is on, an eligible message is
+ * marked processed and not saved, so turning pause off later does not mine it.
+ * Each other eligible message is marked after a decision so a restart does not
+ * extract it again. A failed topic write is left unmarked so a later save can
+ * retry, and it records [AUTOMATIC_SAVE_ERROR] instead of reporting success.
  */
 class AutomaticMemoryCoordinator(
     private val pauseStore: MemoryPauseStore,
@@ -136,9 +138,14 @@ class AutomaticMemoryCoordinator(
     suspend fun onMessagesSaved(chatTitle: String, messages: List<StoredMessage>) {
         try {
             val state = pauseStore.state.first()
-            if (!extractionAllowed(state)) return
+            if (state.unreadable || !state.automaticEnabled || state.automaticEnabledAt <= 0L) return
+            val eligible = eligibleUserMessages(messages, state.automaticEnabledAt)
+            if (state.paused) {
+                skipWhilePaused(chatTitle, eligible, state.processedMessages)
+                return
+            }
             val seen = state.processedMessages.toMutableSet()
-            for (message in eligibleUserMessages(messages, state.automaticEnabledAt)) {
+            for (message in eligible) {
                 val key = sourceKey(chatTitle, message.id)
                 if (key in seen) continue
                 when (entries.addAutomaticTopic(message.text, chatTitle, message.id, message.createdAt)) {
@@ -158,6 +165,20 @@ class AutomaticMemoryCoordinator(
             throw cancelled
         } catch (_: Exception) {
             pauseStore.setLastError(AUTOMATIC_SAVE_ERROR)
+        }
+    }
+
+    private suspend fun skipWhilePaused(
+        chatTitle: String,
+        eligible: List<StoredMessage>,
+        already: Set<String>,
+    ) {
+        val seen = already.toMutableSet()
+        for (message in eligible) {
+            val key = sourceKey(chatTitle, message.id)
+            if (key in seen) continue
+            pauseStore.rememberProcessed(key)
+            seen.add(key)
         }
     }
 }
