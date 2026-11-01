@@ -62,6 +62,9 @@ fun EditProfileScreen(onBack: () -> Unit, onSaved: () -> Unit = onBack) {
     var email by rememberSaveable { mutableStateOf("") }
     var handle by rememberSaveable { mutableStateOf("") }
     var bio by rememberSaveable { mutableStateOf("") }
+    var role by rememberSaveable { mutableStateOf("") }
+    var timezone by rememberSaveable { mutableStateOf("") }
+    val deviceZone = remember { java.util.TimeZone.getDefault().id }
     var nameError by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -72,6 +75,7 @@ fun EditProfileScreen(onBack: () -> Unit, onSaved: () -> Unit = onBack) {
         if (p != null && !loaded) {
             avatar = Avatars.indexOf(p.safeAvatarResId).coerceAtLeast(0)
             name = p.name; email = p.email; handle = p.handle; bio = p.bio
+            role = p.role; timezone = p.timezone
             loaded = true
         }
     }
@@ -88,6 +92,8 @@ fun EditProfileScreen(onBack: () -> Unit, onSaved: () -> Unit = onBack) {
                             email = email.trim(),
                             handle = handle.trim(),
                             bio = bio,
+                            role = role.trim(),
+                            timezone = timezone.trim(),
                             avatarResId = Avatars[avatar],
                         ),
                     )
@@ -140,15 +146,39 @@ fun EditProfileScreen(onBack: () -> Unit, onSaved: () -> Unit = onBack) {
             onValueChange = { email = it },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            supportingText = { Text("Used for sign-in and receipts. We'll send a code to confirm a change.") },
+            supportingText = { Text("Shown on your Profile. Saved on this device — no verification email is sent.") },
             modifier = Modifier.fillMaxWidth(),
         )
         // Public handle removed: Orhan is an agent app, not a social network. Stored value is kept as-is.
-        SectionLabel("About you")
+        SectionLabel("Role")
+        OutlinedTextField(
+            value = role,
+            onValueChange = { role = it },
+            singleLine = true,
+            placeholder = { Text("e.g. Android designer") },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        SectionLabel("Timezone")
+        OutlinedTextField(
+            value = timezone,
+            onValueChange = { timezone = it },
+            singleLine = true,
+            placeholder = { Text(deviceZone) },
+            supportingText = {
+                if (timezone.isBlank()) {
+                    Text("Use device timezone ($deviceZone)", modifier = Modifier.clickable { timezone = deviceZone })
+                } else {
+                    Text("Helps Orhan with times and scheduling.")
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        SectionLabel("Context for Orhan")
         OutlinedTextField(
             value = bio,
             onValueChange = { bio = it },
             minLines = 3,
+            supportingText = { Text("What you work on, how you like answers. Sent to Orhan in chats.") },
             modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
         )
         FootNote("Saved on this device.")

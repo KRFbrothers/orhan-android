@@ -1,0 +1,86 @@
+Orhan AI — Android
+Copyright 2026 KRFbrothers
+
+This product includes software and assets developed by third parties.
+The attributions below are provided in accordance with Section 4(d) of the
+Apache License, Version 2.0, and with the notice requirements of the
+SIL Open Font License, Version 1.1.
+
+================================================================================
+1. Lato
+================================================================================
+
+Files bundled in this repository:
+
+  app/src/main/res/font/lato_regular.ttf
+  app/src/main/res/font/lato_bold.ttf
+  app/src/main/res/font/lato_black.ttf
+  design/fonts/lato-400.woff2
+  design/fonts/lato-700.woff2
+  design/fonts/lato-900.woff2
+  design/code-pages/*/fonts/lato-*.woff2
+
+Copyright (c) 2010-2014 by tyPoland Lukasz Dziedzic (team@latofonts.com)
+with Reserved Font Name "Lato".
+
+Licensed under the SIL Open Font License, Version 1.1.
+Full license text: licenses/Lato-OFL.txt
+Upstream: https://www.latofonts.com/
+
+================================================================================
+2. Inter
+================================================================================
+
+Files bundled in this repository:
+
+  app/src/main/res/font/inter_variable.ttf
+  app/src/main/res/font/inter_italic_variable.ttf
+
+Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter)
+
+Licensed under the SIL Open Font License, Version 1.1.
+Full license text: licenses/Inter-OFL.txt
+Upstream: https://github.com/rsms/inter
+
+Note: Inter is bundled as an opt-in fallback typeface. It is not the default
+brand typeface and is not referenced by the app's Type.kt.
+
+================================================================================
+3. Material Icons (Android Jetpack Compose)
+================================================================================
+
+Component used:
+
+  androidx.compose.material:material-icons-extended
+  (declared in gradle/libs.versions.toml, resolved transitively at build time)
+
+Copyright Google LLC
+
+Licensed under the Apache License, Version 2.0.
+Upstream: https://github.com/google/material-design-icons
+
+Note: this is a build-time dependency and is not vendored into this
+repository. No Material Symbols vector drawables are checked in under
+app/src/main/res/. The app's own five hand-drawn icons live in
+app/src/main/java/ai/orhan/design/icons/OrhanIcons.kt and are original to
+this project.
+
+================================================================================
+4. AndroidX / Jetpack Compose / Kotlin
+================================================================================
+
+This application is built on AndroidX, Jetpack Compose and the Kotlin
+standard library, all licensed under the Apache License, Version 2.0,
+Copyright The Android Open Source Project and JetBrains s.r.o.
+These are build-time dependencies and are not vendored into this repository.
+
+================================================================================
+Full license texts
+================================================================================
+
+  Apache License 2.0 ............ LICENSE
+  SIL OFL 1.1 (Lato) ........... licenses/Lato-OFL.txt
+  SIL OFL 1.1 (Inter) .......... licenses/Inter-OFL.txt
+
+Additional provenance detail for third-party assets is recorded in
+THIRD-PARTY-NOTICES.md.

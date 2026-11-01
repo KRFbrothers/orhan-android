@@ -29,11 +29,13 @@ data class ChatAttachment(val name: String, val mimeType: String, val base64: St
 
 /**
  * Talks to the Dua AI engine: POST {DUA_ENGINE_URL}/api/chat (streaming via [stream]; [send] is the non-stream fallback).
- * Request:  {"stream":false,"mode":"agent","messages":[{"role":"user|model","text":"..."}]}
+ * Request:  {"stream":false,"mode":"agent","systemInstruction":"...","messages":[{"role":"user|model","text":"..."}]}
+ * (`systemInstruction` is optional and omitted when blank.)
  * Response: {"text":"..."} or {"error":"..."}
  *
  * [stream] sends `"stream":true` and parses the engine's SSE events
- * (`event: text` → `{"type":"text","delta":"..."}`, `error`, `done`).
+ * (`event: text` → `{"type":"text","delta":"..."}`, `error`, `done`, plus optional
+ * `thinking` / `progress` activity events surfaced via `onActivity`).
  */
 class ChatRepository(
     private val baseUrl: String = BuildConfig.DUA_ENGINE_URL,
@@ -46,20 +48,36 @@ class ChatRepository(
     /** Thrown when streaming fails in a way a non-stream retry can't fix (e.g. 401). */
     class FatalChatException(message: String) : IOException(message)
 
-    private fun body(turns: List<ChatTurn>, stream: Boolean) = JSONObject()
-        .put("stream", stream)
-        .put("mode", "agent") // always agent pipeline (server uses AGENT_ENGINE=adk when configured)
-        .put("messages", JSONArray().apply {
-            turns.takeLast(20).forEach { turn ->
-                val obj = JSONObject().put("role", turn.role).put("text", turn.text)
-                if (turn.role == "user" && turn.attachments.isNotEmpty()) {
-                    obj.put("attachments", JSONArray().apply {
-                        turn.attachments.forEach { put(JSONObject().put("mimeType", it.mimeType).put("data", it.base64)) }
-                    })
+    /**
+     * The server cannot do SSE for this request (406/415 or a non-event-stream body), so a
+     * single non-stream retry is safe. Timeouts, 5xx and mid-stream errors are NOT eligible:
+     * retrying them would double load on a struggling engine (audit REL-02).
+     */
+    class FallbackEligibleStreamException(message: String) : IOException(message)
+
+    companion object {
+        fun isFallbackStatus(code: Int): Boolean = code == 406 || code == 415
+
+        /**
+         * Builds the /api/chat JSON. [systemInstruction] is sent as top-level `systemInstruction`
+         * (Dua-ai #494) only when non-blank, so older engines just see the plain messages array.
+         */
+        internal fun body(turns: List<ChatTurn>, stream: Boolean, systemInstruction: String? = null) = JSONObject()
+            .put("stream", stream)
+            .put("mode", "agent") // always agent pipeline (server uses AGENT_ENGINE=adk when configured)
+            .put("messages", JSONArray().apply {
+                turns.takeLast(20).forEach { turn ->
+                    val obj = JSONObject().put("role", turn.role).put("text", turn.text)
+                    if (turn.role == "user" && turn.attachments.isNotEmpty()) {
+                        obj.put("attachments", JSONArray().apply {
+                            turn.attachments.forEach { put(JSONObject().put("mimeType", it.mimeType).put("data", it.base64)) }
+                        })
+                    }
+                    put(obj)
                 }
-                put(obj)
-            }
-        })
+            })
+            .apply { systemInstruction?.trim()?.takeIf { it.isNotEmpty() }?.let { put("systemInstruction", it) } }
+    }
 
     private suspend fun open(accept: String): HttpURLConnection {
         require(baseUrl.isNotBlank()) { "DUA_ENGINE_URL is not set in local.properties" }
@@ -78,23 +96,33 @@ class ChatRepository(
 
     /**
      * Streams a reply. [onDelta] is called (on IO) with each text chunk. Returns the full text.
-     * Fails with [FatalChatException] for auth problems; any other failure is fallback-eligible.
+     * [onActivity] receives a short label for `thinking` / `progress` events (no-op if never sent).
+     * Fails with [FatalChatException] for auth problems and [FallbackEligibleStreamException] only
+     * when the server cannot stream (406/415/non-SSE); every other failure is surfaced as-is.
      */
-    suspend fun stream(turns: List<ChatTurn>, onDelta: suspend (String) -> Unit): Result<String> =
+    suspend fun stream(
+        turns: List<ChatTurn>,
+        systemInstruction: String? = null,
+        onActivity: suspend (String) -> Unit = {},
+        onDelta: suspend (String) -> Unit,
+    ): Result<String> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val conn = open("text/event-stream")
                 // Blocking SSE reads ignore coroutine cancel; disconnect on cancel so Stop is immediate.
                 val watcher = launch { try { awaitCancellation() } finally { conn.disconnect() } }
                 try {
-                    conn.outputStream.use { it.write(body(turns, true).toString().toByteArray()) }
+                    conn.outputStream.use { it.write(body(turns, true, systemInstruction).toString().toByteArray()) }
                     val code = conn.responseCode
                     if (code == 401) {
                         onUnauthorized()
                         throw FatalChatException("Session expired — please sign in again")
                     }
+                    if (isFallbackStatus(code)) throw FallbackEligibleStreamException("HTTP $code")
                     if (code !in 200..299) error("HTTP $code")
-                    if (conn.contentType?.contains("text/event-stream") != true) error("Not an SSE response")
+                    if (conn.contentType?.contains("text/event-stream") != true) {
+                        throw FallbackEligibleStreamException("Not an SSE response")
+                    }
                     val out = StringBuilder()
                     var done = false
                     val data = StringBuilder()
@@ -109,12 +137,18 @@ class ChatRepository(
                                 line.isEmpty() && data.isNotEmpty() -> {
                                     val ev = runCatching { JSONObject(data.toString()) }.getOrNull()
                                     data.setLength(0)
-                                    when (ev?.optString("type")) {
+                                    val type = ev?.optString("type")
+                                    when (type) {
                                         "text" -> ev.optString("delta").takeIf { it.isNotEmpty() }?.let {
                                             out.append(it); onDelta(it)
                                         }
                                         "error" -> error(ev.optString("message").ifBlank { "Stream error" })
                                         "done" -> done = true
+                                        "thinking", "progress" -> SseActivity.label(
+                                            type,
+                                            field = { k -> ev.optString(k) },
+                                            nested = { k -> ev.optJSONObject("data")?.optString(k).orEmpty() },
+                                        )?.let { onActivity(it) }
                                     }
                                 }
                             }
@@ -129,10 +163,10 @@ class ChatRepository(
             }
         }
 
-    suspend fun send(turns: List<ChatTurn>): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun send(turns: List<ChatTurn>, systemInstruction: String? = null): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val conn = open("application/json")
-            val body = body(turns, false)
+            val body = body(turns, false, systemInstruction)
             try {
                 conn.outputStream.use { it.write(body.toString().toByteArray()) }
                 val code = conn.responseCode

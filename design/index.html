@@ -250,6 +250,61 @@ h1 .accent{color:var(--primary)}
 .scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
 .scroll::-webkit-scrollbar-track{background:transparent}
 
+/* memory screen (moved out of Settings onto the 5th nav tab) */
+.memtop{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 16px 8px}
+.memtop h2{margin:0;font-size:20px;font-weight:900;letter-spacing:-.02em;color:var(--ink)}
+.memnew{
+  flex:none;height:48px;padding:0 14px;border-radius:999px;border:0;background:transparent;
+  color:var(--primary-ink);font:inherit;font-size:13.5px;font-weight:800;
+  display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+}
+.memnew .ic{width:16px;height:16px}
+.memnew:hover{background:var(--surface-2)}
+.memnew:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+[data-theme="dark"] .memnew{color:var(--mint)}
+.mseg{display:flex;gap:4px;padding:0 10px;margin-bottom:12px;background:var(--field);border-radius:999px}
+.mseg button{
+  flex:1 1 0;min-width:0;height:48px;border:0;border-radius:999px;background:transparent;
+  font:inherit;font-size:13px;font-weight:700;color:var(--ink-2);cursor:pointer;
+}
+.mseg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px var(--scrim)}
+.mseg button:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.qgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 16px 12px}
+.qcard{
+  display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:12px;border-radius:16px;
+  background:var(--surface);border:1px solid var(--line-soft);font:inherit;color:inherit;
+  text-align:left;cursor:pointer;min-width:0;
+}
+.qcard:hover{background:var(--surface-2)}
+.qcard:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.qcard .qic{
+  width:28px;height:28px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;
+  background:var(--primary-soft);color:var(--primary-ink);flex:none;
+}
+[data-theme="light"] .qcard .qic{background:#ddf3e5;color:#066a3b}
+.qcard .qic .ic{width:16px;height:16px}
+.qcard .qt{font-size:13.5px;font-weight:800;color:var(--ink);line-height:1.2;overflow-wrap:anywhere}
+.qcard .qs{font-size:11.5px;color:var(--ink-3);line-height:1.3;overflow-wrap:anywhere}
+.memrow{display:flex;align-items:flex-start;gap:11px;width:100%;padding:10px 12px;border-radius:16px;border:0;background:transparent;text-align:left;font:inherit;color:inherit;cursor:pointer;min-height:64px}
+.memrow:hover{background:var(--surface-2)}
+.memrow:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.memrow .mava{width:30px;height:30px;border-radius:9px;flex:none;display:inline-flex;align-items:center;justify-content:center;background:rgba(164,39,30,.12);color:var(--danger)}
+.memrow .mava.update{background:rgba(8,124,69,.12);color:var(--primary-ink)}
+[data-theme="light"] .memrow .mava.update{background:#ddf3e5;color:#066a3b}
+.memrow .mava .ic{width:16px;height:16px}
+.memrow .mbody{min-width:0;flex:1 1 0}
+.memrow > .statpill{flex:none;max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.memrow .mt1{display:block;font-size:14.5px;font-weight:700;color:var(--ink);line-height:1.25;overflow-wrap:anywhere}
+.memrow .mt2{display:block;font-size:11.5px;color:var(--ink-3);margin-top:3px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.statpill{
+  flex:none;align-self:flex-start;margin-top:2px;padding:2px 7px;border-radius:999px;
+  font-size:9.5px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;
+  background:rgba(164,39,30,.12);color:var(--danger);
+}
+.statpill.ok{background:rgba(8,124,69,.12);color:var(--primary-ink)}
+[data-theme="light"] .statpill.ok{background:#ddf3e5;color:#066a3b}
+.memfoot{display:flex;align-items:center;gap:12px;padding:2px 20px 14px;font-size:11.5px;color:var(--ink-3);flex-wrap:wrap}
+
 /* search + chips */
 .searchrow{padding:4px 16px 10px}
 .searchfield{
@@ -325,7 +380,7 @@ h1 .accent{color:var(--primary)}
 }
 .navi:focus-visible{outline:2px solid var(--primary);outline-offset:-4px}
 [data-theme="dark"] .navi:focus-visible{outline-color:var(--mint)}
-.navi .pill{display:flex;align-items:center;justify-content:center;width:58px;height:30px;border-radius:999px;transition:background .18s ease}
+.navi .pill{display:flex;align-items:center;justify-content:center;width:64px;height:30px;border-radius:999px;transition:background .18s ease}
 .navi .ic{width:23px;height:23px}
 .navi .lbl{font-size:11px;font-weight:700;letter-spacing:.01em;line-height:1;white-space:nowrap}
 .navi[aria-current="page"]{color:var(--ink)}
@@ -779,7 +834,7 @@ footer b{color:var(--page-ink)}
   .appbar{padding-left:10px;gap:2px}
   .wm{height:19px}
   .navi .lbl{font-size:10px}
-  .navi .pill{width:52px}
+  .navi .pill{width:58px}
   .bubble{max-width:82%}
   .row{padding:10px 8px;gap:11px}
   .ava{width:46px;height:46px;border-radius:15px}
@@ -857,13 +912,18 @@ footer b{color:var(--page-ink)}
     <symbol id="i-filetext" viewBox="0 0 24 24"><path d="M13.6 3.4H7.4a2 2 0 0 0-2 2v13.2a2 2 0 0 0 2 2h9.2a2 2 0 0 0 2-2V8.4z"/><path d="M13.6 3.4v5h5M8.4 12.6h7M8.4 16h5"/></symbol>
     <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13.4 2.6 5.4 13.4h5.2l-1 8 8.2-11h-5.2z"/></symbol>
     <symbol id="i-chatpref" viewBox="0 0 24 24"><path d="M4 7.4A2.4 2.4 0 0 1 6.4 5h11.2A2.4 2.4 0 0 1 20 7.4v6.2a2.4 2.4 0 0 1-2.4 2.4H9.6L4 20z"/><path d="M8.4 9.6h7.2M8.4 12.6h4.4"/></symbol>
+    <symbol id="i-memory" viewBox="0 0 24 24"><path d="M12 4.6a3 3 0 0 1 3 3v.4a3 3 0 0 1 2.2 4.9A3 3 0 0 1 15 18.2a3 3 0 0 1-6 0 3 3 0 0 1-2.2-5.3A3 3 0 0 1 9 8v-.4a3 3 0 0 1 3-3z"/><path d="M12 4.6v4.1M12 15.1v3.1M9 8.4h6"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3.6 20.4 8 12 12.4 3.6 8z"/><path d="M3.6 12.4 12 16.8l8.4-4.4M3.6 16.4 12 20.8l8.4-4.4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4.6V9h-4.4"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.6" y="5.4" width="16.8" height="15" rx="2.6"/><path d="M3.6 10h16.8M8.6 3.6v3.4M15.4 3.6v3.4"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.6" y="3.6" width="7" height="7" rx="2"/><rect x="13.4" y="3.6" width="7" height="7" rx="2"/><rect x="3.6" y="13.4" width="7" height="7" rx="2"/><rect x="13.4" y="13.4" width="7" height="7" rx="2"/></symbol>
   </defs>
 </svg>
 
 <div class="wrap">
 
   <header class="page-head">
-    <div class="eyebrow"><img src="images/orhan-mark.png" alt="">Orhan AI<span> &middot; Android app &middot; 14 screens</span></div>
+    <div class="eyebrow"><img src="images/orhan-mark.png" alt="">Orhan AI<span> &middot; Android app &middot; 16 screens</span></div>
     <h1>Orhan AI Android — <span class="accent">complete</span> app with Profile &amp; Settings</h1>
     <p class="sub">Material&nbsp;3, mobile-first at a 390px base. Every screen is real markup driven by the same brand tokens as v1 — primary <span class="mono">#087c45</span>, dark canvas <span class="mono">#141816</span>, light canvas <span class="mono">#eef2ef</span>, Lato, and the real Orhan logo. Day and night mode both work on every screen, and the Appearance selector changes the actual theme.</p>
     <div class="controls">
@@ -880,25 +940,27 @@ footer b{color:var(--page-ink)}
 
     <!-- ============ SCREEN RAIL ============ -->
     <aside class="rail" aria-label="Screens">
-      <div class="rail-h"><span>Screens</span><span class="count">14</span></div>
+      <div class="rail-h"><span>Screens</span><span class="count">16</span></div>
 
       <div class="rgrp">Main</div>
       <button class="rbtn is-on" type="button" data-go="home"><span class="n">01</span>Home / Chats</button>
       <button class="rbtn" type="button" data-go="chat"><span class="n">02</span>Chat</button>
       <button class="rbtn" type="button" data-go="agents"><span class="n">03</span>Agents</button>
       <button class="rbtn" type="button" data-go="discover"><span class="n">04</span>Discover</button>
-      <button class="rbtn" type="button" data-go="profile"><span class="n">05</span>Profile</button>
+      <button class="rbtn" type="button" data-go="memory"><span class="n">05</span>Memory</button>
+      <button class="rbtn" type="button" data-go="artifacts"><span class="n">06</span>Artifacts</button>
+      <button class="rbtn" type="button" data-go="profile"><span class="n">07</span>Profile</button>
 
       <div class="rgrp">Settings</div>
-      <button class="rbtn" type="button" data-go="settings"><span class="n">06</span>Settings</button>
-      <button class="rbtn" type="button" data-go="appearance"><span class="n">07</span>Appearance</button>
-      <button class="rbtn" type="button" data-go="editprofile"><span class="n">08</span>Edit profile</button>
-      <button class="rbtn" type="button" data-go="notifications"><span class="n">09</span>Notifications</button>
-      <button class="rbtn" type="button" data-go="privacy"><span class="n">10</span>Privacy &amp; security</button>
-      <button class="rbtn" type="button" data-go="chatprefs"><span class="n">11</span>Chat preferences</button>
-      <button class="rbtn" type="button" data-go="storage"><span class="n">12</span>Storage</button>
-      <button class="rbtn" type="button" data-go="language"><span class="n">13</span>Language</button>
-      <button class="rbtn" type="button" data-go="about"><span class="n">14</span>About</button>
+      <button class="rbtn" type="button" data-go="settings"><span class="n">08</span>Settings</button>
+      <button class="rbtn" type="button" data-go="appearance"><span class="n">09</span>Appearance</button>
+      <button class="rbtn" type="button" data-go="editprofile"><span class="n">10</span>Edit profile</button>
+      <button class="rbtn" type="button" data-go="notifications"><span class="n">11</span>Notifications</button>
+      <button class="rbtn" type="button" data-go="privacy"><span class="n">12</span>Privacy &amp; security</button>
+      <button class="rbtn" type="button" data-go="chatprefs"><span class="n">13</span>Chat preferences</button>
+      <button class="rbtn" type="button" data-go="storage"><span class="n">14</span>Storage</button>
+      <button class="rbtn" type="button" data-go="language"><span class="n">15</span>Language</button>
+      <button class="rbtn" type="button" data-go="about"><span class="n">16</span>About</button>
     </aside>
 
     <div class="stage">
@@ -975,6 +1037,14 @@ footer b{color:var(--page-ink)}
               <button class="navi" type="button" data-go="discover">
                 <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
                 <span class="lbl">Discover</span>
+              </button>
+              <button class="navi" type="button" data-go="memory">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-memory"/></svg><span class="count">31</span></span></span>
+                <span class="lbl">Memory</span>
+              </button>
+              <button class="navi" type="button" data-go="artifacts">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></span>
+                <span class="lbl">Artifacts</span>
               </button>
               <button class="navi" type="button" data-go="profile">
                 <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
@@ -1148,6 +1218,14 @@ footer b{color:var(--page-ink)}
                 <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
                 <span class="lbl">Discover</span>
               </button>
+              <button class="navi" type="button" data-go="memory">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-memory"/></svg><span class="count">31</span></span></span>
+                <span class="lbl">Memory</span>
+              </button>
+              <button class="navi" type="button" data-go="artifacts">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></span>
+                <span class="lbl">Artifacts</span>
+              </button>
               <button class="navi" type="button" data-go="profile">
                 <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
                 <span class="lbl">Profile</span>
@@ -1216,6 +1294,14 @@ footer b{color:var(--page-ink)}
                 <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
                 <span class="lbl">Discover</span>
               </button>
+              <button class="navi" type="button" data-go="memory">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-memory"/></svg><span class="count">31</span></span></span>
+                <span class="lbl">Memory</span>
+              </button>
+              <button class="navi" type="button" data-go="artifacts">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></span>
+                <span class="lbl">Artifacts</span>
+              </button>
               <button class="navi" type="button" data-go="profile">
                 <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
                 <span class="lbl">Profile</span>
@@ -1226,7 +1312,222 @@ footer b{color:var(--page-ink)}
         <div class="caption"><b>04</b> Discover tab</div>
       </div>
 
-      <!-- ==================== 05 · PROFILE ==================== -->
+      <!-- ==================== 05 · MEMORY ==================== -->
+      <div class="slot" id="p-memory">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="appbar">
+              <div class="brandlock">
+                <img class="mark" src="images/orhan-mark.png" alt="Orhan AI logo">
+                <img class="wm wm-light" src="images/orhan-wordmark.png" alt="Orhan AI">
+                <img class="wm wm-dark" src="images/orhan-wordmark-dark.png" alt="" aria-hidden="true">
+              </div>
+              <button class="iconbtn" type="button" aria-label="Search memory"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></button>
+              <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
+                <svg class="ic i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+                <svg class="ic i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+              </button>
+              <button class="iconbtn" type="button" aria-label="Open settings" data-go="settings"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
+            </div>
+
+            <div class="scroll">
+              <div class="memtop">
+                <h2>Memory</h2>
+                <button class="memnew" type="button" data-toast="New memory section">
+                  <svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>New
+                </button>
+              </div>
+
+              <div class="searchrow">
+                <div class="searchfield">
+                  <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+                  <span>Search memory</span>
+                </div>
+              </div>
+
+              <div class="mseg" role="group" aria-label="Memory sections">
+                <button type="button" aria-pressed="true">Context</button>
+                <button type="button" aria-pressed="false">Notes</button>
+                <button type="button" aria-pressed="false">To-dos</button>
+              </div>
+
+              <div class="qgrid">
+                <button class="qcard" type="button" data-toast="Personal context injected into every chat">
+                  <span class="qic"><svg class="ic" aria-hidden="true"><use href="#i-memory"/></svg></span>
+                  <span class="qt">Personal context</span>
+                  <span class="qs">Shared with every chat</span>
+                </button>
+                <button class="qcard" type="button" data-toast="Local notes stay on this phone">
+                  <span class="qic"><svg class="ic" aria-hidden="true"><use href="#i-filetext"/></svg></span>
+                  <span class="qt">Notes</span>
+                  <span class="qs">Kept on this phone</span>
+                </button>
+                <button class="qcard" type="button" data-toast="To-dos Orhan can see">
+                  <span class="qic"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span>
+                  <span class="qt">To-dos</span>
+                  <span class="qs">Orhan can tick these off</span>
+                </button>
+                <button class="qcard" type="button" data-toast="Pause memory stops new injections">
+                  <span class="qic"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></span>
+                  <span class="qt">Pause memory</span>
+                  <span class="qs">Off · stop new context</span>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>Recent</span><span>2</span></div>
+              <div class="list">
+                <button class="memrow" type="button" data-toast="Opens this memory entry">
+                  <span class="mava update"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></span>
+                  <span class="mbody">
+                    <span class="mt1">Prefers short, direct answers</span>
+                    <span class="mt2">Context · 2 days ago</span>
+                  </span>
+                  <span class="statpill ok">Context</span>
+                </button>
+                <button class="memrow" type="button" data-toast="Opens this memory entry">
+                  <span class="mava update"><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg></span>
+                  <span class="mbody">
+                    <span class="mt1">Ship Orhan 0.2.0 before Friday</span>
+                    <span class="mt2">To-do · no due time</span>
+                  </span>
+                  <span class="statpill ok">To-do</span>
+                </button>
+              </div>
+
+              <div class="memfoot"><span>Local only</span><span>·</span><span>Injected into chats</span></div>
+            </div>
+
+            <nav class="navbar" aria-label="Primary">
+              <button class="navi" type="button" data-go="home">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-chats"/></svg><span class="count">3</span></span></span>
+                <span class="lbl">Chats</span>
+              </button>
+              <button class="navi" type="button" data-go="agents">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span>
+                <span class="lbl">Agents</span>
+              </button>
+              <button class="navi" type="button" data-go="discover">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
+                <span class="lbl">Discover</span>
+              </button>
+              <button class="navi" type="button" data-go="memory" aria-current="page">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-memory"/></svg><span class="count">31</span></span></span>
+                <span class="lbl">Memory</span>
+              </button>
+              <button class="navi" type="button" data-go="artifacts">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></span>
+                <span class="lbl">Artifacts</span>
+              </button>
+              <button class="navi" type="button" data-go="profile">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
+                <span class="lbl">Profile</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+        <div class="caption"><b>05</b> Memory</div>
+      </div>
+
+      <!-- ==================== 06 · ARTIFACTS ==================== -->
+      <div class="slot" id="p-artifacts">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="appbar">
+              <div class="brandlock">
+                <img class="mark" src="images/orhan-mark.png" alt="Orhan AI logo">
+                <img class="wm wm-light" src="images/orhan-wordmark.png" alt="Orhan AI">
+                <img class="wm wm-dark" src="images/orhan-wordmark-dark.png" alt="" aria-hidden="true">
+              </div>
+              <button class="iconbtn" type="button" aria-label="Search artifacts"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></button>
+              <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
+                <svg class="ic i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+                <svg class="ic i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+              </button>
+              <button class="iconbtn" type="button" aria-label="Open settings" data-go="settings"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
+            </div>
+
+            <div class="scroll">
+              <div class="memtop"><h2>Artifacts</h2></div>
+              <div class="mseg" role="group" aria-label="Artifact kinds">
+                <button type="button" aria-pressed="true">All</button>
+                <button type="button" aria-pressed="false">Pages</button>
+                <button type="button" aria-pressed="false">Files</button>
+              </div>
+
+              <div class="list">
+                <button class="memrow" type="button" data-toast="Opens the artifact preview">
+                  <span class="mava update"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg></span>
+                  <span class="mbody">
+                    <span class="mt1">meetup-landing · v1</span>
+                    <span class="mt2">Page · 12 sections</span>
+                  </span>
+                  <span class="statpill ok">Page</span>
+                </button>
+                <button class="memrow" type="button" data-toast="Opens the artifact preview">
+                  <span class="mava update"><svg class="ic" aria-hidden="true"><use href="#i-filetext"/></svg></span>
+                  <span class="mbody">
+                    <span class="mt1">orhan-audit.md</span>
+                    <span class="mt2">File · 18 KB</span>
+                  </span>
+                  <span class="statpill ok">File</span>
+                </button>
+              </div>
+
+              <div class="memfoot"><span>2 artifacts</span><span>·</span><span>Made by agents</span></div>
+            </div>
+
+            <nav class="navbar" aria-label="Primary">
+              <button class="navi" type="button" data-go="home">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-chats"/></svg><span class="count">3</span></span></span>
+                <span class="lbl">Chats</span>
+              </button>
+              <button class="navi" type="button" data-go="agents">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span>
+                <span class="lbl">Agents</span>
+              </button>
+              <button class="navi" type="button" data-go="discover">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
+                <span class="lbl">Discover</span>
+              </button>
+              <button class="navi" type="button" data-go="memory">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-memory"/></svg><span class="count">31</span></span></span>
+                <span class="lbl">Memory</span>
+              </button>
+              <button class="navi" type="button" data-go="artifacts" aria-current="page">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></span>
+                <span class="lbl">Artifacts</span>
+              </button>
+              <button class="navi" type="button" data-go="profile">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
+                <span class="lbl">Profile</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+        <div class="caption"><b>06</b> Artifacts</div>
+      </div>
+
+      <!-- ==================== 07 · PROFILE ==================== -->
       <div class="slot" id="p-profile">
         <div class="phone">
           <div class="screen">
@@ -1361,6 +1662,14 @@ footer b{color:var(--page-ink)}
                 <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
                 <span class="lbl">Discover</span>
               </button>
+              <button class="navi" type="button" data-go="memory">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-memory"/></svg><span class="count">31</span></span></span>
+                <span class="lbl">Memory</span>
+              </button>
+              <button class="navi" type="button" data-go="artifacts">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></span>
+                <span class="lbl">Artifacts</span>
+              </button>
               <button class="navi" type="button" data-go="profile" aria-current="page">
                 <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
                 <span class="lbl">Profile</span>
@@ -1368,10 +1677,10 @@ footer b{color:var(--page-ink)}
             </nav>
           </div>
         </div>
-        <div class="caption"><b>05</b> Profile</div>
+        <div class="caption"><b>07</b> Profile</div>
       </div>
 
-      <!-- ==================== 06 · SETTINGS ==================== -->
+      <!-- ==================== 08 · SETTINGS ==================== -->
       <div class="slot" id="p-settings">
         <div class="phone">
           <div class="screen">
@@ -1500,10 +1809,10 @@ footer b{color:var(--page-ink)}
             </div>
           </div>
         </div>
-        <div class="caption"><b>06</b> Settings</div>
+        <div class="caption"><b>08</b> Settings</div>
       </div>
 
-      <!-- ==================== 07 · APPEARANCE ==================== -->
+      <!-- ==================== 09 · APPEARANCE ==================== -->
       <div class="slot" id="p-appearance">
         <div class="phone">
           <div class="screen">
@@ -1587,10 +1896,10 @@ footer b{color:var(--page-ink)}
             </div>
           </div>
         </div>
-        <div class="caption"><b>07</b> Appearance / theme</div>
+        <div class="caption"><b>09</b> Appearance / theme</div>
       </div>
 
-      <!-- ==================== 08 · EDIT PROFILE ==================== -->
+      <!-- ==================== 10 · EDIT PROFILE ==================== -->
       <div class="slot" id="p-editprofile">
         <div class="phone">
           <div class="screen">
@@ -1654,10 +1963,10 @@ footer b{color:var(--page-ink)}
             </div>
           </div>
         </div>
-        <div class="caption"><b>08</b> Edit profile</div>
+        <div class="caption"><b>10</b> Edit profile</div>
       </div>
 
-      <!-- ==================== 09 · NOTIFICATIONS ==================== -->
+      <!-- ==================== 11 · NOTIFICATIONS ==================== -->
       <div class="slot" id="p-notifications">
         <div class="phone">
           <div class="screen">
@@ -1739,10 +2048,10 @@ footer b{color:var(--page-ink)}
             </div>
           </div>
         </div>
-        <div class="caption"><b>09</b> Notifications</div>
+        <div class="caption"><b>11</b> Notifications</div>
       </div>
 
-      <!-- ==================== 10 · PRIVACY & SECURITY ==================== -->
+      <!-- ==================== 12 · PRIVACY & SECURITY ==================== -->
       <div class="slot" id="p-privacy">
         <div class="phone">
           <div class="screen">
@@ -1774,10 +2083,10 @@ footer b{color:var(--page-ink)}
             </div>
           </div>
         </div>
-        <div class="caption"><b>10</b> Privacy &amp; security</div>
+        <div class="caption"><b>12</b> Privacy &amp; security</div>
       </div>
 
-      <!-- ==================== 11 · CHAT PREFERENCES ==================== -->
+      <!-- ==================== 13 · CHAT PREFERENCES ==================== -->
       <div class="slot" id="p-chatprefs">
         <div class="phone">
           <div class="screen">
@@ -1838,10 +2147,10 @@ footer b{color:var(--page-ink)}
             </div>
           </div>
         </div>
-        <div class="caption"><b>11</b> Chat preferences</div>
+        <div class="caption"><b>13</b> Chat preferences</div>
       </div>
 
-      <!-- ==================== 12 · STORAGE ==================== -->
+      <!-- ==================== 14 · STORAGE ==================== -->
       <div class="slot" id="p-storage">
         <div class="phone">
           <div class="screen">
@@ -1905,10 +2214,10 @@ footer b{color:var(--page-ink)}
             </div>
           </div>
         </div>
-        <div class="caption"><b>12</b> Storage</div>
+        <div class="caption"><b>14</b> Storage</div>
       </div>
 
-      <!-- ==================== 13 · LANGUAGE ==================== -->
+      <!-- ==================== 15 · LANGUAGE ==================== -->
       <div class="slot" id="p-language">
         <div class="phone">
           <div class="screen">
@@ -1974,10 +2283,10 @@ footer b{color:var(--page-ink)}
             </div>
           </div>
         </div>
-        <div class="caption"><b>13</b> Language</div>
+        <div class="caption"><b>15</b> Language</div>
       </div>
 
-      <!-- ==================== 14 · ABOUT ==================== -->
+      <!-- ==================== 16 · ABOUT ==================== -->
       <div class="slot" id="p-about">
         <div class="phone">
           <div class="screen">
@@ -2037,7 +2346,7 @@ footer b{color:var(--page-ink)}
             </div>
           </div>
         </div>
-        <div class="caption"><b>14</b> About</div>
+        <div class="caption"><b>16</b> About</div>
       </div>
 
     </div><!-- /stage -->
@@ -2049,7 +2358,7 @@ footer b{color:var(--page-ink)}
         <h4 id="noteTitle">Home / Chats</h4>
         <p id="noteBody">Top bar with the real Orhan lockup, search and settings. Orhan sits pinned on top as your main agent that runs your other agents; recent chats list below. No All/Unread/Groups filters. Bottom nav uses the M3 58×30 active indicator.</p>
         <ul id="noteList">
-          <li><b>4 nav destinations</b> — Chats, Agents, Discover, Profile</li>
+          <li><b>6 nav destinations</b> — Chats, Agents, Discover, Memory, Artifacts, Profile</li>
           <li><b>Touch targets</b> — every row ≥ 72px tall</li>
         </ul>
       </div>
@@ -2066,7 +2375,7 @@ footer b{color:var(--page-ink)}
       <div class="note">
         <div class="kicker">Navigation map</div>
         <ul>
-          <li>Nav: Chats → Home, Agents → Agents, Discover, Profile</li>
+          <li>Nav: Chats → Home, Agents → Agents, Discover, Memory, Artifacts, Profile</li>
           <li>Profile → Edit profile / Settings / Privacy</li>
           <li>Settings → Appearance, Notifications, Chat prefs, Privacy, Storage, Language, About</li>
           <li>Every detail screen has a working back arrow</li>
@@ -2083,16 +2392,17 @@ footer b{color:var(--page-ink)}
 
       <div class="card">
         <h3>Bottom navigation</h3>
-        <p>4 destinations, 80px bar, one 48px+ target per item, M3 active indicator pill — present on all 5 main screens.</p>
+        <p>The shipped app has 5 destinations — <span class="mono">OrhanTab</span> in HomeScreen.kt: Chats, Agents, Discover, Memory, Artifacts. This mockup renders those 5 plus Profile as a 6th tab so the Profile screen stays one tap away on mobile. 80px bar, one 48px+ target per item, M3 active indicator pill, on all 6 main screens.</p>
         <div class="navanatomy">
           <div class="anat"><div class="box"><svg class="ic" aria-hidden="true"><use href="#i-chats"/></svg><span class="sz">48</span></div><div class="nm">Chats</div></div>
           <div class="anat"><div class="box"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg><span class="sz">48</span></div><div class="nm">Agents</div></div>
           <div class="anat"><div class="box"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg><span class="sz">48</span></div><div class="nm">Discover</div></div>
-          <div class="anat"><div class="box"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg><span class="sz">48</span></div><div class="nm">Profile</div></div>
+          <div class="anat"><div class="box"><svg class="ic" aria-hidden="true"><use href="#i-memory"/></svg><span class="sz">48</span></div><div class="nm">Memory</div></div>
+          <div class="anat"><div class="box"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg><span class="sz">48</span></div><div class="nm">Artifacts</div></div>
         </div>
         <ul class="toklist" style="margin-top:18px">
           <li><span>Bar height</span><b class="mono">80px + safe area</b></li>
-          <li><span>Active indicator</span><b class="mono">58 × 30 pill</b></li>
+          <li><span>Active indicator</span><b class="mono">64 × 30 pill</b></li>
           <li><span>Settings row</span><b class="mono">60px · 38px icon tile</b></li>
           <li><span>Switch target</span><b class="mono">56 × 48 (52×32 track)</b></li>
         </ul>
@@ -2140,7 +2450,7 @@ footer b{color:var(--page-ink)}
   </section>
 
   <footer>
-    <b>Orhan AI — complete Android UI mockup.</b> Material 3, mobile-first at a 390px base, 14 screens.<br>
+    <b>Orhan AI — complete Android UI mockup.</b> Material 3, mobile-first at a 390px base, 16 screens.<br>
     Brand palette — green-700 <span class="mono">#087c45</span>, brand soft <span class="mono">#cbe7d2</span>, dark canvas <span class="mono">#141816</span>, light canvas <span class="mono">#eef2ef</span>, <span class="mono">--font-sans: Lato</span>. Logo: Orhan AI hexagon orbit-O mark + wordmark.
   </footer>
 </div>
@@ -2218,10 +2528,12 @@ footer b{color:var(--page-ink)}
   var railBtns = Array.prototype.slice.call(document.querySelectorAll('.rail [data-go]'));
 
   var NOTES = {
-    home:        ['Home / Chats', 'Top bar with the real Orhan lockup, search and settings. Orhan sits pinned on top as your main agent that runs your other agents; recent chats list below. No All/Unread/Groups filters.', ['<b>4 nav destinations</b> — Chats, Agents, Discover, Profile', '<b>Every row</b> ≥ 72px tall']],
+    home:        ['Home / Chats', 'Top bar with the real Orhan lockup, search and settings. Orhan sits pinned on top as your main agent that runs your other agents; recent chats list below. No All/Unread/Groups filters.', ['<b>6 nav destinations</b> — Chats, Agents, Discover, Memory, Artifacts, Profile', '<b>Every row</b> ≥ 72px tall']],
     chat:        ['Chat', 'Agent thread at 14.5px with user and AI bubbles, an inline artifact card, and a composer with attach, mic and send.', ['<b>Send works</b> — type and press send; a reply comes back', '<b>Composer</b> 52px field, 48px send button']],
     agents:      ['Agents', 'Four real agents with status pills, descriptions and an Open CTA that jumps into the chat thread. Tapping anywhere on a card also opens that agent\'s chat; long-press removes a user agent.', ['<b>Open CTA</b> 48px tall', '<b>Create agent</b> dashed row at the end']],
     discover:    ['Discover', 'Featured agent hero on brand green, a trend grid, and a social feed of what people you follow shared.', ['<b>Hero CTA</b> 48px', '<b>2-up cards</b> with tag footer']],
+    memory:      ['Memory', 'What Orhan remembers, on its own nav tab instead of buried in Settings. Context / Notes / To-dos segmented control, four quick cards, then the recent entries with their kind pill.', ['<b>Pause memory</b> stops new context', '<b>Notes + To-dos</b> stay local to this phone']],
+    artifacts:   ['Artifacts', 'Everything agents produced, filtered by All / Pages / Files, with the same row anatomy as Memory so the two tabs read as one system.', ['<b>Kind pill</b> per row', '<b>Page</b> rows open the preview']],
     profile:     ['Profile', 'Avatar with verified badge, name and email, a 3-up stats row, four quick actions and an account section. Sign out opens a real bottom sheet.', ['<b>Stats</b> Chats / Agents / Artifacts', '<b>Sign out</b> → confirm sheet']],
     settings:    ['Settings', 'Full list grouped by Account, Look & feel, Messages, Data and Support. Every row opens a real screen or shows a value.', ['<b>Appearance</b> shows the live mode', '<b>Sign out</b> at the bottom']],
     appearance:  ['Appearance / Theme', 'Three radio cards with hand-drawn theme previews — System, Night, Day. Tapping one switches the whole app immediately, and a live preview block below shows the result.', ['<b>Persisted</b> in localStorage', '<b>Preview block</b> uses real tokens']],
@@ -2276,6 +2588,15 @@ footer b{color:var(--page-ink)}
       var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
       setMode(next);
       toast('Switched to ' + MODE_LABEL[next] + ' mode');
+      return;
+    }
+
+    var seg = t.closest && t.closest('.mseg button');
+    if (seg) {
+      Array.prototype.forEach.call(seg.parentNode.querySelectorAll('button'), function (b) {
+        b.setAttribute('aria-pressed', b === seg ? 'true' : 'false');
+      });
+      toast(seg.textContent.trim());
       return;
     }
 

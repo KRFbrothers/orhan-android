@@ -190,6 +190,8 @@ fun ChatScreen(
     messagesOverride: List<ChatMessage>? = null,
     loading: Boolean = false,
     busy: Boolean = false,
+    /** Optional live status (e.g. "Thinking…") shown beside the typing indicator. */
+    activityLabel: String? = null,
     error: String? = null,
     onSendMessage: ((String) -> Unit)? = null,
     /** Sends text plus one inline file to the engine. When null, Attach explains files aren't available here. */
@@ -380,7 +382,7 @@ fun ChatScreen(
 
             if (showTypingIndicator && (loading || messagesOverride == null)) {
                 item(key = "typing") {
-                    TypingIndicator(agentName)
+                    TypingIndicator(agentName, activityLabel)
                 }
             }
         }
@@ -686,7 +688,7 @@ private fun SkeletonRule(widthFraction: Float) {
 
 /** Three mint dots in an agent bubble \u2014 the agent is still writing. */
 @Composable
-private fun TypingIndicator(agentName: String) {
+private fun TypingIndicator(agentName: String, activityLabel: String? = null) {
     val colors = OrhanTheme.colors
     val bubble = RoundedCornerShape(20.dp)
 
@@ -705,6 +707,16 @@ private fun TypingIndicator(agentName: String) {
             Dot(alpha = 1f)
             Dot(alpha = 0.62f)
             Dot(alpha = 0.34f)
+            if (!activityLabel.isNullOrBlank()) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = activityLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

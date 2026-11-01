@@ -22,10 +22,11 @@ import ai.orhan.design.screens.ChatScreen
 import ai.orhan.feature.agents.CreateAgentScreen
 import ai.orhan.feature.profile.EditProfileScreen
 import ai.orhan.feature.memory.MemoryScreen
-import ai.orhan.data.memory.MemoryPause
-import ai.orhan.data.memory.chatPersonalContext
 import ai.orhan.data.memory.memoryPauseStore
 import ai.orhan.data.memory.memoryStore
+import ai.orhan.data.permissions.askBeforeActingStore
+import ai.orhan.data.prefs.replyStyleStore
+import ai.orhan.data.prefs.toneStore
 import ai.orhan.feature.profile.UserProfile
 import ai.orhan.feature.profile.profilePreferences
 import ai.orhan.feature.settings.detail.ChatPrefs
@@ -114,10 +115,16 @@ fun OrhanNavHost(isDark: Boolean) {
     val workflowStore = remember(context) { context.workflowStore() }
     val workflows by workflowStore.workflows.collectAsStateWithLifecycle(initialValue = emptyList())
     val personalMemory by memoryStore.memory.collectAsStateWithLifecycle(initialValue = "")
-    // Stay withheld until the on-device pause flag is read. Default is paused so a
-    // saved pause cannot leak on the first frame. Topics and to-dos are not passed in.
-    val pauseStore = remember(context) { context.memoryPauseStore() }
-    val memoryPause by pauseStore.state.collectAsStateWithLifecycle(initialValue = MemoryPause())
+    // Missing key stays not-paused, matching the installed preference. A failed
+    // read makes [MemoryPauseStore.paused] true so personal context is withheld.
+    val memoryPauseStore = remember(context) { context.memoryPauseStore() }
+    val memoryPaused by memoryPauseStore.paused.collectAsStateWithLifecycle(initialValue = false)
+    val askBeforeActingStore = remember(context) { context.askBeforeActingStore() }
+    val askBeforeActing by askBeforeActingStore.enabled.collectAsStateWithLifecycle(initialValue = true)
+    val replyStyleStore = remember(context) { context.replyStyleStore() }
+    val replyStyle by replyStyleStore.style.collectAsStateWithLifecycle(initialValue = ai.orhan.data.prefs.ReplyStyle.Balanced)
+    val toneStore = remember(context) { context.toneStore() }
+    val agentTone by toneStore.tone.collectAsStateWithLifecycle(initialValue = ai.orhan.data.prefs.AgentTone.Friendly)
 
     NavHost(navController = navController, startDestination = AppRoutes.HOME) {
         composable(AppRoutes.HOME) {
@@ -324,9 +331,11 @@ fun OrhanNavHost(isDark: Boolean) {
                 if (agent != null) emptyList()
                 else savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions, it.tools) },
             )
-            chatViewModel.setPersonalMemory(
-                chatPersonalContext(personalMemory, memoryPause.loaded, memoryPause.paused),
-            )
+            chatViewModel.setPersonalMemory(personalMemory, memoryPaused)
+            chatViewModel.setAskBeforeActing(askBeforeActing)
+            chatViewModel.setReplyStyle(replyStyle)
+            chatViewModel.setTone(agentTone)
+            chatViewModel.setUserProfile(profile.name, profile.bio, profile.role, profile.timezone)
             val languageRepo = remember(context) { context.settingsDetailPreferences() }
             val languagePrefs by languageRepo.language.collectAsStateWithLifecycle(initialValue = LanguagePrefs())
             chatViewModel.setReplyLanguage(if (languagePrefs.agentsUseAppLanguage) languageName(languagePrefs.code) else null)
@@ -338,6 +347,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 messagesOverride = chat.messages,
                 loading = chat.loading,
                 busy = chat.busy,
+                activityLabel = chat.activityLabel,
                 error = chat.error,
                 onSendMessage = { chatViewModel.send(it) },
                 onSendAttachment = { text, file -> chatViewModel.send(text, file) },

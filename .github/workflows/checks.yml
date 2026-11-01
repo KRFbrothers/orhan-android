@@ -18,7 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # fetch-depth: 0 — versionCode is derived from `git rev-list --count HEAD`
+      # (app/build.gradle.kts), which needs the full history. A depth=1 clone
+      # fails the configuration phase on purpose instead of guessing a number.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
@@ -34,8 +40,15 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
-      - name: Build and unit test
-        run: ./gradlew :app:assembleDebug :app:testDebugUnitTest --no-daemon --max-workers=2
+      # assembleRelease here is a compile + R8 check only: PRs have no release
+      # keystore (it is never committed), so the run opts out of the
+      # "refuse to emit an unsigned release" guard explicitly. The debug APK that
+      # actually ships is verified in build-apk.yml.
+      - name: Build, lint, and unit test
+        run: >
+          ./gradlew :app:assembleDebug :app:assembleRelease :app:lintDebug
+          :app:testDebugUnitTest --no-daemon --max-workers=2
+          -PallowUnsignedRelease=true
 
       - name: Upload unit test reports
         if: always()
@@ -46,3 +59,42 @@ jobs:
             app/build/reports/tests/testDebugUnitTest/
             app/build/test-results/testDebugUnitTest/
           if-no-files-found: ignore
+
+      - name: Upload lint reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-lint-reports
+          path: |
+            app/build/reports/lint-results-debug.html
+            app/build/reports/lint-results-debug.xml
+          if-no-files-found: ignore
+
+      # Proves R8 actually ran, and that material-icons-extended no longer ships
+      # its unused ~2,700 icons in the release dex.
+      - name: Verify R8 ran and unused icons were stripped
+        run: |
+          set -euo pipefail
+          test -f app/build/outputs/mapping/release/mapping.txt \
+            || { echo "::error::mapping.txt missing - R8 did not run on the release variant."; exit 1; }
+          echo "R8 mapping.txt lines: $(wc -l < app/build/outputs/mapping/release/mapping.txt)"
+
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          echo "release APK: ${APK} ($(du -h "${APK}" | cut -f1))"
+          python3 - "${APK}" <<'PY'
+          import re, sys, zipfile
+
+          apk = sys.argv[1]
+          z = zipfile.ZipFile(apk)
+          dex = [n for n in z.namelist() if n.startswith('classes') and n.endswith('.dex')]
+          raw = sum(z.getinfo(n).file_size for n in dex)
+          refs = sum(len(re.findall(rb'androidx/compose/material/icons', z.read(n))) for n in dex)
+          print(f"dex files: {len(dex)} | raw dex {raw/1048576:.2f} MB")
+          print(f"material/icons refs in dex: {refs}")
+          # With R8 on, only the referenced icons survive: their names are
+          # obfuscated, so the package string appears once or twice per kept
+          # class rather than thousands of times.
+          if refs > 200:
+              sys.exit("FAIL: material-icons-extended was not stripped (refs %d)" % refs)
+          print("OK: unused icons stripped")
+          PY

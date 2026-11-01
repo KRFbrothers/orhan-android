@@ -20,10 +20,14 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.FlowPreview
 import ai.orhan.data.history.ChatThreadStore
 import ai.orhan.data.history.chatThreads
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /** A specialist agent Orhan can delegate to. */
 data class RosterAgent(val name: String, val blurb: String, val instructions: String, val tools: List<String> = emptyList())
@@ -56,8 +60,37 @@ internal fun stripHandoff(reply: String): String {
 }
 
 /** Folds preface blocks into one hidden user turn + one model ack (2 turns total). */
+/** Builds the hidden "who the user is" block from profile name/bio/role/timezone; null when all blank. */
+internal fun userProfileSummary(
+    name: String?,
+    bio: String?,
+    role: String? = null,
+    timezone: String? = null,
+): String? {
+    val lines = buildList {
+        name?.trim()?.takeIf { it.isNotEmpty() }?.let { add("User's name: $it") }
+        role?.trim()?.takeIf { it.isNotEmpty() }?.let { add("User's role: $it") }
+        timezone?.trim()?.takeIf { it.isNotEmpty() }?.let { add("User's timezone: $it") }
+        bio?.trim()?.takeIf { it.isNotEmpty() }?.let { add("About user: $it") }
+    }
+    return if (lines.isEmpty()) null else "User profile (use when relevant):\n" + lines.joinToString("\n")
+}
+
+/**
+ * Send hidden context as top-level `systemInstruction` (Dua-ai #494). Flip to false only for an
+ * engine older than #494; the app then falls back to hidden user/model preface turns.
+ */
+internal const val USE_SYSTEM_INSTRUCTION = true
+
+/** Joins non-blank context blocks into one systemInstruction string. */
+internal fun systemInstructionOf(blocks: List<String>): String =
+    blocks.map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n\n")
+
 internal fun prefacePair(blocks: List<String>, ack: String): List<ChatTurn> =
     listOf(ChatTurn("user", blocks.filter { it.isNotBlank() }.joinToString("\n\n---\n\n")), ChatTurn("model", ack))
+
+internal fun currentTimeString(): String =
+    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
 
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
@@ -65,6 +98,8 @@ data class ChatUiState(
     val error: String? = null,
     /** True while a reply is in flight (typing indicator or streaming bubble). */
     val busy: Boolean = false,
+    /** Transient status from SSE `thinking`/`progress` events; shown with the typing indicator. */
+    val activityLabel: String? = null,
 )
 
 class ChatViewModel(
@@ -87,6 +122,9 @@ class ChatViewModel(
     /**
      * Restores the saved thread for [title] once, then persists message changes (debounced).
      * Only real turns are saved; the design-kit demo thread never flows through this VM.
+     *
+     * Disk writes are gated on `!busy` so partial SSE chunks never trigger mid-stream
+     * serialization. Writes happen only after streaming completes, stops, or errors.
      */
     @OptIn(FlowPreview::class)
     fun loadThread(title: String) {
@@ -99,7 +137,8 @@ class ChatViewModel(
                 saved.attachments.forEach { (id, a) -> attachmentsById.putIfAbsent(id, a) }
                 _state.update { it.copy(messages = saved.messages) }
             }
-            _state.map { it.messages }
+            _state.filter { !it.busy }
+                .map { it.messages }
                 .distinctUntilChanged()
                 .drop(1)
                 .debounce(300)
@@ -107,14 +146,16 @@ class ChatViewModel(
         }
     }
 
-    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
     override fun onCleared() {
-        // Flush the latest messages in case the debounce window hadn't elapsed.
+        // Final flush: save immediately if the debounce window hadn't elapsed.
+        // Uses viewModelScope (already cancelling but not yet cancelled) rather than
+        // GlobalScope, so clearing history while this VM is on the back stack cannot
+        // resurrect a deleted thread.
         val title = threadTitle ?: return
         val store = threadStore ?: return
         val msgs = _state.value.messages
         val atts = attachmentsById.toMap()
-        if (msgs.isNotEmpty()) kotlinx.coroutines.GlobalScope.launch { store.save(title, msgs, atts) }
+        if (msgs.isNotEmpty()) viewModelScope.launch { store.save(title, msgs, atts) }
     }
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -152,6 +193,14 @@ class ChatViewModel(
 
     private var personalMemory: String = ""
 
+    /** Hidden profile summary (name/bio/role/timezone), or null when unset/blank. */
+    private var userProfile: String? = null
+
+    /** Sets the user's profile summary sent as hidden context. Idempotent; safe on every recomposition. */
+    fun setUserProfile(name: String?, bio: String?, role: String? = null, timezone: String? = null) {
+        userProfile = userProfileSummary(name, bio, role, timezone)
+    }
+
     /** Display name of the user's chosen reply language, or null to mirror the user's language. */
     private var replyLanguage: String? = null
 
@@ -161,8 +210,35 @@ class ChatViewModel(
     }
 
     /** Sets the user's personal memory sent as hidden context. Idempotent; safe on every recomposition. */
-    fun setPersonalMemory(text: String) {
+    fun setPersonalMemory(text: String, paused: Boolean = false) {
         personalMemory = text.trim()
+        memoryPaused = paused
+    }
+
+    private var memoryPaused: Boolean = false
+
+    /** Privacy → "Ask before acting". Default ON. */
+    private var askBeforeActing: Boolean = true
+
+    /** Sets the "Ask before acting" preference. Idempotent; safe on every recomposition. */
+    fun setAskBeforeActing(enabled: Boolean) {
+        askBeforeActing = enabled
+    }
+
+    /** Chat preferences → "Reply style". Default Balanced. */
+    private var replyStyle: ai.orhan.data.prefs.ReplyStyle = ai.orhan.data.prefs.ReplyStyle.Balanced
+
+    /** Sets the reply-style preference. Idempotent; safe on every recomposition. */
+    fun setReplyStyle(style: ai.orhan.data.prefs.ReplyStyle) {
+        replyStyle = style
+    }
+
+    /** Chat preferences → "Tone". Default Friendly. */
+    private var tone: ai.orhan.data.prefs.AgentTone = ai.orhan.data.prefs.AgentTone.Friendly
+
+    /** Sets the agent tone preference. Idempotent; safe on every recomposition. */
+    fun setTone(value: ai.orhan.data.prefs.AgentTone) {
+        tone = value
     }
 
     /** Identity layer sent on every request so the shared engine never answers as Dua AI or names its model vendor. */
@@ -177,22 +253,38 @@ class ChatViewModel(
             (replyLanguage?.let { " The user's chosen app language is $it: reply in $it unless they explicitly ask for another language." } ?: "")
     }
 
-    /** Prepends hidden user/model preface turns (engine only supports those roles); never shown in UI. */
-    internal fun withPreface(uiTurns: List<ChatTurn>): List<ChatTurn> {
-        val blocks = buildList {
-            add(orhanIdentity(agentName))
-            if (personalMemory.isNotBlank()) add("Personal context about the user (use when relevant):\n$personalMemory")
-            rosterPreface()?.let { add(it) }
-            if (instructions.isNotBlank()) {
-                add("You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions\n\n" + AgentToolGuidance.text(tools))
-            } else if (tools.isNotEmpty()) {
-                add(AgentToolGuidance.text(tools))
-            }
+    /** Hidden context blocks (identity, profile, memory, roster, agent instructions + tools) for the main chat. */
+    internal fun contextBlocks(): List<String> = buildList {
+        add(orhanIdentity(agentName))
+        userProfile?.let { add(it) }
+        personalMemoryBlock(personalMemory, memoryPaused)?.let { add(it) }
+        askBeforeActingBlock(askBeforeActing)?.let { add(it) }
+        replyStyleBlock(replyStyle)?.let { add(it) }
+        toneBlock(tone)?.let { add(it) }
+        rosterPreface()?.let { add(it) }
+        if (instructions.isNotBlank()) {
+            add("You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions\n\n" + AgentToolGuidance.text(tools))
+        } else if (tools.isNotEmpty()) {
+            add(AgentToolGuidance.text(tools))
         }
-        val preface = prefacePair(blocks, "Understood. I'm Orhan. I'll follow all of that.")
+    }
+
+    /** Top-level `systemInstruction` for /api/chat (Dua-ai #494): all hidden context in one string. */
+    internal fun systemInstruction(): String = systemInstructionOf(contextBlocks())
+
+    /**
+     * Turns sent as `messages`. With [USE_SYSTEM_INSTRUCTION] the full 20-turn window is real chat;
+     * otherwise (legacy engines) hidden user/model preface turns are prepended, never shown in UI.
+     */
+    internal fun withPreface(uiTurns: List<ChatTurn>): List<ChatTurn> {
+        if (USE_SYSTEM_INSTRUCTION) return uiTurns.takeLast(20)
+        val preface = prefacePair(contextBlocks(), "Understood. I'm Orhan. I'll follow all of that.")
         // 2 preface turns + 18 UI turns = 20, matching ChatRepository's takeLast(20) so the preface is never dropped.
         return preface + uiTurns.takeLast(20 - preface.size)
     }
+
+    /** systemInstruction to send alongside [withPreface] turns, or null in legacy preface mode. */
+    private fun systemInstructionOrNull(): String? = if (USE_SYSTEM_INSTRUCTION) systemInstruction() else null
 
     /**
      * File parts by user message id. Persisted to disk via [ChatThreadStore] and restored on load,
@@ -207,9 +299,9 @@ class ChatViewModel(
         val text = raw.trim()
         if ((text.isEmpty() && attachment == null) || _state.value.busy) return
         val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
-        val user = ChatMessage(nextId(), ChatRole.User, shown, "now")
+        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString())
         if (attachment != null) attachmentsById[user.id] = attachment
-        _state.update { it.copy(messages = it.messages + user, loading = true, busy = true, error = null) }
+        _state.update { it.copy(messages = it.messages + user, loading = true, activityLabel = null, busy = true, error = null) }
         streamReply()
     }
 
@@ -223,7 +315,7 @@ class ChatViewModel(
         val msgs = s.messages.toMutableList()
         while (msgs.isNotEmpty() && msgs.last().role == ChatRole.Agent) msgs.removeAt(msgs.lastIndex)
         if (msgs.isEmpty()) { clearError(); return }
-        _state.update { it.copy(messages = msgs, loading = true, busy = true, error = null) }
+        _state.update { it.copy(messages = msgs, loading = true, activityLabel = null, busy = true, error = null) }
         streamReply()
     }
 
@@ -233,44 +325,45 @@ class ChatViewModel(
     fun stop() {
         streamJob?.cancel()
         streamJob = null
-        _state.update { it.copy(loading = false, busy = false) }
+        _state.update { it.copy(loading = false, activityLabel = null, busy = false) }
     }
 
     private fun streamReply() {
         streamJob?.cancel()
         val turns = withPreface(turnsForApi(_state.value.messages, attachmentsById))
+        val system = systemInstructionOrNull()
         val replyId = nextId()
         streamJob = viewModelScope.launch {
             var streamed = false
-            val result = repository.stream(turns) { delta ->
+            val result = repository.stream(turns, system, onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } }) { delta ->
                 streamed = true
                 _state.update { s ->
                     val existing = s.messages.lastOrNull()?.takeIf { it.id == replyId }
                     val msgs = if (existing == null) {
-                        s.messages + ChatMessage(replyId, ChatRole.Agent, delta, "now")
+                        s.messages + ChatMessage(replyId, ChatRole.Agent, delta, currentTimeString())
                     } else {
                         s.messages.dropLast(1) + existing.copy(text = existing.text + delta)
                     }
                     // First delta replaces the typing indicator with the live bubble.
-                    s.copy(messages = msgs, loading = false)
+                    s.copy(messages = msgs, loading = false, activityLabel = null)
                 }
             }.recoverCatching { e ->
                 if (e is CancellationException) throw e
                 // Fall back to non-streaming only if nothing was shown yet and the error isn't fatal (auth).
-                if (streamed || e is ChatRepository.FatalChatException) throw e
-                repository.send(turns).getOrThrow().also { reply ->
-                    _state.update { it.copy(messages = it.messages + ChatMessage(replyId, ChatRole.Agent, reply, "now")) }
+                if (streamed || e !is ChatRepository.FallbackEligibleStreamException) throw e
+                repository.send(turns, system).getOrThrow().also { reply ->
+                    _state.update { it.copy(messages = it.messages + ChatMessage(replyId, ChatRole.Agent, reply, currentTimeString())) }
                 }
             }
             result.onSuccess { full ->
                 val handoff = parseHandoff(full, roster)
-                if (handoff == null) { _state.update { it.copy(loading = false, busy = false) }; return@onSuccess }
+                if (handoff == null) { _state.update { it.copy(loading = false, activityLabel = null, busy = false) }; return@onSuccess }
                 runHandoff(replyId, handoff.first, handoff.second)
             }
                 .onFailure { e ->
                     // User cancel (stop()) or scope teardown: state already reset; never surface as error.
                     if (e is CancellationException) return@launch
-                    _state.update { it.copy(loading = false, busy = false, error = e.message ?: "Request failed") }
+                    _state.update { it.copy(loading = false, activityLabel = null, busy = false, error = e.message ?: "Request failed") }
                 }
         }
     }
@@ -283,15 +376,21 @@ class ChatViewModel(
         _state.update { s ->
             s.copy(messages = s.messages.map { m ->
                 if (m.id == orhanReplyId) m.copy(text = stripHandoff(m.text) + "\n\n\u21AA Assigned to ${agent.name}: $task") else m
-            }, loading = true)
+            }, loading = true, activityLabel = null)
         }
         val lastUser = turnsForApi(_state.value.messages, attachmentsById).lastOrNull { it.role == "user" }
+        val blocks = buildList {
+            add(orhanIdentity(agent.name))
+            userProfile?.let { add(it) }
+            personalMemoryBlock(personalMemory, memoryPaused)?.let { add(it) }
+            askBeforeActingBlock(askBeforeActing)?.let { add(it) }
+            replyStyleBlock(replyStyle)?.let { add(it) }
+            toneBlock(tone)?.let { add(it) }
+            if (agent.instructions.isNotBlank()) add("You are the agent named \"${agent.name}\". Follow these system instructions:\n${agent.instructions}\n\n" + AgentToolGuidance.text(agent.tools))
+        }
+        val system = if (USE_SYSTEM_INSTRUCTION) systemInstructionOf(blocks) else null
         val turns = buildList {
-            addAll(prefacePair(buildList {
-                add(orhanIdentity(agent.name))
-                if (personalMemory.isNotBlank()) add("Personal context about the user (use when relevant):\n$personalMemory")
-                if (agent.instructions.isNotBlank()) add("You are the agent named \"${agent.name}\". Follow these system instructions:\n${agent.instructions}\n\n" + AgentToolGuidance.text(agent.tools))
-            }, "Understood. I'm ${agent.name}."))
+            if (!USE_SYSTEM_INSTRUCTION) addAll(prefacePair(blocks, "Understood. I'm ${agent.name}."))
             if (lastUser != null) {
                 add(lastUser) // user's latest message, with its attachment bytes
                 add(ChatTurn("model", "Noted."))
@@ -302,25 +401,25 @@ class ChatViewModel(
         val bubbleId = nextId()
         val header = specialistHeader(agent.name)
         var streamed = false
-        repository.stream(turns) { delta ->
+        repository.stream(turns, system, onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } }) { delta ->
             streamed = true
             _state.update { s ->
                 val existing = s.messages.lastOrNull()?.takeIf { it.id == bubbleId }
-                val msgs = if (existing == null) s.messages + ChatMessage(bubbleId, ChatRole.Agent, header + delta, "now")
+                val msgs = if (existing == null) s.messages + ChatMessage(bubbleId, ChatRole.Agent, header + delta, currentTimeString())
                 else s.messages.dropLast(1) + existing.copy(text = existing.text + delta)
-                s.copy(messages = msgs, loading = false)
+                s.copy(messages = msgs, loading = false, activityLabel = null)
             }
         }.recoverCatching { e ->
             if (e is CancellationException) throw e
-            if (streamed || e is ChatRepository.FatalChatException) throw e
-            repository.send(turns).getOrThrow().also { reply ->
-                _state.update { it.copy(messages = it.messages + ChatMessage(bubbleId, ChatRole.Agent, header + reply, "now")) }
+            if (streamed || e !is ChatRepository.FallbackEligibleStreamException) throw e
+            repository.send(turns, system).getOrThrow().also { reply ->
+                _state.update { it.copy(messages = it.messages + ChatMessage(bubbleId, ChatRole.Agent, header + reply, currentTimeString())) }
             }
         }
-            .onSuccess { _state.update { it.copy(loading = false, busy = false) } }
+            .onSuccess { _state.update { it.copy(loading = false, activityLabel = null, busy = false) } }
             .onFailure { e ->
                 if (e is CancellationException) throw e
-                _state.update { it.copy(loading = false, busy = false, error = "${agent.name}: ${e.message ?: "Request failed"}") }
+                _state.update { it.copy(loading = false, activityLabel = null, busy = false, error = "${agent.name}: ${e.message ?: "Request failed"}") }
             }
     }
 
@@ -342,4 +441,28 @@ internal fun turnsForApi(messages: List<ChatMessage>, attachmentsById: Map<Long,
             if (it.id == lastUserId) listOfNotNull(attachmentsById[it.id]) else emptyList(),
         )
     }
+}
+
+/** Hidden personal-memory block for the preface, or null when blank or paused by the user. */
+/** Hidden instruction line for the "Ask before acting" preference; null (omitted) when off. */
+internal fun askBeforeActingBlock(enabled: Boolean): String? =
+    if (enabled) "Ask the user before taking actions on their behalf (opening links, sending messages, changing data)." else null
+
+/** Hidden instruction line for the reply-style preference; null (omitted) when Balanced. */
+internal fun replyStyleBlock(style: ai.orhan.data.prefs.ReplyStyle): String? = when (style) {
+    ai.orhan.data.prefs.ReplyStyle.Short -> "Keep replies short and concise."
+    ai.orhan.data.prefs.ReplyStyle.Detailed -> "Give more detail and explanation in replies."
+    ai.orhan.data.prefs.ReplyStyle.Balanced -> null
+}
+
+internal fun toneBlock(tone: ai.orhan.data.prefs.AgentTone): String? = when (tone) {
+    ai.orhan.data.prefs.AgentTone.Direct -> "Keep a direct, no-fluff tone."
+    ai.orhan.data.prefs.AgentTone.Professional -> "Keep a professional, polished tone."
+    ai.orhan.data.prefs.AgentTone.Friendly -> null
+}
+
+internal fun personalMemoryBlock(text: String, paused: Boolean): String? {
+    val t = text.trim()
+    if (paused || t.isBlank()) return null
+    return "Personal context about the user (use when relevant):\n$t"
 }

@@ -4,6 +4,7 @@ import ai.orhan.app.PinField
 import ai.orhan.data.applock.AppLockStore
 import ai.orhan.data.applock.PinHash
 import ai.orhan.data.applock.appLockStore
+import ai.orhan.data.permissions.askBeforeActingStore
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,6 +36,8 @@ fun PrivacyScreen(
     val context = LocalContext.current.applicationContext
     val lockStore = remember(context) { context.appLockStore() }
     val lockEnabled by lockStore.isEnabled.collectAsStateWithLifecycle(initialValue = false)
+    val askStore = remember(context) { context.askBeforeActingStore() }
+    val askBeforeActing by askStore.enabled.collectAsStateWithLifecycle(initialValue = true)
     var pinDialog by remember { mutableStateOf<PinDialog?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
@@ -59,6 +62,18 @@ fun PrivacyScreen(
             }
         }
         GroupCard(lockRows)
+
+        SectionLabel("Permissions")
+        GroupCard(listOf(
+            {
+                SwitchRow(
+                    title = "Ask before acting",
+                    subtitle = "Orhan should confirm before taking actions on your behalf. Connected apps aren't wired yet.",
+                    checked = askBeforeActing,
+                    onCheckedChange = { on -> scope.launch { askStore.setEnabled(on) } },
+                )
+            },
+        ))
 
         SectionLabel("Data")
         GroupCard(listOf(

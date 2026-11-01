@@ -12,6 +12,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
+import kotlin.coroutines.cancellation.CancellationException
 
 /* Local notes, to-dos and topics. On-device only; never sent to the engine. */
 const val MAX_NOTE_CONTENT = 8_000
@@ -126,10 +127,21 @@ class MemoryEntriesStore(private val dataStore: DataStore<MemoryEntries>) {
         return true
     }
 
-    suspend fun deleteTopic(id: String) {
-        dataStore.updateData { raw ->
-            val current = raw.withNotesMigrated()
-            current.copy(topics = current.topics.filterNot { it.id == id })
+    /**
+     * Removes a topic. Returns false when the write fails; the saved list is
+     * left as it was so the editor can stay open.
+     */
+    suspend fun deleteTopic(id: String): Boolean {
+        return try {
+            dataStore.updateData { raw ->
+                val current = raw.withNotesMigrated()
+                current.copy(topics = current.topics.filterNot { it.id == id })
+            }
+            true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
         }
     }
 

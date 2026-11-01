@@ -1,5 +1,9 @@
 package ai.orhan.data.memory
 
+import androidx.datastore.core.DataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -7,6 +11,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
+import java.io.IOException
 
 /**
  * Topic storage and chat-context rules. Fixtures are synthetic. Nothing here is
@@ -16,14 +21,19 @@ class MemoryTopicsTest {
 
     @Test fun pauseKeyMatchesInstalledPreferencesFile() {
         assertEquals("orhan_memory_prefs", MEMORY_PAUSE_FILE)
-        assertEquals("memory_paused", MEMORY_PAUSED_KEY)
+        assertEquals("memory_paused", MEMORY_PAUSED_KEY.name)
     }
 
-    @Test fun chatContextStaysEmptyUntilPauseIsLoadedAndOff() {
-        assertEquals("", chatPersonalContext("  kept  ", loaded = false, paused = false))
-        assertEquals("", chatPersonalContext("kept", loaded = true, paused = true))
-        assertEquals("", chatPersonalContext("   ", loaded = true, paused = false))
-        assertEquals("kept", chatPersonalContext("  kept  ", loaded = true, paused = false))
+    @Test fun deleteTopicKeepsTheSavedListWhenTheWriteFails() = runBlocking {
+        val kept = topic("1", "Keep me")
+        val storeData = TopicDataStore(MemoryEntries(topics = listOf(kept)))
+        val store = MemoryEntriesStore(storeData)
+        storeData.failWrites = true
+        assertFalse(store.deleteTopic("1"))
+        assertEquals(listOf(kept), storeData.state.value.topics)
+        storeData.failWrites = false
+        assertTrue(store.deleteTopic("1"))
+        assertTrue(storeData.state.value.topics.isEmpty())
     }
 
     @Test fun version1NotesBecomeTopicsOnceAndTodosStay() {
@@ -149,6 +159,18 @@ class MemoryTopicsTest {
         assertEquals("about 3 hours ago", memoryTimestamp(now - 3 * 3_600_000L, now) { _, _ -> "older" })
         assertEquals("older", memoryTimestamp(now - 25 * 3_600_000L, now) { _, _ -> "older" })
         assertEquals("older", memoryTimestamp(now + 5_000L, now) { _, _ -> "older" })
+    }
+
+    private class TopicDataStore(initial: MemoryEntries) : DataStore<MemoryEntries> {
+        val state = MutableStateFlow(initial)
+        var failWrites = false
+        override val data: Flow<MemoryEntries> = state
+        override suspend fun updateData(transform: suspend (t: MemoryEntries) -> MemoryEntries): MemoryEntries {
+            val next = transform(state.value)
+            if (failWrites) throw IOException("disk full")
+            state.value = next
+            return next
+        }
     }
 
     private fun encodeV1(notes: List<MemoryEntry>, todos: List<MemoryEntry>): ByteArray {

@@ -392,7 +392,7 @@ private fun HomeTopBar(
     ) {
         Image(
             painter = painterResource(profile.safeAvatarResId),
-            contentDescription = profile.name,
+            contentDescription = profile.displayName,
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .align(Alignment.CenterStart)
@@ -868,18 +868,23 @@ private fun ProfileTab(
                     ) {
                         Image(
                             painter = painterResource(profile.safeAvatarResId),
-                            contentDescription = profile.name,
+                            contentDescription = profile.displayName,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(profile.name, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(profile.email, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(profile.displayName, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(profile.displayEmail, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = "Edit profile", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                ProfileRow(
+                    "About me for Orhan",
+                    profile.role.trim().ifEmpty { "Role, timezone, context" },
+                    onClick = onEditProfile,
+                )
                 ProfileRow("Memory", "What Orhan remembers about you", onClick = onOpenMemory)
                 ProfileRow("Artifacts", if (artifactCount > 0) "$artifactCount saved" else "Saved replies", onClick = onOpenArtifacts)
             }
@@ -899,10 +904,10 @@ private fun ProfileTab(
         ProfileSectionLabel("Preferences")
         OrhanCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(4.dp)) {
-                ProfileRow("Notifications", "", onClick = { onOpenSettingsPage("settings/notifications") })
+                ProfileRow("Notifications", "Saved on device; push not connected yet", onClick = { onOpenSettingsPage("settings/notifications") })
                 ProfileRow("Appearance", "Theme: System, Light or Dark", onClick = onOpenAppearance)
-                ProfileRow("Language", "", onClick = { onOpenSettingsPage("settings/language") })
-                ProfileRow("All settings", "", onClick = onOpenSettings)
+                ProfileRow("Language", "App language & agent replies", onClick = { onOpenSettingsPage("settings/language") })
+                ProfileRow("All settings", "Appearance, privacy, storage", onClick = onOpenSettings)
             }
         }
 
@@ -911,7 +916,7 @@ private fun ProfileTab(
             Column(modifier = Modifier.padding(4.dp)) {
                 ProfileRow("About Orhan", "Version, licences", onClick = { onOpenSettingsPage("settings/about") })
                 if (onSignOut != null) {
-                    ProfileRow("Sign out", profile.email, danger = true, onClick = onSignOut)
+                    ProfileRow("Sign out", profile.email.trim(), danger = true, onClick = onSignOut)
                 }
             }
         }

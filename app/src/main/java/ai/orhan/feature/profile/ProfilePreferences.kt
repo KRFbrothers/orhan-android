@@ -23,21 +23,32 @@ import java.io.OutputStream
  * ==========================================================================*/
 
 private const val PROFILE_DATASTORE_FILE = "orhan_profile.pb"
-private const val PROFILE_FORMAT_VERSION = 1
+private const val PROFILE_FORMAT_VERSION = 2
+private const val PROFILE_FORMAT_V1 = 1
 
 /** Avatars the user may pick from. Persisted avatar ids outside this list fall back to the first. */
 val ProfileAvatars: List<Int> = listOf(R.drawable.user_alex, R.drawable.user_alice, R.drawable.user_david)
 
 data class UserProfile(
-    val name: String = "Fareed Khan",
-    val email: String = "fareed.khan@gmail.com",
-    val handle: String = "@fareed",
-    val bio: String = "Building AI agents at Orhan. Mostly on Android, always in dark mode.",
+    val name: String = "",
+    val email: String = "",
+    val handle: String = "",
+    val bio: String = "",
+    /** Short role, e.g. "Android designer". Added in format v2. */
+    val role: String = "",
+    /** IANA zone id or display string, e.g. "Asia/Kolkata". Added in format v2. */
+    val timezone: String = "",
     @DrawableRes val avatarResId: Int = ProfileAvatars.first(),
 ) {
     /** Avatar guaranteed to be a current drawable (res ids can shift between builds). */
     @get:DrawableRes
     val safeAvatarResId: Int get() = avatarResId.takeIf { it in ProfileAvatars } ?: ProfileAvatars.first()
+
+    /** Name for UI; placeholder when the user has not set one. */
+    val displayName: String get() = name.trim().ifEmpty { "You" }
+
+    /** Email/subtitle for UI; prompt when blank. */
+    val displayEmail: String get() = email.trim().ifEmpty { "Add your name and email in Profile" }
 
     val initials: String
         get() = name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2)
@@ -56,14 +67,18 @@ object UserProfileSerializer : Serializer<UserProfile> {
         if (bytes.isEmpty()) return defaultValue
         return try {
             DataInputStream(bytes.inputStream()).use { d ->
-                if (d.readInt() != PROFILE_FORMAT_VERSION) return defaultValue
-                UserProfile(
+                val version = d.readInt()
+                if (version != PROFILE_FORMAT_VERSION && version != PROFILE_FORMAT_V1) return defaultValue
+                val base = UserProfile(
                     name = d.readUTF(),
                     email = d.readUTF(),
                     handle = d.readUTF(),
                     bio = d.readUTF(),
                     avatarResId = d.readInt(),
                 )
+                // v1 files end here; v2 appends role + timezone (blank defaults for v1).
+                if (version == PROFILE_FORMAT_V1) base
+                else base.copy(role = d.readUTF(), timezone = d.readUTF())
             }
         } catch (e: IOException) {
             defaultValue
@@ -78,6 +93,8 @@ object UserProfileSerializer : Serializer<UserProfile> {
         d.writeUTF(t.handle)
         d.writeUTF(t.bio)
         d.writeInt(t.avatarResId)
+        d.writeUTF(t.role)
+        d.writeUTF(t.timezone)
         d.flush()
     }
 }

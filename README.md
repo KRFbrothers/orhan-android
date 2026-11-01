@@ -61,3 +61,29 @@ Early / in active development. On `main` today:
 - Lato 400/700/900 (`res/font/lato_*.ttf`, OFL, `licenses/Lato-OFL.txt`)
 - Inter variable as opt-in fallback (OFL, `licenses/Inter-OFL.txt`)
 - See `THIRD-PARTY-NOTICES.md`.
+
+## License
+
+Orhan AI — Android is licensed under the **Apache License, Version 2.0**.
+
+- Full license text: [`LICENSE`](LICENSE)
+- Third-party attributions: [`NOTICE`](NOTICE) and [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)
+- Bundled font licenses: [`licenses/`](licenses/) (Lato and Inter, both SIL OFL 1.1)
+
+Copyright 2026 KRFbrothers.
+
+```
+Copyright 2026 KRFbrothers
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```

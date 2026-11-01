@@ -177,6 +177,7 @@ fun MemoryScreen(
                     entries.upsertTopic(if (creating) null else openTopicId, title, summary, content, group, tags)
                 },
                 onDelete = { id -> entries.deleteTopic(id) },
+                snackbar = snackbar,
             )
             page == "overview" -> OverviewPage(topics, onBack = { page = "home" }, onOpen = { openTopicId = it })
             page == "profile" -> ProfilePage(onBack = { page = "home" }, onEditProfile = onEditProfile, snackbar = snackbar)
@@ -503,9 +504,23 @@ private fun ProfilePage(onBack: () -> Unit, onEditProfile: () -> Unit, snackbar:
         }
     }
     PageColumn("My Profile", onBack) {
-        Text(profile.name, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(
+            profile.displayName,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
         if (profile.handle.isNotBlank()) {
             Text(profile.handle, style = OrhanTextStyles.snippet, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (profile.role.isNotBlank() || profile.timezone.isNotBlank()) {
+            Text(
+                listOf(profile.role, profile.timezone).filter { it.isNotBlank() }.joinToString(" · "),
+                style = OrhanTextStyles.snippet,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
         }
         if (profile.bio.isNotBlank()) {
             Text(profile.bio, style = OrhanTextStyles.snippet, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 8.dp))
@@ -522,13 +537,20 @@ private fun ProfilePage(onBack: () -> Unit, onEditProfile: () -> Unit, snackbar:
                 )
             }
             Switch(
-                checked = !pause.loaded || pause.paused,
+                checked = pause.paused,
                 onCheckedChange = { scope.launch { pauseStore.setPaused(it) } },
-                enabled = pause.loaded,
+                enabled = !pause.unreadable,
                 modifier = Modifier.semantics { contentDescription = "Pause memory" },
             )
         }
-        if (pause.loaded && pause.paused) {
+        if (pause.unreadable) {
+            Text(
+                "Pause setting couldn't be read. Chats won't include this context until it can be read again.",
+                style = OrhanTextStyles.snippet,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        } else if (pause.paused) {
             Text(
                 "Memory is paused — chats won't include this context until you turn it back on.",
                 style = OrhanTextStyles.snippet,
@@ -719,7 +741,8 @@ private fun TopicEditor(
     groups: List<String>,
     onBack: () -> Unit,
     onSave: suspend (String, String, String, String, List<String>) -> Boolean,
-    onDelete: suspend (String) -> Unit,
+    onDelete: suspend (String) -> Boolean,
+    snackbar: SnackbarHostState,
 ) {
     val scope = rememberCoroutineScope()
     var title by rememberSaveable(topic?.id) { mutableStateOf(topic?.title.orEmpty()) }
@@ -729,6 +752,8 @@ private fun TopicEditor(
     var tagDraft by rememberSaveable(topic?.id) { mutableStateOf("") }
     var tags by rememberSaveable(topic?.id, stateSaver = StringListSaver) { mutableStateOf(topic?.tags.orEmpty()) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var deleting by rememberSaveable { mutableStateOf(false) }
+    var deleteError by rememberSaveable { mutableStateOf<String?>(null) }
     PageColumn(
         title = "Memory",
         onBack = onBack,
@@ -815,12 +840,30 @@ private fun TopicEditor(
     if (confirmDelete && topic != null) {
         ConfirmDelete(
             title = "Delete topic?",
-            body = "\"${topic.title}\" will be removed from this device.",
-            onDismiss = { confirmDelete = false },
+            body = deleteError ?: "\"${topic.title}\" will be removed from this device.",
+            confirmEnabled = !deleting,
+            onDismiss = {
+                if (!deleting) {
+                    confirmDelete = false
+                    deleteError = null
+                }
+            },
             onConfirm = {
-                scope.launch { onDelete(topic.id) }
-                confirmDelete = false
-                onBack()
+                if (deleting) return@ConfirmDelete
+                val id = topic.id
+                deleting = true
+                scope.launch {
+                    val removed = onDelete(id)
+                    deleting = false
+                    if (removed) {
+                        confirmDelete = false
+                        deleteError = null
+                        onBack()
+                    } else {
+                        deleteError = "Couldn't delete this topic. It is still saved on this device."
+                        snackbar.showSnackbar("Couldn't delete this topic. It is still saved on this device.")
+                    }
+                }
             },
         )
     }
@@ -863,13 +906,19 @@ private fun ArtifactDraft(initial: Artifact, onBack: () -> Unit, onSave: (String
 }
 
 @Composable
-private fun ConfirmDelete(title: String, body: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+private fun ConfirmDelete(
+    title: String,
+    body: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    confirmEnabled: Boolean = true,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { Text(body) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text("Delete") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = onConfirm, enabled = confirmEnabled) { Text("Delete") } },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = confirmEnabled) { Text("Cancel") } },
     )
 }
 

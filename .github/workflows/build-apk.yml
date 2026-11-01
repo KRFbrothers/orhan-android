@@ -10,12 +10,24 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Certificate the committed app/debug.keystore must produce. Override with a
+  # repo variable of the same name if the keystore is ever rotated.
+  ORHAN_DEBUG_CERT_SHA256: ${{ vars.ORHAN_DEBUG_CERT_SHA256 || '8D:E8:C2:E4:6E:57:2D:F1:A7:DC:ED:CE:00:B4:8A:6B:A0:E5:3C:04:2D:52:07:9C:51:0F:29:23:BE:88:E0:6E' }}
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # fetch-depth: 0 is REQUIRED: versionCode is derived from
+      # `git rev-list --count HEAD` (app/build.gradle.kts). The default depth=1
+      # clone has no history to count, and the build fails on purpose rather than
+      # falling back to a lower number.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
@@ -31,16 +43,29 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
-      # SECURITY: DUA_DEV_JWT is local-only (developer local.properties). It must NEVER be
-      # written here: these debug APKs are published publicly (debug-apk-latest release).
+      # The debug keystore is COMMITTED at app/debug.keystore and
+      # app/build.gradle.kts points signingConfigs.debug at it. Nothing is
+      # generated on the runner any more: a per-runner keystore gave every APK a
+      # different certificate, which is what broke in-place updates
+      # (INSTALL_FAILED_UPDATE_INCOMPATIBLE).
+      - name: Verify committed debug keystore
+        run: |
+          set -euo pipefail
+          test -f app/debug.keystore || { echo "::error::app/debug.keystore is missing - it must be committed."; exit 1; }
+          echo "committed keystore sha256: $(sha256sum app/debug.keystore | cut -d' ' -f1)"
+          echo "expected certificate sha256: ${ORHAN_DEBUG_CERT_SHA256}"
+
+      # SECURITY: DUA_DEV_JWT and DUA_APP_TOKEN are local-only (developer local.properties).
+      # They must NEVER be written here: these debug APKs are published publicly.
       - name: Write local.properties from secrets
+        id: build-meta
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           DUA_ENGINE_URL: ${{ secrets.DUA_ENGINE_URL }}
           DUA_API_URL: ${{ secrets.DUA_API_URL }}
-          DUA_APP_TOKEN: ${{ secrets.DUA_APP_TOKEN }}
         run: |
+          set -euo pipefail
           # Public engine URLs from docs/BACKEND.md are used only as fallbacks.
           : "${DUA_ENGINE_URL:=https://dua-ai-engine-228305912525.us-central1.run.app}"
           : "${DUA_API_URL:=https://dua-api-228305912525.us-central1.run.app}"
@@ -53,11 +78,17 @@ jobs:
             echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
             echo "DUA_ENGINE_URL=$DUA_ENGINE_URL"
             echo "DUA_API_URL=$DUA_API_URL"
-            echo "DUA_APP_TOKEN=$DUA_APP_TOKEN"
           } > local.properties
+          # Version comes from the repo (VERSION + commit count), never run_number.
+          VERSION_NAME=$(cat VERSION)
+          VERSION_CODE=$(( $(git rev-list --count HEAD) + 100 ))
+          echo "version_name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
+          echo "Building v${VERSION_NAME} (versionCode ${VERSION_CODE})"
 
+      # No -PbuildNumber any more: local and CI derive the same versionCode.
       - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --max-workers=2 -PbuildNumber=${{ github.run_number }}
+        run: ./gradlew :app:assembleDebug --no-daemon --max-workers=2
 
       - name: Remove local.properties
         if: always()
@@ -66,11 +97,38 @@ jobs:
       - name: Rename APK
         run: cp app/build/outputs/apk/debug/app-debug.apk Orhan-debug.apk
 
+      # Proves, on this runner, that the APK is signed by the committed key and
+      # that it carries the version the repo derives. Fails the run otherwise.
+      - name: Verify APK certificate and version
+        run: |
+          set -euo pipefail
+          BT="${ANDROID_HOME}/build-tools/35.0.0"
+          "$BT/apksigner" verify --print-certs Orhan-debug.apk | tee apk-certs.txt
+          GOT_CERT=$("$BT/apksigner" verify --print-certs Orhan-debug.apk \
+            | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print $2}' \
+            | tr '[:upper:]' '[:lower:]' | tr -d ' :')
+          WANT_CERT=$(echo "${ORHAN_DEBUG_CERT_SHA256}" | tr '[:upper:]' '[:lower:]' | tr -d ' :')
+          echo "APK certificate sha256 : ${GOT_CERT}"
+          echo "expected     sha256    : ${WANT_CERT}"
+          test "${GOT_CERT}" = "${WANT_CERT}" \
+            || { echo "::error::APK is signed by an unexpected key - the committed debug keystore is not being used."; exit 1; }
+
+          "$BT/aapt2" dump badging Orhan-debug.apk | head -1 | tee apk-badging.txt
+          WANT_CODE="${{ steps.build-meta.outputs.version_code }}"
+          WANT_NAME="${{ steps.build-meta.outputs.version_name }}"
+          grep -q "versionCode='${WANT_CODE}'" apk-badging.txt \
+            || { echo "::error::APK versionCode does not match ${WANT_CODE} derived from the repo."; exit 1; }
+          grep -q "versionName='${WANT_NAME}'" apk-badging.txt \
+            || { echo "::error::APK versionName does not match ${WANT_NAME} from the VERSION file."; exit 1; }
+          echo "versionCode/versionName match the repo."
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Orhan-debug-APK
-          path: Orhan-debug.apk
+          path: |
+            Orhan-debug.apk
+            apk-certs.txt
           retention-days: 14
           if-no-files-found: error
 
@@ -78,14 +136,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: debug-apk-latest
+          VERSION_NAME: ${{ steps.build-meta.outputs.version_name }}
+          VERSION_CODE: ${{ steps.build-meta.outputs.version_code }}
         run: |
-          NOTES="Orhan v0.1.${{ github.run_number }} (versionCode ${{ github.run_number }}) - debug APK from run #${{ github.run_number }} (commit ${{ github.sha }})."
+          set -euo pipefail
+          CERT=$(echo "${ORHAN_DEBUG_CERT_SHA256}" | tr -d ' ')
+          NOTES="Orhan v${VERSION_NAME} (versionCode ${VERSION_CODE}) - debug APK from commit ${{ github.sha }}.
+
+          > **Note:** DUA_APP_TOKEN and DUA_DEV_JWT are excluded from CI builds. Sign in with your Supabase account; the backend authenticates via your user JWT.
+          > Signed with the committed debug keystore (certificate SHA-256 \`${CERT}\`), so this APK installs over previous debug builds without uninstalling."
           if gh release view "$TAG" >/dev/null 2>&1; then
             git tag -f "$TAG" "${{ github.sha }}"
             git push -f origin "refs/tags/$TAG"
-            gh release edit "$TAG" --title "Debug APK v0.1.${{ github.run_number }} (latest)" --notes "$NOTES" --prerelease=false --latest
+            gh release edit "$TAG" --title "Debug APK v${VERSION_NAME} (latest)" --notes "$NOTES" --prerelease --latest=false
             gh release upload "$TAG" Orhan-debug.apk --clobber
           else
             gh release create "$TAG" Orhan-debug.apk --target "${{ github.sha }}" \
-              --title "Debug APK v0.1.${{ github.run_number }} (latest)" --notes "$NOTES" --prerelease=false --latest
+              --title "Debug APK v${VERSION_NAME} (latest)" --notes "$NOTES" --prerelease --latest=false
           fi
