@@ -22,8 +22,10 @@ import ai.orhan.design.screens.ChatScreen
 import ai.orhan.feature.agents.CreateAgentScreen
 import ai.orhan.feature.profile.EditProfileScreen
 import ai.orhan.feature.memory.MemoryScreen
+import ai.orhan.data.memory.memoryEntriesStore
 import ai.orhan.data.memory.memoryPauseStore
 import ai.orhan.data.memory.memoryStore
+import ai.orhan.data.memory.updatesCount
 import ai.orhan.data.permissions.askBeforeActingStore
 import ai.orhan.data.prefs.replyStyleStore
 import ai.orhan.data.prefs.toneStore
@@ -110,6 +112,8 @@ fun OrhanNavHost(isDark: Boolean) {
     // Canonical names (saved + samples) so "writer" and "Writer" share one thread/recent/pin key.
     val canon: (String) -> String = { t -> canonicalAgentTitle(t, mergeWithSamples(savedAgents.map { it.toInstalledAgent() }).map { it.name }) }
     val memoryStore = remember(context) { context.memoryStore() }
+    val memoryEntries = remember(context) { context.memoryEntriesStore() }
+    val memoryTopics by memoryEntries.topics.collectAsStateWithLifecycle(initialValue = emptyList())
     val artifactStore = remember(context) { context.artifactStore() }
     val artifacts by artifactStore.artifacts.collectAsStateWithLifecycle(initialValue = emptyList())
     val workflowStore = remember(context) { context.workflowStore() }
@@ -177,6 +181,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 onUpsertArtifact = { item -> scope.launch { artifactStore.upsert(item) } },
                 onDeleteArtifact = { id -> scope.launch { artifactStore.delete(id) } },
                 artifactCount = artifacts.size,
+                memoryUpdates = updatesCount(memoryTopics),
                 onOpenChatPreferences = { navController.openSettingsPage(SettingsRoutes.CHAT_PREFERENCES) },
                 onOpenSettingsPage = { route -> navController.openSettingsPage(route) },
                 onSignOut = if (homeSession != null) {

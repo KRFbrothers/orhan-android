@@ -18,7 +18,10 @@ import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import ai.orhan.data.artifacts.Artifact
+import ai.orhan.data.memory.memoryTabBadge
 import ai.orhan.feature.artifacts.ArtifactsScreen
 import ai.orhan.feature.memory.MemoryScreen
 import ai.orhan.feature.search.LocalSearchScreen
@@ -38,6 +41,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -193,6 +197,8 @@ fun HomeScreen(
     onUpsertArtifact: (Artifact) -> Unit = {},
     onDeleteArtifact: (String) -> Unit = {},
     artifactCount: Int = 0,
+    /** Unread Memory topics. The tab badge uses this count and hides at zero. */
+    memoryUpdates: Int = 0,
     /** Agent behaviour knobs (reply style, preview) live in Chat preferences. */
     onOpenChatPreferences: () -> Unit = onOpenSettings,
     /** Null when no session exists; Profile then hides the Sign out row. */
@@ -366,6 +372,7 @@ fun HomeScreen(
             OrhanBottomBar(
                 selected = tab,
                 onSelect = { tab = it },
+                memoryUpdates = memoryUpdates,
                 modifier = Modifier
                     .navigationBarsPadding()
                     .padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
@@ -983,6 +990,7 @@ fun OrhanBottomBar(
     selected: OrhanTab,
     onSelect: (OrhanTab) -> Unit,
     modifier: Modifier = Modifier,
+    memoryUpdates: Int = 0,
 ) {
     val colors = OrhanTheme.colors
     Surface(
@@ -1013,12 +1021,29 @@ fun OrhanBottomBar(
                         .padding(vertical = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Icon(
-                        imageVector = tab.icon,
-                        contentDescription = null,
-                        tint = tint,
-                        modifier = Modifier.size(22.dp),
-                    )
+                    Box {
+                        Icon(
+                            imageVector = tab.icon,
+                            contentDescription = null,
+                            tint = tint,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        val badge = if (tab == OrhanTab.Memory) memoryTabBadge(memoryUpdates) else null
+                        if (badge != null) {
+                            Text(
+                                text = badge,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                style = OrhanTextStyles.eyebrow,
+                                maxLines = 1,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 10.dp, y = (-6).dp)
+                                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                                    .padding(horizontal = 4.dp)
+                                    .semantics { contentDescription = "$badge updates" },
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = tab.label,

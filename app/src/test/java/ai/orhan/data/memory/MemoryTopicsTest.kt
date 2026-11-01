@@ -150,15 +150,58 @@ class MemoryTopicsTest {
         assertEquals(listOf("1"), topics.matching("", setOf("HOME"), true).map { it.id })
     }
 
-    @Test fun timestampsUseAboutHoursThenTheOlderLabel() {
+    @Test fun timestampsUseAboutHoursThenDayAgoThenTheOlderLabel() {
         val now = 10_000_000L
+        val day = 86_400_000L
         assertEquals("less than a minute ago", memoryTimestamp(now - 30_000L, now) { _, _ -> "older" })
         assertEquals("about 1 minute ago", memoryTimestamp(now - 60_000L, now) { _, _ -> "older" })
         assertEquals("about 2 minutes ago", memoryTimestamp(now - 120_000L, now) { _, _ -> "older" })
         assertEquals("about 1 hour ago", memoryTimestamp(now - 3_600_000L, now) { _, _ -> "older" })
         assertEquals("about 3 hours ago", memoryTimestamp(now - 3 * 3_600_000L, now) { _, _ -> "older" })
-        assertEquals("older", memoryTimestamp(now - 25 * 3_600_000L, now) { _, _ -> "older" })
+        assertEquals("1 day ago", memoryTimestamp(now - 25 * 3_600_000L, now) { _, _ -> "older" })
+        assertEquals("5 days ago", memoryTimestamp(now - 5 * day, now) { _, _ -> "older" })
+        assertEquals("6 days ago", memoryTimestamp(now - 6 * day, now) { _, _ -> "older" })
+        assertEquals("older", memoryTimestamp(now - 7 * day, now) { _, _ -> "older" })
         assertEquals("older", memoryTimestamp(now + 5_000L, now) { _, _ -> "older" })
+    }
+
+    @Test fun updatesFeedIsFlatAndTheTabBadgeHidesZero() {
+        val topics = listOf(
+            topic("1", "A", group = "Zebra", unread = true, updatedAt = 3),
+            topic("2", "B", group = "Alpha", unread = true, updatedAt = 2),
+            topic("3", "C", group = "Zebra", unread = false, updatedAt = 1),
+        )
+        val flat = memoryFeed(topics.matching("", emptySet(), true), updatesOnly = true)
+        assertEquals(listOf(""), flat.map { it.name })
+        assertEquals(listOf("1", "2"), flat.single().topics.map { it.id })
+        val grouped = memoryFeed(topics.matching("", emptySet(), false), updatesOnly = false)
+        assertEquals(listOf("Zebra", "Alpha"), grouped.map { it.name })
+        assertNull(memoryTabBadge(0))
+        assertNull(memoryTabBadge(-1))
+        assertEquals("30", memoryTabBadge(30))
+    }
+
+    @Test fun saveAndMarkReadKeepTheSavedTopicWhenTheWriteFails() = runBlocking {
+        val kept = topic("1", "Keep me", content = "old", unread = true)
+        val storeData = TopicDataStore(MemoryEntries(topics = listOf(kept)))
+        val store = MemoryEntriesStore(storeData)
+        storeData.failWrites = true
+        assertFalse(store.upsertTopic("1", "Keep me", "", "new", DEFAULT_TOPIC_GROUP, emptyList()))
+        assertEquals("old", storeData.state.value.topics.single().content)
+        assertTrue(storeData.state.value.topics.single().unread)
+        assertFalse(store.markTopicRead("1"))
+        assertTrue(storeData.state.value.topics.single().unread)
+
+        storeData.failWrites = false
+        assertTrue(store.upsertTopic("1", "Keep me", "", "new", DEFAULT_TOPIC_GROUP, emptyList()))
+        assertEquals("new", storeData.state.value.topics.single().content)
+        assertFalse(storeData.state.value.topics.single().unread)
+
+        val read = topic("2", "Already", unread = false)
+        val readStore = TopicDataStore(MemoryEntries(topics = listOf(read)))
+        readStore.failWrites = true
+        assertTrue(MemoryEntriesStore(readStore).markTopicRead("2"))
+        assertEquals(read, readStore.state.value.topics.single())
     }
 
     private class TopicDataStore(initial: MemoryEntries) : DataStore<MemoryEntries> {

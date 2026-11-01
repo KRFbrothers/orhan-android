@@ -7,6 +7,7 @@ import androidx.datastore.core.Serializer
 import androidx.datastore.dataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.io.IOException
 import java.io.InputStream
@@ -99,7 +100,10 @@ class MemoryEntriesStore(private val dataStore: DataStore<MemoryEntries>) {
         dataStore.updateData { d -> d.copy(todos = d.todos.filterNot { it.id == id }) }
     }
 
-    /** Insert or replace a topic. Returns false when the title is blank. */
+    /**
+     * Insert or replace a topic. Returns false when the title is blank or the
+     * write fails. A failed write leaves the saved topic unchanged.
+     */
     suspend fun upsertTopic(
         id: String?,
         title: String,
@@ -109,22 +113,28 @@ class MemoryEntriesStore(private val dataStore: DataStore<MemoryEntries>) {
         tags: List<String>,
     ): Boolean {
         if (title.trim().isEmpty()) return false
-        dataStore.updateData { raw ->
-            val current = raw.withNotesMigrated()
-            val existing = current.topics.firstOrNull { it.id == id }
-            val topic = prepareTopic(
-                existing = existing,
-                title = title,
-                summary = summary,
-                content = content,
-                group = group,
-                tags = tags,
-                now = System.currentTimeMillis(),
-                newId = UUID.randomUUID().toString(),
-            ) ?: return@updateData current
-            current.copy(topics = current.topics.upsertedTopic(topic))
+        return try {
+            dataStore.updateData { raw ->
+                val current = raw.withNotesMigrated()
+                val existing = current.topics.firstOrNull { it.id == id }
+                val topic = prepareTopic(
+                    existing = existing,
+                    title = title,
+                    summary = summary,
+                    content = content,
+                    group = group,
+                    tags = tags,
+                    now = System.currentTimeMillis(),
+                    newId = UUID.randomUUID().toString(),
+                ) ?: return@updateData current
+                current.copy(topics = current.topics.upsertedTopic(topic))
+            }
+            true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
         }
-        return true
     }
 
     /**
@@ -145,11 +155,31 @@ class MemoryEntriesStore(private val dataStore: DataStore<MemoryEntries>) {
         }
     }
 
-    /** Opening a topic clears its unread flag without changing the edited time. */
-    suspend fun markTopicRead(id: String) {
-        dataStore.updateData { raw ->
-            val current = raw.withNotesMigrated()
-            current.copy(topics = current.topics.map { if (it.id == id && it.unread) it.copy(unread = false) else it })
+    /**
+     * Opening a topic clears its unread flag without changing the edited time.
+     * Returns false when that write fails; the topic stays unread. An already-read
+     * topic does not write.
+     */
+    suspend fun markTopicRead(id: String): Boolean {
+        val current = try {
+            dataStore.data.first()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            return false
+        }
+        val topic = current.withNotesMigrated().topics.firstOrNull { it.id == id } ?: return true
+        if (!topic.unread) return true
+        return try {
+            dataStore.updateData { raw ->
+                val latest = raw.withNotesMigrated()
+                latest.copy(topics = latest.topics.map { if (it.id == id && it.unread) it.copy(unread = false) else it })
+            }
+            true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
         }
     }
 }

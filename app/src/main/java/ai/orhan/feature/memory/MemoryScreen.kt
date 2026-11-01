@@ -93,6 +93,7 @@ import ai.orhan.data.memory.MemoryTopic
 import ai.orhan.data.memory.allCount
 import ai.orhan.data.memory.groupTopics
 import ai.orhan.data.memory.matching
+import ai.orhan.data.memory.memoryFeed
 import ai.orhan.data.memory.memoryEntriesStore
 import ai.orhan.data.memory.memoryPauseStore
 import ai.orhan.data.memory.memoryStore
@@ -197,7 +198,9 @@ fun MemoryScreen(
     }
     LaunchedEffect(openTopicId) {
         val id = openTopicId ?: return@LaunchedEffect
-        entries.markTopicRead(id)
+        if (!entries.markTopicRead(id)) {
+            snackbar.showSnackbar("Couldn't update this topic. It is still in Updates.")
+        }
     }
 }
 
@@ -288,39 +291,43 @@ private fun TopicHome(
         }
         when {
             topics.isEmpty() -> EmptyCopy("No topics yet. Tap + New to add one.")
+            visible.isEmpty() && updatesOnly && query.isBlank() && selected.isEmpty() -> EmptyCopy("No updates")
             visible.isEmpty() -> EmptyCopy("No matches")
             else -> {
-                groupTopics(visible).forEach { group ->
-                    val closed = group.name in collapsed
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp)
-                            .clickable {
-                                collapsed = if (closed) collapsed - group.name else collapsed + group.name
-                            }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            if (closed) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess,
-                            contentDescription = if (closed) "Expand ${group.name}" else "Collapse ${group.name}",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            group.name.uppercase(),
-                            style = OrhanTextStyles.kicker,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 4.dp).weight(1f, fill = false),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            group.topics.size.toString(),
-                            style = OrhanTextStyles.kicker,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 8.dp),
-                        )
+                memoryFeed(visible, updatesOnly).forEach { group ->
+                    val showHeader = group.name.isNotBlank()
+                    val closed = showHeader && group.name in collapsed
+                    if (showHeader) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .clickable {
+                                    collapsed = if (closed) collapsed - group.name else collapsed + group.name
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                if (closed) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess,
+                                contentDescription = if (closed) "Expand ${group.name}" else "Collapse ${group.name}",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                group.name.uppercase(),
+                                style = OrhanTextStyles.kicker,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 4.dp).weight(1f, fill = false),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                group.topics.size.toString(),
+                                style = OrhanTextStyles.kicker,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
                     }
                     if (!closed) {
                         group.topics.forEach { topic ->
@@ -754,6 +761,7 @@ private fun TopicEditor(
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
     var deleteError by rememberSaveable { mutableStateOf<String?>(null) }
+    var saveError by rememberSaveable { mutableStateOf<String?>(null) }
     PageColumn(
         title = "Memory",
         onBack = onBack,
@@ -767,7 +775,14 @@ private fun TopicEditor(
                 onClick = {
                     scope.launch {
                         val pending = if (tagDraft.isNotBlank()) tags + tagDraft else tags
-                        if (onSave(title, summary, content, group, pending)) onBack()
+                        if (onSave(title, summary, content, group, pending)) {
+                            saveError = null
+                            onBack()
+                        } else {
+                            val message = "Couldn't save this topic. Your edits are still here."
+                            saveError = message
+                            snackbar.showSnackbar(message)
+                        }
                     }
                 },
                 enabled = title.isNotBlank(),
@@ -835,6 +850,14 @@ private fun TopicEditor(
             minLines = 6,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 160.dp),
         )
+        saveError?.let { message ->
+            Text(
+                message,
+                style = OrhanTextStyles.snippet,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
         FootNote("Topics stay on this device. They are not sent to your agents.")
     }
     if (confirmDelete && topic != null) {
