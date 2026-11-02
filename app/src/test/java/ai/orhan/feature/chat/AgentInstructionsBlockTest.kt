@@ -20,4 +20,3 @@ class AgentInstructionsBlockTest {
         assertFalse(block.contains("Image"))
     }
 }
-
