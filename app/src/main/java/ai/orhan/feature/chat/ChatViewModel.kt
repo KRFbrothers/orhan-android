@@ -32,6 +32,7 @@ import ai.orhan.data.memory.memoryEntriesStore
 import ai.orhan.data.memory.memoryPauseStore
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.io.IOException
 import java.util.Date
 import java.util.Locale
 
@@ -542,6 +543,32 @@ class ChatViewModel(
 
     suspend fun transcribeAudio(attachment: ChatAttachment): Result<String> =
         serviceRepository.transcribeAudio(attachment)
+
+    /** Saves only an explicitly requested transcript beside its original audio message. */
+    suspend fun saveTranscript(messageId: Long, transcript: String): Result<String> {
+        val text = transcript.trim()
+        if (text.isEmpty() || text.length > 100_000) return Result.failure(IllegalArgumentException("Transcript is empty or too long to save."))
+        if (_state.value.busy) return Result.failure(IllegalStateException("Wait for the chat reply to finish before saving this transcript."))
+        val store = threadStore ?: return Result.failure(IllegalStateException("Chat history storage is unavailable."))
+        val title = threadTitle?.takeIf(String::isNotBlank)
+            ?: return Result.failure(IllegalStateException("Open a saved chat before saving its transcript."))
+        val current = _state.value
+        val source = current.messages.firstOrNull { it.id == messageId }
+            ?: return Result.failure(IllegalStateException("The source audio message is no longer in this chat."))
+        if (source.role != ChatRole.User || source.attachment?.mimeType?.startsWith("audio/") != true) {
+            return Result.failure(IllegalArgumentException("Transcripts can only be saved to their source audio message."))
+        }
+        val updated = current.messages.map { message -> if (message.id == messageId) message.copy(transcript = text) else message }
+        return try {
+            store.save(title, updated, attachmentsById.toMap(), pendingHandoffRetry = pendingHandoffRetry?.toStored(), agentId = activeAgentId)
+            _state.update { state ->
+                if (state.messages.any { it.id == messageId }) state.copy(messages = state.messages.map { if (it.id == messageId) it.copy(transcript = text) else it })
+                else state
+            }
+            Result.success("Transcript saved with this audio message.")
+        } catch (cancel: CancellationException) { throw cancel }
+        catch (error: Exception) { Result.failure(IOException("Couldn't save the transcript. The original audio message is unchanged.", error)) }
+    }
 
     suspend fun createMeetingMinutes(attachment: ChatAttachment): Result<String> =
         serviceRepository.createMeetingMinutes(attachment)

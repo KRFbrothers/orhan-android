@@ -625,6 +625,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 },
                 onTranslateMessage = { text -> chatViewModel.translateMessage(text, languageName(languagePrefs.code)) },
                 onTranscribeAudio = chatViewModel::transcribeAudio,
+                onSaveTranscript = chatViewModel::saveTranscript,
                 onCreateMeetingMinutes = chatViewModel::createMeetingMinutes,
                 onSaveMeetingMinutes = { artifactTitle, content, chatId, messageId, author ->
                     artifactStore.upsert(

@@ -157,6 +157,8 @@ data class ChatMessage(
     val createdAt: Long = 0L,
     /** Inline payload restored from the local attachment store; never serialized in the thread record. */
     val attachment: ChatAttachment? = null,
+    /** Transcript explicitly requested for this audio message; persisted separately from the source bytes. */
+    val transcript: String? = null,
 )
 
 /**
@@ -175,6 +177,7 @@ private val ChatThreadSaver: Saver<List<ChatMessage>, ArrayList<String>> = Saver
                     m.artifact?.name ?: "",
                     m.artifact?.meta ?: "",
                     m.createdAt.toString(),
+                    m.transcript.orEmpty(),
                 ).joinToString("\u001f")
             },
         )
@@ -193,6 +196,7 @@ private val ChatThreadSaver: Saver<List<ChatMessage>, ArrayList<String>> = Saver
                     null
                 },
                 createdAt = p.getOrNull(6)?.toLongOrNull() ?: 0L,
+                transcript = p.getOrNull(7)?.takeIf(String::isNotBlank),
             )
         }
     },
@@ -241,6 +245,8 @@ fun ChatScreen(
     onTranslateMessage: (suspend (String) -> Result<String>)? = null,
     /** Sends the original persisted audio payload to the configured speech-capable model. */
     onTranscribeAudio: (suspend (ChatAttachment) -> Result<String>)? = null,
+    /** Persists a reviewed transcript on its source audio message before showing success. */
+    onSaveTranscript: (suspend (Long, String) -> Result<String>)? = null,
     /** Creates factual minutes from an audio message through the configured model provider. */
     onCreateMeetingMinutes: (suspend (ChatAttachment) -> Result<String>)? = null,
     /** Persists minutes with a source link to the original chat message. */
@@ -283,7 +289,12 @@ fun ChatScreen(
     var textActionNotice by rememberSaveable { mutableStateOf<String?>(null) }
     var meetingMinutesSaved by rememberSaveable { mutableStateOf(false) }
 
-    fun runTextAction(title: String, sourceMessageId: Long = 0L, action: suspend () -> Result<String>) {
+    fun runTextAction(
+        title: String,
+        sourceMessageId: Long = 0L,
+        persistResult: (suspend (String) -> Result<String>)? = null,
+        action: suspend () -> Result<String>,
+    ) {
         actionMessageId = null
         textActionTitle = title
         textActionSourceMessageId = sourceMessageId
@@ -296,7 +307,16 @@ fun ChatScreen(
             val result = try { action() } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
             catch (error: Exception) { Result.failure(error) }
             textActionLoading = false
-            result.onSuccess { textActionResult = it }.onFailure { textActionError = it.message ?: "$title failed." }
+            result.onSuccess { text ->
+                textActionResult = text
+                if (persistResult != null) {
+                    textActionLoading = true
+                    val saved = try { persistResult(text) } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+                    catch (error: Exception) { Result.failure(error) }
+                    finally { textActionLoading = false }
+                    saved.onSuccess { textActionNotice = it }.onFailure { textActionError = it.message ?: "Couldn't save the transcript. The result is still here." }
+                }
+            }.onFailure { textActionError = it.message ?: "$title failed." }
         }
     }
 
@@ -641,7 +661,7 @@ fun ChatScreen(
             canSave = actionMessage.role == ChatRole.Agent && actionMessage.id != 0L && onSaveArtifact != null,
             canSaveAction = actionMessage.role == ChatRole.User && onSaveAction != null && actionMessage.id != 0L,
             canTranslate = onTranslateMessage != null,
-            canTranscribe = onTranscribeAudio != null && actionMessage.attachment?.mimeType?.startsWith("audio/") == true,
+            canTranscribe = onTranscribeAudio != null && onSaveTranscript != null && actionMessage.attachment?.mimeType?.startsWith("audio/") == true,
             canCreateMinutes = onCreateMeetingMinutes != null && actionMessage.attachment?.mimeType?.startsWith("audio/") == true,
             onDismiss = { actionMessageId = null },
             onCopy = {
@@ -669,7 +689,9 @@ fun ChatScreen(
             onTranslate = { runTextAction("Translation") { onTranslateMessage?.invoke(actionMessage.text) ?: Result.failure(IllegalStateException("Translation is unavailable.")) } },
             onTranscribe = {
                 val audio = actionMessage.attachment
-                if (audio != null) runTextAction("Transcript") { onTranscribeAudio?.invoke(audio) ?: Result.failure(IllegalStateException("Transcription is unavailable.")) }
+                if (audio != null) runTextAction("Transcript", actionMessage.id, persistResult = { text ->
+                    onSaveTranscript?.invoke(actionMessage.id, text) ?: Result.failure(IllegalStateException("Transcript saving is unavailable."))
+                }) { onTranscribeAudio?.invoke(audio) ?: Result.failure(IllegalStateException("Transcription is unavailable.")) }
             },
             onCreateMinutes = {
                 val audio = actionMessage.attachment
@@ -686,7 +708,7 @@ fun ChatScreen(
                     textActionLoading -> Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text("Waiting for the configured model service…")
+                        Text(if (textActionResult != null) "Saving this result…" else "Waiting for the configured model service…")
                     }
                     textActionError != null -> Column {
                         Text(textActionError!!, color = MaterialTheme.colorScheme.error)
@@ -702,7 +724,22 @@ fun ChatScreen(
                 }
             },
             confirmButton = {
-                TextButton(enabled = !textActionLoading, onClick = { textActionTitle = null; textActionResult = null; textActionError = null; textActionNotice = null }) { Text("Done") }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (title == "Transcript" && textActionError != null && textActionResult != null && onSaveTranscript != null) {
+                        TextButton(enabled = !textActionLoading, onClick = {
+                            if (!textActionLoading) scope.launch {
+                                textActionLoading = true
+                                val saved = try { onSaveTranscript.invoke(textActionSourceMessageId, textActionResult.orEmpty()) }
+                                catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+                                catch (error: Exception) { Result.failure(error) }
+                                finally { textActionLoading = false }
+                                saved.onSuccess { textActionError = null; textActionNotice = it }
+                                    .onFailure { textActionError = it.message ?: "Couldn't save the transcript. The result is still here." }
+                            }
+                        }) { Text("Retry save") }
+                    }
+                    TextButton(enabled = !textActionLoading, onClick = { textActionTitle = null; textActionResult = null; textActionError = null; textActionNotice = null }) { Text("Done") }
+                }
             },
             dismissButton = if (title == "Meeting minutes" && textActionResult != null) ({
                 Column(horizontalAlignment = Alignment.End) {
@@ -902,6 +939,17 @@ private fun MessageBubble(
             message.attachment?.let { payload ->
                 Spacer(modifier = Modifier.height(6.dp))
                 AttachmentMessagePreview(payload)
+            }
+            message.transcript?.takeIf(String::isNotBlank)?.let { transcript ->
+                var expanded by rememberSaveable(message.id) { mutableStateOf(false) }
+                Spacer(modifier = Modifier.height(6.dp))
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Transcript", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (transcript.length > 1200) TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Show less" else "Show more") }
+                    }
+                    SelectionContainer { Text(if (expanded || transcript.length <= 1200) transcript else transcript.take(1200) + "…", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurface) }
+                }
             }
 
             if (showActivityCards) message.artifact?.let { artifact ->

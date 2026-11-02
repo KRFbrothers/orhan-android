@@ -25,7 +25,8 @@ import java.io.OutputStream
  * Local per-chat message threads keyed by chat title (same string as AppRoutes.chat(title)).
  * Device-only; no cloud sync.
  */
-private const val THREAD_FORMAT_VERSION = 6
+private const val THREAD_FORMAT_VERSION = 7
+private const val THREAD_FORMAT_V6 = 6
 private const val THREAD_FORMAT_V5 = 5
 private const val THREAD_FORMAT_V4 = 4
 private const val THREAD_FORMAT_V3 = 3
@@ -44,6 +45,7 @@ data class StoredMessage(
     val attachment: StoredAttachment? = null,
     /** Epoch millis when the bubble was created. Zero on threads saved before automatic memory. */
     val createdAt: Long = 0L,
+    val transcript: String? = null,
 )
 data class StoredHandoffRetry(
     val sourceReplyId: Long,
@@ -96,12 +98,15 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
                         if (version >= THREAD_FORMAT_V2 && d.readBoolean()) {
                             message = message.copy(attachment = StoredAttachment(d.readUTF(), d.readUTF(), d.readLong(), d.readUTF()))
                         }
+                        if (version >= THREAD_FORMAT_VERSION && d.readBoolean()) {
+                            message = message.copy(transcript = readLongString(d))
+                        }
                         message
                     }
                     val pending = if (version >= THREAD_FORMAT_V4 && d.readBoolean()) {
                         val replyId = d.readLong(); val agentName = d.readUTF()
                         val instructions = readLongString(d); val task = readLongString(d)
-                        val allowedTools = if (version >= THREAD_FORMAT_VERSION && d.readBoolean()) List(d.readInt()) { d.readUTF() } else null
+                        val allowedTools = if (version >= THREAD_FORMAT_V6 && d.readBoolean()) List(d.readInt()) { d.readUTF() } else null
                         StoredHandoffRetry(replyId, agentName, instructions, task, allowedTools)
                     } else null
                     val agentId = if (version >= THREAD_FORMAT_V5 && d.readBoolean()) d.readUTF() else null
@@ -123,6 +128,8 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
                 val a = m.attachment
                 d.writeBoolean(a != null)
                 if (a != null) { d.writeUTF(a.name); d.writeUTF(a.mimeType); d.writeLong(a.sizeBytes); d.writeUTF(a.fileName) }
+                d.writeBoolean(m.transcript != null)
+                m.transcript?.let { writeLongString(d, it) }
             }
             val handoff = th.pendingHandoffRetry
             d.writeBoolean(handoff != null)
@@ -155,10 +162,10 @@ val Context.chatThreadsDataStore: DataStore<List<ChatThread>> by dataStore(
 )
 
 internal fun ChatMessage.toStored(attachment: StoredAttachment? = null) =
-    StoredMessage(id, if (role == ChatRole.User) "user" else "agent", text, time, attachment, createdAt)
+    StoredMessage(id, if (role == ChatRole.User) "user" else "agent", text, time, attachment, createdAt, transcript)
 
 internal fun StoredMessage.toUi() =
-    ChatMessage(id, if (role == "user") ChatRole.User else ChatRole.Agent, text, time, createdAt = createdAt)
+    ChatMessage(id, if (role == "user") ChatRole.User else ChatRole.Agent, text, time, createdAt = createdAt, transcript = transcript)
 
 /** Pure helper: upsert a thread, cap messages and thread count (drop oldest by updatedAt). */
 fun List<ChatThread>.withSaved(

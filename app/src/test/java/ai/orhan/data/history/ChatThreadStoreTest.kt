@@ -20,6 +20,15 @@ class ChatThreadStoreTest {
         assertEquals(MAX_THREADS, l.size)
         assertEquals(false, l.any { it.title == "t0" })
     }
+
+    @Test fun explicitlySavedTranscriptStaysWithItsOriginalMessageAndAudioReference() {
+        val audio = StoredAttachment("voice.m4a", "audio/mp4", 3, "a_1.bin")
+        val original = ChatMessage(8, ChatRole.User, "\uD83D\uDCCE voice.m4a", "now", attachment = ai.orhan.data.chat.ChatAttachment("voice.m4a", "audio/mp4", "AQID", 3), transcript = "Hello from the recording.")
+        val stored = emptyList<ChatThread>().withSaved("Personal AI", listOf(original), 10, mapOf(8L to audio)).single()
+        assertEquals(audio, stored.messages.single().attachment)
+        assertEquals("Hello from the recording.", stored.messages.single().transcript)
+        assertEquals("Hello from the recording.", stored.messages.single().toUi().transcript)
+    }
 }
 
 class ChatAttachmentPersistenceTest {
@@ -28,11 +37,25 @@ class ChatAttachmentPersistenceTest {
     private fun enc(b: ByteArray) = java.util.Base64.getEncoder().encodeToString(b)
 
     @Test fun serializerRoundTripsAttachmentMetadata() = kotlinx.coroutines.runBlocking {
-        val m = StoredMessage(1, "user", "\uD83D\uDCCE note.m4a", "now", StoredAttachment("note.m4a", "audio/mp4", 3, "a_1.bin"))
+        val m = StoredMessage(1, "user", "\uD83D\uDCCE note.m4a", "now", StoredAttachment("note.m4a", "audio/mp4", 3, "a_1.bin"), transcript = "saved transcript")
         val list = listOf(ChatThread("t", 5, listOf(m, StoredMessage(2, "agent", "hi", "now"))))
         val out = java.io.ByteArrayOutputStream()
         ChatThreadsSerializer.writeTo(list, out)
         assertEquals(list, ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()))
+    }
+
+    @Test fun v6ThreadMigratesWithoutAStoredTranscript() = kotlinx.coroutines.runBlocking {
+        val out = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(out).apply {
+            writeInt(6); writeInt(1); writeUTF("Personal AI"); writeLong(30); writeInt(1)
+            writeLong(17); writeUTF("user")
+            val text = "voice.m4a".toByteArray(Charsets.UTF_8)
+            writeInt(text.size); write(text); writeUTF("now"); writeLong(12); writeBoolean(false)
+            writeBoolean(false); writeBoolean(false); flush()
+        }
+        val migrated = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
+        assertEquals("voice.m4a", migrated.messages.single().text)
+        assertEquals(null, migrated.messages.single().transcript)
     }
 
     @Test fun restoredMessagesCarryTheirPersistedAttachmentPayloadForPreview() {
