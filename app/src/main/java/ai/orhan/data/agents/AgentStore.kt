@@ -24,8 +24,9 @@ import java.io.File
 import java.util.UUID
 
 /* Local store for user-created agents (no backend). Name (case-insensitive) is the key. */
-private const val FORMAT_VERSION = 3
+private const val FORMAT_VERSION = 4
 private const val FORMAT_VERSION_V2 = 2
+private const val FORMAT_VERSION_V3 = 3
 private const val FORMAT_VERSION_V1 = 1
 
 const val MAX_AGENT_NAME = 80
@@ -43,6 +44,9 @@ fun SavedAgent.capped(): SavedAgent = copy(
 fun canonicalAgentTitle(title: String, agentNames: List<String>): String =
     agentNames.firstOrNull { it.equals(title.trim(), ignoreCase = true) } ?: title
 
+private fun legacyAgentId(name: String, createdAt: Long): String =
+    UUID.nameUUIDFromBytes("legacy-agent:$name:$createdAt".toByteArray(Charsets.UTF_8)).toString()
+
 /** A deleted/renamed custom-agent thread has history but no longer has that persona. */
 fun chatPersonaName(title: String, agentNames: List<String>): String =
     if (title.equals("Orhan", ignoreCase = true)) "Orhan"
@@ -55,6 +59,7 @@ data class SavedAgent(
     val tools: List<String> = emptyList(),
     val createdAt: Long,
     val avatarFileName: String? = null,
+    val id: String = UUID.randomUUID().toString(),
 )
 
 object SavedAgentsSerializer : Serializer<List<SavedAgent>> {
@@ -68,13 +73,21 @@ object SavedAgentsSerializer : Serializer<List<SavedAgent>> {
                 val version = d.readInt()
                 if (version !in FORMAT_VERSION_V1..FORMAT_VERSION) return defaultValue
                 List(d.readInt()) {
+                    val name = d.readUTF()
+                    val blurb = d.readUTF()
+                    val instructions = if (version >= FORMAT_VERSION_V2) readLongString(d) else d.readUTF()
+                    val tools = List(d.readInt()) { d.readUTF() }
+                    val createdAt = d.readLong()
+                    val avatarFileName = if (version >= FORMAT_VERSION_V3 && d.readBoolean()) d.readUTF() else null
+                    val id = if (version >= FORMAT_VERSION && d.readBoolean()) d.readUTF() else legacyAgentId(name, createdAt)
                     SavedAgent(
-                        name = d.readUTF(),
-                        blurb = d.readUTF(),
-                        instructions = if (version >= FORMAT_VERSION_V2) readLongString(d) else d.readUTF(),
-                        tools = List(d.readInt()) { d.readUTF() },
-                        createdAt = d.readLong(),
-                        avatarFileName = if (version >= 3 && d.readBoolean()) d.readUTF() else null,
+                        name = name,
+                        blurb = blurb,
+                        instructions = instructions,
+                        tools = tools,
+                        createdAt = createdAt,
+                        avatarFileName = avatarFileName,
+                        id = id,
                     )
                 }
             }
@@ -91,6 +104,8 @@ object SavedAgentsSerializer : Serializer<List<SavedAgent>> {
             d.writeLong(a.createdAt)
             d.writeBoolean(a.avatarFileName != null)
             a.avatarFileName?.let { d.writeUTF(it.take(100)) }
+            d.writeBoolean(a.id.isNotBlank())
+            if (a.id.isNotBlank()) d.writeUTF(a.id.take(100))
         }
         d.flush()
     }

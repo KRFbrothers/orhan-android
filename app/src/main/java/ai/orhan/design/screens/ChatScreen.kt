@@ -212,6 +212,7 @@ private fun initialThread(): List<ChatMessage> = emptyList()
 @OptIn(ExperimentalMaterial3Api::class)
 fun ChatScreen(
     agentName: String,
+    sourceChatId: String = agentName,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
     messagesOverride: List<ChatMessage>? = null,
@@ -616,7 +617,7 @@ fun ChatScreen(
                 if (actionMessage.id != 0L) onSaveArtifact?.invoke(
                     agentName.ifBlank { actionMessage.text.take(42) },
                     actionMessage.text,
-                    agentName,
+                    sourceChatId,
                     actionMessage.id,
                     agentName.ifBlank { "Orhan" },
                 )

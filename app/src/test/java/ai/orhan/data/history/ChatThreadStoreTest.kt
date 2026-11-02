@@ -45,10 +45,25 @@ class ChatAttachmentPersistenceTest {
 
     @Test fun serializerRoundTripsPendingHandoffRetryState() = kotlinx.coroutines.runBlocking {
         val retry = StoredHandoffRetry(17L, "Slides", "Use a concise style", "Make a 5-slide deck")
-        val thread = ChatThread("Orhan", 30L, listOf(StoredMessage(17L, "agent", "Assigned to Slides", "now")), retry)
+        val thread = ChatThread("Orhan", 30L, listOf(StoredMessage(17L, "agent", "Assigned to Slides", "now")), retry, "agent-id-1")
         val out = java.io.ByteArrayOutputStream()
         ChatThreadsSerializer.writeTo(listOf(thread), out)
         assertEquals(listOf(thread), ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()))
+    }
+
+    @Test fun v4ThreadKeepsHandoffButDefaultsAgentId() = kotlinx.coroutines.runBlocking {
+        val out = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(out).apply {
+            writeInt(4); writeInt(1); writeUTF("Orhan"); writeLong(30); writeInt(0)
+            writeBoolean(true); writeLong(17); writeUTF("Slides")
+            val instructions = "Be concise".toByteArray(Charsets.UTF_8)
+            writeInt(instructions.size); write(instructions)
+            val task = "Make slides".toByteArray(Charsets.UTF_8)
+            writeInt(task.size); write(task); flush()
+        }
+        val migrated = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
+        assertEquals("Slides", migrated.pendingHandoffRetry?.agentName)
+        assertEquals(null, migrated.agentId)
     }
 
     @Test fun v3ThreadMigratesWithoutPendingHandoff() = kotlinx.coroutines.runBlocking {

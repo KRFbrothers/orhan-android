@@ -216,7 +216,13 @@ fun OrhanNavHost(isDark: Boolean) {
                 workflows = workflows,
                 onOpenWorkflow = { wf ->
                     val available = mergeWithSamples(savedAgents.map { it.toInstalledAgent(agentAvatars) }).map { it.name }
-                    val resolved = resolveWorkflowAgentName(wf.agentName, available)
+                    val titleMatchedAgent = savedAgents.firstOrNull { it.name.equals(wf.agentName, ignoreCase = true) }
+                    if (wf.agentId == null && titleMatchedAgent != null) {
+                        scope.launch { workflowStore.upsert(wf.copy(agentId = titleMatchedAgent.id)) }
+                    }
+                    val resolved = if (wf.agentId != null) {
+                        savedAgents.firstOrNull { it.id == wf.agentId }?.name
+                    } else resolveWorkflowAgentName(wf.agentName, available)
                     if (resolved == null) {
                         val missing = wf.agentName.trim()
                         android.widget.Toast.makeText(
@@ -303,7 +309,8 @@ fun OrhanNavHost(isDark: Boolean) {
                 onBack = { navController.popBackStack() },
                 onSave = { wf ->
                     scope.launch {
-                        workflowStore.upsert(wf)
+                        val selected = savedAgents.firstOrNull { it.name.equals(wf.agentName, ignoreCase = true) }
+                        workflowStore.upsert(wf.copy(agentId = if (wf.agentName.isBlank()) null else selected?.id ?: wf.agentId))
                         navController.popBackStack()
                     }
                 },
@@ -370,6 +377,7 @@ fun OrhanNavHost(isDark: Boolean) {
                             tools = tools,
                             createdAt = previous?.createdAt ?: System.currentTimeMillis(),
                             avatarFileName = avatarFileName,
+                            id = previous?.id ?: java.util.UUID.randomUUID().toString(),
                         ),
                     )
                     when (val nav = navigationAfterAgentSave(previous == null, result)) {
@@ -410,11 +418,15 @@ fun OrhanNavHost(isDark: Boolean) {
             val chat by chatViewModel.state.collectAsStateWithLifecycle()
             val title = canon(entry.arguments?.getString("title").orEmpty())
             LaunchedEffect(title) { chatViewModel.loadThread(title) }
-            val agent = savedAgents.firstOrNull { it.name.equals(title, ignoreCase = true) }
+            val threadAgentId = threads.firstOrNull { it.title == title }?.agentId ?: chat.agentId
+            val agent = if (threadAgentId != null) savedAgents.firstOrNull { it.id == threadAgentId }
+                else savedAgents.firstOrNull { it.name.equals(title, ignoreCase = true) }
             val missingSavedAgent = !title.equals("Orhan", ignoreCase = true) && agent == null
-            val persona = chatPersonaName(title, savedAgents.map { it.name })
+            val persona = if (threadAgentId != null && agent == null) "Orhan"
+                else chatPersonaName(title, savedAgents.map { it.name })
             val mentionRoster = savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions) }
-            chatViewModel.setAgent(persona, agent?.instructions.orEmpty())
+            val effectivePersona = agent?.name ?: persona
+            chatViewModel.setAgent(effectivePersona, agent?.instructions.orEmpty(), agent?.id)
             chatViewModel.setRoster(
                 if (agent != null && !missingSavedAgent) emptyList()
                 else mentionRoster,
@@ -437,14 +449,19 @@ fun OrhanNavHost(isDark: Boolean) {
             val chatPrefsRepo = remember(context) { context.chatPreferences() }
             val chatPrefs by chatPrefsRepo.prefs.collectAsStateWithLifecycle(initialValue = ChatPrefs())
             ChatScreen(
-                agentName = title,
+                agentName = effectivePersona,
+                sourceChatId = title,
                 onBack = { navController.popBackStack() },
                 messagesOverride = chat.messages,
                 loading = chat.loading,
                 busy = chat.busy,
                 activityLabel = chat.activityLabel,
                 error = chat.error,
-                systemNotice = if (missingSavedAgent) "This saved agent is unavailable; new replies in this retained conversation use Orhan. The existing history is preserved." else null,
+                systemNotice = when {
+                    missingSavedAgent -> "This saved agent is unavailable; new replies in this retained conversation use Orhan. The existing history is preserved."
+                    agent != null && !agent.name.equals(title, ignoreCase = true) -> "This conversation was started with $title and is now linked to ${agent.name}'s saved profile and current instructions. The history remains stored under its original title."
+                    else -> null
+                },
                 agentMentions = if (title.equals("Orhan", ignoreCase = true)) mentionRoster.map { it.name } else emptyList(),
                 onSendMessage = { text ->
                     val mention = explicitAgentMention(text, mentionRoster)
