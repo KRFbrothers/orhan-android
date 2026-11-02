@@ -996,7 +996,7 @@ private fun AttachmentMessagePreview(attachment: ChatAttachment) {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
         var opening by remember(attachment.base64) { mutableStateOf(false) }
-        androidx.compose.material3.Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text("${attachment.mimeType} · ${attachment.name}", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
             androidx.compose.material3.TextButton(enabled = !opening, onClick = {
                 if (!opening) scope.launch {
@@ -1058,7 +1058,7 @@ private fun AudioAttachmentPlayer(attachment: ChatAttachment) {
             audioFile?.delete()
         }
     }
-    androidx.compose.material3.Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         androidx.compose.material3.TextButton(
             enabled = fileReady && audioFile != null && !loading.value,
             onClick = {
@@ -1375,16 +1375,14 @@ private fun Composer(
                     canSend -> "Send message"
                     else -> "Voice typing"
                 }
-                val actionClick = when {
-                    busy -> onStop
-                    canSend -> onSend
-                    else -> onMic
-                }
                 Box(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(if (recordingVoice) MaterialTheme.colorScheme.error else colors.primaryGradient)
+                        .then(
+                            if (recordingVoice) Modifier.background(MaterialTheme.colorScheme.error, CircleShape)
+                            else Modifier.background(colors.primaryGradient, CircleShape),
+                        )
                         .then(if (!busy && !canSend) Modifier.pointerInput(Unit) {
                             var longPressed = false
                             detectTapGestures(
@@ -1399,7 +1397,7 @@ private fun Composer(
                                 },
                                 onTap = { if (currentRecording) latestOnRecordStop() else latestOnMic() },
                             )
-                        } else Modifier.clickable(onClick = { if (busy) latestOnStop() else latestOnSend() }),
+                        } else Modifier.clickable(onClick = { if (busy) latestOnStop() else latestOnSend() })),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
