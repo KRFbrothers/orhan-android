@@ -141,7 +141,21 @@ None of it is referenced by Orhan's design or Compose code.
 
 ---
 
-## Summary
+## Typed artifact rendering libraries
+
+Orhan uses `org.commonmark:commonmark:0.30.0` and
+`org.commonmark:commonmark-ext-gfm-tables:0.30.0` to render Markdown and tables.
+Upstream: https://github.com/commonmark/commonmark-java/tree/commonmark-parent-0.30.0
+License: BSD 2-Clause; full text in `licenses/CommonMark-BSD-2-Clause.txt`.
+
+Orhan uses `org.jsoup:jsoup:1.23.2` to parse and sanitize local HTML previews.
+Upstream: https://github.com/jhy/jsoup/tree/jsoup-1.23.2
+License: MIT; full text in `licenses/jsoup-MIT.txt`.
+
+These notices and license texts are bundled by the existing `copyLicenseAssets`
+task and available under Settings → About → Open-source licences.
+
+## Asset summary (excluding library bytecode)
 
 | Category | Files | Size | License |
 |---|---|---|---|

@@ -186,12 +186,17 @@ fun OrhanNavHost(isDark: Boolean) {
                     scope.launch { recentRepo.recordOpened(t) }
                     navController.navigate(AppRoutes.chat(t, messageId = messageId))
                 },
+                onOpenArtifactSource = { chatId, messageId ->
+                    val t = canon(chatId)
+                    scope.launch { recentRepo.recordOpened(t) }
+                    navController.navigate(AppRoutes.chat(t, messageId = messageId))
+                },
                 onOpenArtifacts = {
                     navController.navigate(AppRoutes.artifacts()) { launchSingleTop = true }
                 },
                 artifacts = artifacts,
-                onUpsertArtifact = { item -> scope.launch { artifactStore.upsert(item) } },
-                onDeleteArtifact = { id -> scope.launch { artifactStore.delete(id) } },
+                onUpsertArtifact = { item -> artifactStore.upsert(item) },
+                onDeleteArtifact = { id -> artifactStore.delete(id) },
                 artifactCount = artifacts.size,
                 memoryUpdates = updatesCount(memoryTopics),
                 onOpenChatPreferences = { navController.openSettingsPage(SettingsRoutes.CHAT_PREFERENCES) },
@@ -254,9 +259,14 @@ fun OrhanNavHost(isDark: Boolean) {
             var pendingOpen by rememberSaveable(requested) { mutableStateOf(requested.ifBlank { null }) }
             ArtifactsScreen(
                 artifacts = artifacts,
-                onUpsert = { a -> scope.launch { artifactStore.upsert(a) } },
-                onDelete = { id -> scope.launch { artifactStore.delete(id) } },
+                onUpsert = { a -> artifactStore.upsert(a) },
+                onDelete = { id -> artifactStore.delete(id) },
                 onBack = { navController.popBackStack() },
+                onOpenSourceMessage = { chatId, messageId ->
+                    val t = canon(chatId)
+                    scope.launch { recentRepo.recordOpened(t) }
+                    navController.navigate(AppRoutes.chat(t, messageId = messageId))
+                },
                 pendingOpenId = pendingOpen,
                 onPendingOpenConsumed = { pendingOpen = null },
             )
@@ -399,8 +409,23 @@ fun OrhanNavHost(isDark: Boolean) {
                 showTypingIndicator = chatPrefs.typingIndicators,
                 showActivityCards = chatPrefs.agentActivityCards,
                 previewBeforeSending = chatPrefs.previewBeforeSending,
-                onSaveArtifact = { artTitle, content ->
-                    scope.launch { artifactStore.upsert(artTitle, content) }
+                onSaveArtifact = { artTitle, content, chatId, messageId, author ->
+                    scope.launch {
+                        val saved = artifactStore.upsert(
+                            ai.orhan.data.artifacts.Artifact(
+                                id = java.util.UUID.randomUUID().toString(),
+                                title = artTitle,
+                                content = content,
+                                createdAt = System.currentTimeMillis(),
+                                kind = ai.orhan.data.artifacts.ArtifactKind.SAVED_MESSAGE,
+                                sourceChatId = chatId,
+                                sourceMessageId = messageId,
+                                author = author,
+                            ),
+                        )
+                        val notice = if (saved) "Saved to Artifacts" else "Couldn't save this artifact."
+                        android.widget.Toast.makeText(context, notice, android.widget.Toast.LENGTH_LONG).show()
+                    }
                 },
                 onSaveAction = { messageId, text ->
                     scope.launch {

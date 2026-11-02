@@ -39,8 +39,13 @@ junit = "4.13.2"
 androidxJunit = "1.2.1"
 espresso = "3.6.1"
 coroutinesTest = "1.9.0"
+commonmark = "0.30.0"
+jsoup = "1.23.2"
 
 [libraries]
+commonmark = { group = "org.commonmark", name = "commonmark", version.ref = "commonmark" }
+commonmark-tables = { group = "org.commonmark", name = "commonmark-ext-gfm-tables", version.ref = "commonmark" }
+jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 # --- Compose BOM (the platform; apply with `platform(...)`) ----------------
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 

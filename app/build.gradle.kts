@@ -1,4 +1,6 @@
 import java.util.Properties
+import java.io.ByteArrayOutputStream
+import java.security.MessageDigest
 
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
@@ -129,6 +131,7 @@ android {
 
     defaultConfig {
         applicationId = "ai.orhan"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = orhanVersionCode
@@ -189,6 +192,101 @@ android {
     sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("generated/licenseAssets"))
 }
 
+// UTP connected-test tasks uninstall the target package after running. Do not
+// let an attached personal phone enter that lifecycle; use the explicit,
+// emulator-validated ADB task below, which leaves both APKs installed.
+tasks.configureEach {
+    if (name.equals("connectedAndroidTest", ignoreCase = true) ||
+        (name.contains("connected", ignoreCase = true) && name.endsWith("AndroidTest", ignoreCase = true))) {
+        enabled = false
+    }
+}
+
+val emulatorSerial = providers.gradleProperty("orhanEmulatorSerial").orElse("emulator-5554")
+val adbExecutable = android.sdkDirectory.resolve("platform-tools").resolve(
+    if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) "adb.exe" else "adb",
+)
+fun verifyEmulatorTarget() {
+    val serial = emulatorSerial.get()
+    val process = ProcessBuilder(adbExecutable.absolutePath, "-s", serial, "shell", "getprop", "ro.kernel.qemu")
+        .redirectErrorStream(true).start()
+    val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
+    check(process.waitFor() == 0 && output == "1") {
+        "Refusing instrumentation target '$serial': expected an Android emulator (ro.kernel.qemu=1), got '$output'."
+    }
+}
+val emulatorApkPrefix = listOf(adbExecutable.absolutePath, "-s", emulatorSerial.get())
+fun emulatorAdb(vararg arguments: String): Pair<Int, String> {
+    val process = ProcessBuilder(emulatorApkPrefix + arguments).redirectErrorStream(true).start()
+    val output = process.inputStream.bufferedReader().use { it.readText() }
+    return process.waitFor() to output
+}
+fun requireEmulatorAdb(vararg arguments: String): String {
+    val (exitCode, output) = emulatorAdb(*arguments)
+    check(exitCode == 0) { "ADB ${arguments.joinToString(" ")} failed on emulator ${emulatorSerial.get()}: $output" }
+    return output
+}
+fun installedApkMatches(packageName: String, localApk: java.io.File): Boolean {
+    verifyEmulatorTarget()
+    val pmPath = emulatorAdb("shell", "pm", "path", packageName).second
+        .lineSequence().firstOrNull { it.startsWith("package:") }?.removePrefix("package:") ?: return false
+    val remoteDigest = emulatorAdb("shell", "sha256sum", pmPath).second.substringBefore(' ').trim()
+    val localDigest = MessageDigest.getInstance("SHA-256").digest(localApk.readBytes())
+        .joinToString("") { "%02x".format(it) }
+    return remoteDigest.equals(localDigest, ignoreCase = true)
+}
+val mainApk = layout.buildDirectory.file("outputs/apk/debug/app-debug.apk").get().asFile
+val testApk = layout.buildDirectory.file("outputs/apk/androidTest/debug/app-debug-androidTest.apk").get().asFile
+val installOrhanOnEmulator = tasks.register("installDebugOnEmulator") {
+    dependsOn("assembleDebug")
+    doLast {
+        if (installedApkMatches("ai.orhan", mainApk)) {
+            logger.lifecycle("ai.orhan APK already matches ${mainApk.name}; preserving the running app process.")
+        } else {
+            verifyEmulatorTarget()
+            logger.lifecycle(requireEmulatorAdb("install", "-r", mainApk.absolutePath))
+        }
+    }
+}
+val installTestsOnEmulator = tasks.register("installDebugAndroidTestOnEmulator") {
+    dependsOn(installOrhanOnEmulator, "assembleDebugAndroidTest")
+    doLast {
+        if (installedApkMatches("ai.orhan.test", testApk)) {
+            logger.lifecycle("ai.orhan.test APK already matches ${testApk.name}; preserving instrumentation state.")
+        } else {
+            verifyEmulatorTarget()
+            logger.lifecycle(requireEmulatorAdb("install", "-r", "-t", testApk.absolutePath))
+        }
+    }
+}
+val instrumentationOutput = ByteArrayOutputStream()
+val instrumentationError = ByteArrayOutputStream()
+tasks.register<Exec>("instrumentDebugOnEmulator") {
+    group = "verification"
+    description = "Run Android instrumentation only on a verified emulator; leaves the app and test APK installed."
+    dependsOn(installTestsOnEmulator)
+    isIgnoreExitValue = true
+    standardOutput = instrumentationOutput
+    errorOutput = instrumentationError
+    doFirst {
+        verifyEmulatorTarget()
+        instrumentationOutput.reset()
+        instrumentationError.reset()
+    }
+    commandLine(emulatorApkPrefix + listOf("shell", "am", "instrument", "-w", "-r", "ai.orhan.test/androidx.test.runner.AndroidJUnitRunner"))
+    doLast {
+        val output = instrumentationOutput.toString("UTF-8") + instrumentationError.toString("UTF-8")
+        logger.lifecycle(output)
+        val code = Regex("INSTRUMENTATION_CODE: (-?\\d+)").find(output)?.groupValues?.get(1)
+        check(executionResult.get().exitValue == 0 && code == "0" &&
+            !output.contains("INSTRUMENTATION_FAILED", ignoreCase = true) &&
+            !output.contains("Process crashed", ignoreCase = true) &&
+            !output.contains("FAILURES!!!", ignoreCase = true)) {
+            "Instrumentation failed on emulator ${emulatorSerial.get()} (adb exit=${executionResult.get().exitValue}, resultCode=$code). Output: $output"
+        }
+    }
+}
+
 // Fail a *signed* release build early when signing material is missing.
 //
 // `-PallowUnsignedRelease=true` is the explicit opt-out used by the PR checks
@@ -228,7 +326,13 @@ dependencies {
     implementation(libs.bundles.settings.feature)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.commonmark)
+    implementation(libs.commonmark.tables)
+    implementation(libs.jsoup)
     debugImplementation(libs.bundles.compose.debug)
     testImplementation(libs.junit)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.bundles.compose.test)
     testImplementation("org.json:json:20240303") // real org.json for request-shape tests (android.jar stubs throw)
 }
