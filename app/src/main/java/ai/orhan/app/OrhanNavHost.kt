@@ -157,8 +157,26 @@ fun OrhanNavHost(isDark: Boolean) {
                 deletableAgentNames = savedAgents.map { it.name }.toSet(),
                 onDeleteAgent = { agent -> agentStore.delete(agent.name) },
                 recentChats = recent.map {
-                    val lastText = threads.firstOrNull { t -> t.title == it.title }?.messages?.lastOrNull()?.text
-                    OrhanChat(it.title, previewSnippet(lastText), relativeTime(it.openedAt), isAgent = true)
+                    val savedThread = threads.firstOrNull { t -> t.title == it.title }
+                    val lastText = savedThread?.messages?.lastOrNull()?.text
+                    OrhanChat(
+                        it.title,
+                        previewSnippet(lastText),
+                        relativeTime(it.openedAt),
+                        isAgent = true,
+                        searchableMessages = savedThread?.messages.orEmpty().map { message -> message.text },
+                    )
+                },
+                searchChats = threads.map { savedThread ->
+                    val openedAt = recent.firstOrNull { it.title == savedThread.title }?.openedAt ?: savedThread.updatedAt
+                    val lastText = savedThread.messages.lastOrNull()?.text
+                    OrhanChat(
+                        savedThread.title,
+                        previewSnippet(lastText),
+                        relativeTime(openedAt),
+                        isAgent = true,
+                        searchableMessages = savedThread.messages.map { message -> message.text },
+                    )
                 },
                 pinnedTitles = pinnedTitles,
                 onTogglePin = { chat -> scope.launch { pinRepo.toggle(chat.title) } },

@@ -57,9 +57,22 @@ import java.util.Date
 
 private enum class SearchTab(val label: String) { All("All"), Chats("Chats"), Agents("Agents"), Artifacts("Artifacts") }
 
+internal fun OrhanChat.matchesLocalQuery(query: String): Boolean {
+    val q = query.trim()
+    return q.isEmpty() || title.contains(q, true) || snippet.contains(q, true) || searchableMessages.any { it.contains(q, true) }
+}
+
+internal fun OrhanChat.localSearchSnippet(query: String): String {
+    val q = query.trim()
+    val matched = searchableMessages.firstOrNull { q.isNotEmpty() && it.contains(q, true) } ?: return snippet.ifBlank { "Recent chat" }
+    val index = matched.indexOf(q, ignoreCase = true).coerceAtLeast(0)
+    val start = (index - 45).coerceAtLeast(0)
+    return matched.substring(start, (start + 120).coerceAtMost(matched.length))
+}
+
 /**
  * Local search over saved chats, agents, and artifacts.
- * Message bodies are not stored on the chat row, so only the title and snippet are matched.
+ * Message bodies are read from the already-persisted local thread and are never uploaded for indexing.
  */
 @Composable
 fun LocalSearchScreen(
@@ -79,7 +92,7 @@ fun LocalSearchScreen(
     val focusManager = LocalFocusManager.current
     LaunchedEffect(Unit) { focus.requestFocus() }
     val q = query.trim()
-    val matchedChats = chats.filter { q.isEmpty() || it.title.contains(q, true) || it.snippet.contains(q, true) }
+    val matchedChats = chats.filter { it.matchesLocalQuery(q) }
     val matchedAgents = agents.filter { q.isEmpty() || it.name.contains(q, true) || it.blurb.contains(q, true) }
     val matchedArtifacts = artifacts.filter { q.isEmpty() || it.title.contains(q, true) || it.content.contains(q, true) }
 
@@ -184,7 +197,7 @@ fun LocalSearchScreen(
             if (showChats && matchedChats.isNotEmpty()) {
                 item(key = "h-chats") { SectionLabel("Chats", matchedChats.size > 3 && tab == SearchTab.All) { tab = SearchTab.Chats } }
                 items(if (tab == SearchTab.All) matchedChats.take(3) else matchedChats, key = { "c:" + it.title }) { chat ->
-                    ResultRow(chat.title, chat.snippet.ifBlank { "Recent chat" }) { onOpenChat(chat) }
+                    ResultRow(chat.title, chat.localSearchSnippet(q)) { onOpenChat(chat) }
                 }
             }
             if (showAgents && matchedAgents.isNotEmpty()) {

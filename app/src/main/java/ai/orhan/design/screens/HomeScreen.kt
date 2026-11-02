@@ -124,6 +124,8 @@ data class OrhanChat(
     val members: Int = 0,
     val unread: Int = 0,
     val working: Boolean = false,
+    /** Persisted local message text used by chat-wide search; never uploaded for indexing. */
+    val searchableMessages: List<String> = emptyList(),
 )
 
 /** An agent card \u2014 name, what it does, its current state. */
@@ -213,6 +215,8 @@ fun HomeScreen(
     profile: UserProfile = UserProfile(),
     /** Recently opened chats (local history), newest first; shown above the samples. */
     recentChats: List<OrhanChat> = emptyList(),
+    /** Every locally persisted conversation, including older threads outside the recent list. */
+    searchChats: List<OrhanChat> = recentChats,
     /** Titles of pinned chats (persisted locally). */
     pinnedTitles: Set<String> = emptySet(),
     onTogglePin: (OrhanChat) -> Unit = {},
@@ -237,7 +241,7 @@ fun HomeScreen(
     if (searchOpen) {
         BackHandler { searchOpen = false }
         LocalSearchScreen(
-            chats = recentChats,
+            chats = searchChats,
             agents = agents,
             artifacts = artifacts,
             onCancel = { searchOpen = false },
