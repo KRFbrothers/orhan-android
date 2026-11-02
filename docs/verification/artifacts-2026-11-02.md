@@ -412,3 +412,40 @@ passed in the recorded runner output; manual typed-artifact UI checks remain
 pending. Live agent-reply save still requires ordinary sign-in. DOCX/media,
 saved-message semantics and hosted-share access behavior remain unverified.
 Agents stage has not started.
+
+### Post-report v299 install check
+
+The documentation commit advanced the repository-derived versionCode, so a
+new debug APK was assembled with the emulator shut down: `ai.orhan` 0.2.0,
+versionCode **299**, SHA-256
+`2BAE04DB15A396DB5515B8ECA09183C0284C580851762042D1A81A9820C8FBAE`;
+signer SHA-256 remained
+`8de8c2e46e572df1a7dcedce00b48a6ba0e53c042d52079c510f2923be88e06e`.
+`:app:assembleDebug` passed in 1m18s. No Gradle task was running during AVD
+startup.
+
+After API 36 boot completion on the sole `emulator-5554` AVD, the install
+command itself returned an ADB `device offline` error. Subsequent explicit-
+serial reads returned `device`, `sys.boot_completed=1`, and package metadata
+`ai.orhan` versionCode 299 / versionName 0.2.0 / lastUpdateTime 14:54:18. Thus
+the package is present at v299 despite the lost install-command acknowledgement;
+the installed APK bytes were not pulled back for hash comparison.
+
+The launch log showed the MainActivity process and foreground activity, but
+`am start -W` did not return a completed responsiveness result. Logcat recorded
+an input-dispatch ANR for Android's `[Gesture Monitor] edge-swipe` channel at
+14:54:35 and its corresponding ActivityManager timeout at 14:55:02; no
+`ANR in ai.orhan` or app fatal exception was found in the sampled lines. This
+means v299 installation is package-readback verified, while its interactive
+UI check remains **blocked by emulator input/resource responsiveness**. No
+v299 feature screenshot was successfully captured. The emulator was then
+stopped; no qemu process remained, freeing its roughly 2.7 GiB host working
+set.
+
+The previous v298 warm home launch and four `OK (4 tests)` runner assertions
+remain useful but do not count as v299 interactive UI verification. Do not
+retry the instrumentation command unchanged. Resume by lowering host load or
+switching to a verified accelerated renderer, boot one AVD, confirm a warm
+app launch and touch responsiveness, then complete the synthetic Markdown/HTML
+flows. If the host still reports SwiftShader, record that limitation and keep
+manual feature checks pending rather than calling the emulator healthy.
