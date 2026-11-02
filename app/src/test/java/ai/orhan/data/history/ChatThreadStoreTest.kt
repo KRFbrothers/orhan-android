@@ -43,6 +43,11 @@ class ChatAttachmentPersistenceTest {
         assertEquals(message.text, loaded.messagesWithAttachments().single().text)
     }
 
+    @Test fun attachmentShareUsesOriginalBytesAndRejectsCorruptLength() {
+        assertEquals(listOf<Byte>(1, 2, 3), ai.orhan.design.screens.attachmentShareBytes(att)?.toList())
+        assertEquals(null, ai.orhan.design.screens.attachmentShareBytes(att.copy(sizeBytes = 4)))
+    }
+
     @Test fun serializerRoundTripsPendingHandoffRetryState() = kotlinx.coroutines.runBlocking {
         val retry = StoredHandoffRetry(17L, "Slides", "Use a concise style", "Make a 5-slide deck")
         val thread = ChatThread("Orhan", 30L, listOf(StoredMessage(17L, "agent", "Assigned to Slides", "now")), retry, "agent-id-1")
