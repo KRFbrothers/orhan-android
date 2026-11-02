@@ -31,6 +31,14 @@ data class Workflow(
     val agentId: String? = null,
 )
 
+/** Rebinds only title-linked records for a confirmed local rename, preserving prompt content and IDs. */
+fun List<Workflow>.relinkRenamedAgent(previousName: String, currentName: String, agentId: String): List<Workflow> =
+    map { workflow ->
+        val belongsById = workflow.agentId == agentId
+        val belongsByLegacyName = workflow.agentId == null && workflow.agentName.equals(previousName, ignoreCase = true)
+        if (belongsById || belongsByLegacyName) workflow.copy(agentName = currentName, agentId = agentId) else workflow
+    }
+
 /** Blank workflow agent means Orhan; a missing named agent is unresolved and must not be guessed. */
 fun resolveWorkflowAgentName(requested: String, availableAgentNames: List<String>, defaultName: String = "Orhan"): String? {
     val name = requested.trim()
@@ -104,6 +112,11 @@ class WorkflowStore(private val dataStore: DataStore<List<Workflow>>) {
         val w = workflow.normalized()
         if (w.content.isBlank()) return
         dataStore.updateData { it.upserted(w) }
+    }
+
+    suspend fun relinkAgentRename(previousName: String, currentName: String, agentId: String) {
+        if (previousName.isBlank() || currentName.isBlank() || agentId.isBlank()) return
+        dataStore.updateData { it.relinkRenamedAgent(previousName, currentName, agentId) }
     }
 
     suspend fun delete(id: String) {

@@ -68,6 +68,7 @@ import ai.orhan.feature.settings.openAppearance
 import ai.orhan.feature.settings.openSettingsPage
 import ai.orhan.feature.settings.settingsDetailPages
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -380,6 +381,28 @@ fun OrhanNavHost(isDark: Boolean) {
                             id = previous?.id ?: java.util.UUID.randomUUID().toString(),
                         ),
                     )
+                    if (result is ai.orhan.data.agents.AgentSaveResult.Saved && previous != null && !previous.name.equals(result.agent.name, ignoreCase = true)) {
+                        var migrationFailed = false
+                        try {
+                            threadStore.associateLegacyChatsForRename(previous.name, result.agent.id)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            migrationFailed = true
+                        }
+                        try {
+                            workflowStore.relinkAgentRename(previous.name, result.agent.name, result.agent.id)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            migrationFailed = true
+                        }
+                        if (migrationFailed) android.widget.Toast.makeText(
+                            context,
+                            "Agent renamed, but some older chat or workflow links could not be updated. Existing content is unchanged.",
+                            android.widget.Toast.LENGTH_LONG,
+                        ).show()
+                    }
                     when (val nav = navigationAfterAgentSave(previous == null, result)) {
                         is AgentSaveNav.OpenChat -> navController.navigate(AppRoutes.chat(canon(nav.name))) {
                             popUpTo(AppRoutes.CREATE_AGENT) { inclusive = true }
