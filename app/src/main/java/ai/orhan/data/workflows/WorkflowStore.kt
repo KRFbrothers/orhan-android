@@ -21,6 +21,8 @@ const val WORKFLOW_MAX_CONTENT = 4000
 const val WORKFLOW_MAX_ITEMS = 200
 private const val TITLE_FALLBACK_LEN = 42
 
+class WorkflowCapacityException : IOException("Workflow storage is full. Remove a saved workflow before adding another.")
+
 data class Workflow(
     val id: String,
     val title: String,
@@ -111,7 +113,12 @@ class WorkflowStore(private val dataStore: DataStore<List<Workflow>>) {
     suspend fun upsert(workflow: Workflow) {
         val w = workflow.normalized()
         if (w.content.isBlank()) return
-        dataStore.updateData { it.upserted(w) }
+        dataStore.updateData { current ->
+            if (current.size >= WORKFLOW_MAX_ITEMS && current.none { it.id == w.id }) {
+                throw WorkflowCapacityException()
+            }
+            current.upserted(w)
+        }
     }
 
     suspend fun relinkAgentRename(previousName: String, currentName: String, agentId: String) {
