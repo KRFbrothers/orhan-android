@@ -41,6 +41,7 @@ fun WorkflowEditorScreen(
     agentNames: List<String>,
     onBack: () -> Unit,
     onOpenRunChat: (String) -> Unit = {},
+    onResumeRun: (WorkflowRun) -> Unit = {},
     onSave: suspend (Workflow) -> Boolean,
     onDelete: (suspend (Workflow) -> Boolean)? = null,
 ) {
@@ -115,6 +116,11 @@ fun WorkflowEditorScreen(
             runs.take(10).forEach { run ->
                 TextButton(onClick = { onOpenRunChat(run.chatTitle) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Text("${run.status.name.lowercase().replace('_', ' ')} · ${run.agentName} · ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(run.startedAt))}")
+                }
+                if (run.status == ai.orhan.data.workflows.WorkflowRunStatus.INTERRUPTED && run.engineRunId != null) {
+                    OutlinedButton(onClick = { onResumeRun(run) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text("Resume interrupted run")
+                    }
                 }
                 run.error?.let { FootNote(it) }
             }

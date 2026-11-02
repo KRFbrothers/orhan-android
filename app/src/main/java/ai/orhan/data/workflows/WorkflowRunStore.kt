@@ -28,9 +28,10 @@ data class WorkflowRun(
     val startedAt: Long,
     val finishedAt: Long = 0L,
     val error: String? = null,
+    val engineRunId: String? = null,
 )
 
-private const val RUNS_VERSION = 1
+private const val RUNS_VERSION = 2
 private const val MAX_RUNS = 100
 
 object WorkflowRunsSerializer : Serializer<List<WorkflowRun>> {
@@ -41,7 +42,8 @@ object WorkflowRunsSerializer : Serializer<List<WorkflowRun>> {
         if (bytes.isEmpty()) return defaultValue
         return try {
             DataInputStream(bytes.inputStream()).use { d ->
-                if (d.readInt() != RUNS_VERSION) return defaultValue
+                val version = d.readInt()
+                if (version !in 1..RUNS_VERSION) return defaultValue
                 val count = d.readInt()
                 if (count !in 0..MAX_RUNS) throw IOException("invalid workflow run count")
                 List(count) {
@@ -55,7 +57,8 @@ object WorkflowRunsSerializer : Serializer<List<WorkflowRun>> {
                     val started = d.readLong()
                     val finished = d.readLong()
                     val error = if (d.readBoolean()) d.readUTF() else null
-                    WorkflowRun(id, workflowId, title, chat, agentId, agent, status, started, finished, error)
+                    val engineRunId = if (version >= 2 && d.readBoolean()) d.readUTF() else null
+                    WorkflowRun(id, workflowId, title, chat, agentId, agent, status, started, finished, error, engineRunId)
                 }
             }
         } catch (e: IOException) { defaultValue }
@@ -70,6 +73,7 @@ object WorkflowRunsSerializer : Serializer<List<WorkflowRun>> {
                 writeBoolean(run.agentId != null); run.agentId?.let(::writeUTF)
                 writeUTF(run.agentName); writeInt(run.status.ordinal); writeLong(run.startedAt); writeLong(run.finishedAt)
                 writeBoolean(run.error != null); run.error?.take(300)?.let(::writeUTF)
+                writeBoolean(run.engineRunId != null); run.engineRunId?.take(100)?.let(::writeUTF)
             }
             flush()
         }
@@ -99,6 +103,12 @@ class WorkflowRunStore(private val dataStore: DataStore<List<WorkflowRun>>) {
     suspend fun update(id: String, status: WorkflowRunStatus, error: String? = null) {
         val finished = if (status in setOf(WorkflowRunStatus.SUCCEEDED, WorkflowRunStatus.FAILED, WorkflowRunStatus.CANCELLED, WorkflowRunStatus.INTERRUPTED)) System.currentTimeMillis() else 0L
         dataStore.updateData { runs -> runs.map { if (it.id == id) it.copy(status = status, finishedAt = finished, error = error?.take(300)) else it } }
+    }
+
+    suspend fun saveEngineRunId(id: String, engineRunId: String) {
+        val safeId = engineRunId.take(100)
+        if (safeId.isBlank()) return
+        dataStore.updateData { runs -> runs.map { if (it.id == id) it.copy(engineRunId = safeId) else it } }
     }
 
     suspend fun interruptOrphanedRuns() {
