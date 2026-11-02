@@ -353,9 +353,9 @@ internal fun AgentAvatarImage(path: String?, fallback: Int, size: Dp, descriptio
         }
     }
     if (bitmap != null) {
-        Image(bitmap!!, contentDescription, contentScale = ContentScale.Crop, modifier = Modifier.size(size).clip(CircleShape))
+        Image(bitmap!!, description, contentScale = ContentScale.Crop, modifier = Modifier.size(size).clip(CircleShape))
     } else {
-        Image(painterResource(fallback), contentDescription, contentScale = ContentScale.Crop, modifier = Modifier.size(size).clip(CircleShape))
+        Image(painterResource(fallback), description, contentScale = ContentScale.Crop, modifier = Modifier.size(size).clip(CircleShape))
     }
 }
 
