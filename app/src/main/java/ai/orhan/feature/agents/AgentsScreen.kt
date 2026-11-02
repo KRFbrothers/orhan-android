@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import android.graphics.BitmapFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -106,29 +107,38 @@ fun AgentsScreen(
     onOpenWorkflow: (Workflow) -> Unit = {},
     onCreateWorkflow: () -> Unit = {},
     onEditWorkflow: (Workflow) -> Unit = {},
-    onDeleteWorkflow: ((Workflow) -> Unit)? = null,
+    onDeleteWorkflow: (suspend (Workflow) -> Boolean)? = null,
 ) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var pendingWorkflowDelete by remember { mutableStateOf<Workflow?>(null) }
+    var workflowDeleteError by remember { mutableStateOf<String?>(null) }
+    var deletingWorkflow by remember { mutableStateOf(false) }
     pendingWorkflowDelete?.let { target ->
         AlertDialog(
-            onDismissRequest = { pendingWorkflowDelete = null },
+            onDismissRequest = { if (!deletingWorkflow) { pendingWorkflowDelete = null; workflowDeleteError = null } },
             title = { Text("Delete ${target.title}?") },
-            text = { Text("This workflow will be removed.") },
+            text = { Text(workflowDeleteError ?: "This workflow will be removed.") },
             confirmButton = {
-                TextButton(onClick = {
-                    pendingWorkflowDelete = null
-                    onDeleteWorkflow?.invoke(target)
-                }) { Text("Delete") }
+                TextButton(enabled = !deletingWorkflow, onClick = {
+                    if (!deletingWorkflow) scope.launch {
+                        deletingWorkflow = true
+                        val removed = try { onDeleteWorkflow?.invoke(target) == true }
+                        catch (cancel: CancellationException) { throw cancel }
+                        catch (_: Exception) { false }
+                        finally { deletingWorkflow = false }
+                        if (removed) { pendingWorkflowDelete = null; workflowDeleteError = null }
+                        else workflowDeleteError = "Couldn't delete this workflow. Your saved workflow is unchanged."
+                    }
+                }) { Text(if (deletingWorkflow) "Deleting…" else "Delete") }
             },
             dismissButton = {
-                TextButton(onClick = { pendingWorkflowDelete = null }) { Text("Cancel") }
+                TextButton(enabled = !deletingWorkflow, onClick = { pendingWorkflowDelete = null; workflowDeleteError = null }) { Text("Cancel") }
             },
         )
     }
     var pendingDelete by remember { mutableStateOf<InstalledAgent?>(null) }
     var deleteError by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf(false) }
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
     pendingDelete?.let { target ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
@@ -216,7 +226,7 @@ fun AgentsScreen(
                         wf,
                         onOpen = { onOpenWorkflow(wf) },
                         onEdit = { onEditWorkflow(wf) },
-                        onLongPress = if (onDeleteWorkflow != null) ({ pendingWorkflowDelete = wf }) else null,
+                        onLongPress = if (onDeleteWorkflow != null) ({ workflowDeleteError = null; pendingWorkflowDelete = wf }) else null,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                     )
                 }

@@ -22,10 +22,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 /** Create or edit a workflow (saved prompt). [existing] null = create. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -34,22 +38,36 @@ fun WorkflowEditorScreen(
     existing: Workflow?,
     agentNames: List<String>,
     onBack: () -> Unit,
-    onSave: (Workflow) -> Unit,
-    onDelete: ((Workflow) -> Unit)? = null,
+    onSave: suspend (Workflow) -> Boolean,
+    onDelete: (suspend (Workflow) -> Boolean)? = null,
 ) {
     var title by rememberSaveable(existing?.id) { mutableStateOf(existing?.title.orEmpty()) }
     var content by rememberSaveable(existing?.id) { mutableStateOf(existing?.content.orEmpty()) }
     var agent by rememberSaveable(existing?.id) { mutableStateOf(existing?.agentName.orEmpty()) }
     var showError by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
+    var writeError by rememberSaveable { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     if (confirmDelete && existing != null && onDelete != null) {
         AlertDialog(
-            onDismissRequest = { confirmDelete = false },
+            onDismissRequest = { if (!deleting) confirmDelete = false },
             title = { Text("Delete ${existing.title}?") },
-            text = { Text("This workflow will be removed.") },
-            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete(existing) }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+            text = { Text(writeError ?: "This workflow will be removed.") },
+            confirmButton = { TextButton(enabled = !deleting, onClick = {
+                if (!deleting) scope.launch {
+                    deleting = true
+                    val removed = try { onDelete(existing) }
+                    catch (cancel: CancellationException) { throw cancel }
+                    catch (_: Exception) { false }
+                    finally { deleting = false }
+                    if (removed) { confirmDelete = false; writeError = null; onBack() }
+                    else writeError = "Couldn't delete this workflow. Your saved workflow is unchanged."
+                }
+            }) { Text(if (deleting) "Deleting…" else "Delete") } },
+            dismissButton = { TextButton(enabled = !deleting, onClick = { confirmDelete = false; writeError = null }) { Text("Cancel") } },
         )
     }
 
@@ -89,29 +107,38 @@ fun WorkflowEditorScreen(
             FootNote("Saved agent \"$agent\" is unavailable. Choose Default or an available agent before opening this workflow.")
         }
         FootNote("Opening a workflow starts a chat with the prompt ready to send.")
+        writeError?.takeIf { !confirmDelete }?.let { FootNote(it) }
         Spacer(Modifier.height(24.dp))
         Button(
+            enabled = !saving,
             onClick = {
                 if (content.isBlank()) {
                     showError = true
-                } else {
-                    onSave(
-                        Workflow(
+                } else if (!saving) {
+                    scope.launch {
+                        saving = true
+                        writeError = null
+                        val saved = try {
+                            onSave(Workflow(
                             id = existing?.id.orEmpty(),
                             title = title,
                             content = content,
                             agentName = agent,
                             createdAt = existing?.createdAt ?: System.currentTimeMillis(),
-                        ),
-                    )
+                            ))
+                        } catch (cancel: CancellationException) { throw cancel }
+                        catch (_: Exception) { false }
+                        finally { saving = false }
+                        if (saved) onBack() else writeError = "Couldn't save this workflow. Your draft is still here."
+                    }
                 }
             },
             modifier = Modifier.fillMaxWidth().height(48.dp),
-        ) { Text("Save") }
+        ) { Text(if (saving) "Saving…" else "Save") }
         if (existing != null && onDelete != null) {
             Spacer(Modifier.height(12.dp))
             OutlinedButton(
-                onClick = { confirmDelete = true },
+                onClick = { writeError = null; confirmDelete = true },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
             ) { Text("Delete") }
         }

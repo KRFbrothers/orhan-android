@@ -227,7 +227,7 @@ fun HomeScreen(
     onOpenWorkflow: (ai.orhan.data.workflows.Workflow) -> Unit = {},
     onCreateWorkflow: () -> Unit = {},
     onEditWorkflow: (ai.orhan.data.workflows.Workflow) -> Unit = {},
-    onDeleteWorkflow: ((ai.orhan.data.workflows.Workflow) -> Unit)? = null,
+    onDeleteWorkflow: (suspend (ai.orhan.data.workflows.Workflow) -> Boolean)? = null,
     onOpenPlaybook: (ai.orhan.feature.discover.Playbook) -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
