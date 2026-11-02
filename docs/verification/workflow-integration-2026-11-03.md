@@ -98,8 +98,10 @@ Full migration order, service configuration, exact secret names, external
 signing protocol, supervisor setup and rollback are in the backend
 [integration plan](https://github.com/KRFbrothers/Dua-ai/blob/feat/workflow-automation-integration/docs/integrations/workflow-integration-plan.md).
 Identity/supervisor work is saved in [Dua #509](https://github.com/KRFbrothers/Dua-ai/pull/509);
-automation is a separate stacked follow-up, and Android targets the already
-integrated #112 branch. No merge is requested/performed by this report.
+automation is [Dua #510](https://github.com/KRFbrothers/Dua-ai/pull/510), stacked
+on #509; [Orhan #113](https://github.com/KRFbrothers/orhan-android/pull/113)
+targets the already integrated #112 branch. No merge is requested/performed by
+this report. The three follow-up PRs are drafts with source-only evidence.
 
 Required external setup: actual target migration/deployment inventory, server
 service/app/encryption secrets, a dedicated confirmed owner refresh session and

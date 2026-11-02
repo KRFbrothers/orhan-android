@@ -172,7 +172,7 @@ class WorkflowExecutionRepository(
                 if (bytes.size > 2 * 1024 * 1024) throw IOException("Workflow response is too large.")
                 val json = runCatching { JSONObject(String(bytes, Charsets.UTF_8)) }.getOrNull()
                 if (code !in 200..299) throw IOException(json?.optString("error")?.takeIf { it.isNotBlank() }
-                    ?: if (code == 404) "Workflow execution API is not deployed on this service." else "Workflow request failed (HTTP $code).")
+                    ?: if (code == 404) "The requested workflow API is not deployed on this service." else "Workflow request failed (HTTP $code).")
                 json ?: throw IOException("Workflow service returned an invalid response.")
             } finally { disconnect.cancel(); conn.disconnect() }
         }
