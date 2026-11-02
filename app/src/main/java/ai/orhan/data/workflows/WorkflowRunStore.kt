@@ -7,6 +7,7 @@ import androidx.datastore.core.Serializer
 import androidx.datastore.dataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -85,7 +86,7 @@ val Context.workflowRunsDataStore: DataStore<List<WorkflowRun>> by dataStore(
     serializer = WorkflowRunsSerializer,
 )
 
-class WorkflowRunStore(private val dataStore: DataStore<List<WorkflowRun>>) {
+class WorkflowRunStore(private val dataStore: DataStore<List<WorkflowRun>>, private val remote: WorkflowRunService? = null) {
     val runs: Flow<List<WorkflowRun>> = dataStore.data
         .catch { if (it is IOException) emit(emptyList()) else throw it }
         .map { list -> list.sortedByDescending { it.startedAt } }
@@ -97,27 +98,42 @@ class WorkflowRunStore(private val dataStore: DataStore<List<WorkflowRun>>) {
             status = WorkflowRunStatus.QUEUED, startedAt = System.currentTimeMillis(),
         )
         dataStore.updateData { (listOf(run) + it).take(MAX_RUNS) }
+        runCatching { remote?.save(run) }
         return run
     }
 
     suspend fun update(id: String, status: WorkflowRunStatus, error: String? = null) {
         val finished = if (status in setOf(WorkflowRunStatus.SUCCEEDED, WorkflowRunStatus.FAILED, WorkflowRunStatus.CANCELLED, WorkflowRunStatus.INTERRUPTED)) System.currentTimeMillis() else 0L
-        dataStore.updateData { runs -> runs.map { if (it.id == id) it.copy(status = status, finishedAt = finished, error = error?.take(300)) else it } }
+        val updated = dataStore.updateData { runs -> runs.map { if (it.id == id) it.copy(status = status, finishedAt = finished, error = error?.take(300)) else it } }
+        updated.firstOrNull { it.id == id }?.let { runCatching { remote?.save(it) } }
     }
 
     suspend fun saveEngineRunId(id: String, engineRunId: String) {
         val safeId = engineRunId.take(100)
         if (safeId.isBlank()) return
-        dataStore.updateData { runs -> runs.map { if (it.id == id) it.copy(engineRunId = safeId) else it } }
+        val updated = dataStore.updateData { runs -> runs.map { if (it.id == id) it.copy(engineRunId = safeId) else it } }
+        updated.firstOrNull { it.id == id }?.let { runCatching { remote?.save(it) } }
     }
 
     suspend fun interruptOrphanedRuns() {
-        dataStore.updateData { runs -> runs.map { run ->
+        val updated = dataStore.updateData { runs -> runs.map { run ->
             if (run.status == WorkflowRunStatus.QUEUED || run.status == WorkflowRunStatus.RUNNING) {
                 run.copy(status = WorkflowRunStatus.INTERRUPTED, finishedAt = System.currentTimeMillis(), error = "App stopped before the workflow finished.")
             } else run
         } }
+        updated.forEach { runCatching { remote?.save(it) } }
+    }
+
+    /** Local history remains authoritative; authenticated server rows extend it across installs. */
+    suspend fun syncRemote() {
+        val service = remote ?: return
+        val local = dataStore.data.first()
+        val remoteRuns = service.sync(local).getOrNull() ?: return
+        dataStore.updateData { current ->
+            val byId = (remoteRuns + current).associateBy { it.id }
+            byId.values.sortedByDescending { it.startedAt }.take(MAX_RUNS)
+        }
     }
 }
 
-fun Context.workflowRunStore(): WorkflowRunStore = WorkflowRunStore(workflowRunsDataStore)
+fun Context.workflowRunStore(remote: WorkflowRunService? = null): WorkflowRunStore = WorkflowRunStore(workflowRunsDataStore, remote)

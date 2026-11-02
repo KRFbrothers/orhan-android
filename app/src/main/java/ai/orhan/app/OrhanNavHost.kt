@@ -83,6 +83,7 @@ import ai.orhan.data.workflows.workflowStore
 import ai.orhan.data.workflows.resolveWorkflowAgentName
 import ai.orhan.data.workflows.WorkflowRunStatus
 import ai.orhan.data.workflows.workflowRunStore
+import ai.orhan.data.workflows.WorkflowRunService
 import ai.orhan.feature.workflows.WorkflowEditorScreen
 
 /** Top-level routes. Settings routes live in [SettingsRoutes]. */
@@ -115,6 +116,7 @@ fun OrhanNavHost(isDark: Boolean) {
     val navController = rememberNavController()
     val context = LocalContext.current.applicationContext
     val authRepository = remember(context) { AuthRepository.get(context) }
+    val authSession by authRepository.session.collectAsStateWithLifecycle(initialValue = null)
     val agentToolRepository = remember(context) {
         ChatRepository(
             tokenProvider = { authRepository.accessToken() },
@@ -143,9 +145,17 @@ fun OrhanNavHost(isDark: Boolean) {
     val artifacts by artifactStore.artifacts.collectAsStateWithLifecycle(initialValue = emptyList())
     val workflowStore = remember(context) { context.workflowStore() }
     val workflows by workflowStore.workflows.collectAsStateWithLifecycle(initialValue = emptyList())
-    val workflowRunStore = remember(context) { context.workflowRunStore() }
+    val workflowRunService = remember(authRepository) { WorkflowRunService(authRepository) }
+    val workflowRunStore = remember(context, workflowRunService) { context.workflowRunStore(workflowRunService) }
     val workflowRuns by workflowRunStore.runs.collectAsStateWithLifecycle(initialValue = emptyList())
-    LaunchedEffect(workflowRunStore) { workflowRunStore.interruptOrphanedRuns() }
+    var workflowRunsInitialized by remember(workflowRunStore) { mutableStateOf(false) }
+    LaunchedEffect(workflowRunStore) {
+        workflowRunStore.interruptOrphanedRuns()
+        workflowRunsInitialized = true
+    }
+    LaunchedEffect(workflowRunStore, authSession?.accessToken, workflowRunsInitialized) {
+        if (workflowRunsInitialized && authSession != null) workflowRunStore.syncRemote()
+    }
     val personalMemory by memoryStore.memory.collectAsStateWithLifecycle(initialValue = "")
     // Missing key stays not-paused, matching the installed preference. A failed
     // read makes [MemoryPauseStore.paused] true so personal context is withheld.
