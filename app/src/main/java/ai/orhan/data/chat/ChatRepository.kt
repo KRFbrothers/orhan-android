@@ -1,6 +1,7 @@
 package ai.orhan.data.chat
 
 import ai.orhan.BuildConfig
+import android.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
@@ -152,14 +153,103 @@ class ChatRepository(
         )
     }
 
-    /** Sends the original audio attachment to the configured Gemini engine for transcription. */
+    /** Stores audio with the signed-in owner, then uses Dua's configured transcription providers. */
     suspend fun transcribeAudio(attachment: ChatAttachment): Result<String> {
         if (!attachment.mimeType.lowercase().startsWith("audio/")) return Result.failure(IllegalArgumentException("Choose an audio attachment to transcribe."))
-        return plainTextRequest(
-            prompt = "Transcribe the speech in the attached audio.",
-            instruction = "Transcribe speech in the attached audio verbatim in its original language. Return only the transcript. If no speech is audible, say [no speech].",
-            attachment = attachment,
-        )
+        return withContext(Dispatchers.IO) { runCatching { transcribeStoredAudio(attachment) } }
+    }
+
+    private suspend fun transcribeStoredAudio(attachment: ChatAttachment): String {
+        val apiBase = BuildConfig.DUA_API_URL.trimEnd('/')
+        require(apiBase.startsWith("https://")) { "DUA_API_URL must be configured with HTTPS for stored audio transcription." }
+        val jwt = tokenProvider() ?: throw FatalChatException("Sign in required to transcribe audio")
+        val bytes = Base64.decode(attachment.base64, Base64.DEFAULT)
+        if (bytes.isEmpty() || bytes.size.toLong() != attachment.sizeBytes || bytes.size > ChatAttachment.MAX_BYTES) {
+            throw IOException("The saved audio attachment is incomplete or exceeds the supported size.")
+        }
+
+        var storedPath: String? = null
+        val transcript: String
+        try {
+            val sign = serviceJson(apiBase, "/api/files/sign", jwt,
+                JSONObject().put("name", attachment.name).put("mimeType", attachment.mimeType).put("size", bytes.size))
+            if (sign.code !in 200..299) throw serviceError(sign)
+            val upload = sign.json ?: throw IOException("File storage returned an invalid upload response.")
+            val path = upload.optString("path").takeIf(String::isNotBlank)
+                ?: throw IOException("File storage did not return an audio path.")
+            storedPath = path
+            val uploadUrl = URL(upload.getString("uploadUrl"))
+            if (uploadUrl.protocol != "https" || uploadUrl.userInfo != null) throw IOException("File storage returned an unsafe upload URL.")
+            val headers = upload.optJSONObject("headers") ?: throw IOException("File storage omitted upload headers.")
+            val put = (uploadUrl.openConnection() as HttpURLConnection).apply {
+                requestMethod = "PUT"
+                instanceFollowRedirects = false
+                connectTimeout = 15_000
+                readTimeout = 120_000
+                doOutput = true
+                headers.keys().forEach { key -> setRequestProperty(key, headers.getString(key)) }
+            }
+            try {
+                put.outputStream.use { it.write(bytes) }
+                val code = put.responseCode
+                if (code !in 200..299) throw IOException("Private audio upload failed (HTTP $code).")
+            } finally { put.disconnect() }
+
+            val result = serviceJson(apiBase, "/api/files/transcribe", jwt,
+                JSONObject().put("path", path).put("name", attachment.name).put("mimeType", attachment.mimeType).put("size", bytes.size))
+            if (result.code !in 200..299) throw serviceError(result)
+            transcript = result.json?.optString("transcript")?.trim()?.takeIf(String::isNotEmpty)
+                ?: throw IOException("The configured transcription provider returned no transcript.")
+        } catch (failure: Throwable) {
+            val cleanupFailure = storedPath?.let { path -> runCatching { deleteStoredUpload(apiBase, jwt, path) }.exceptionOrNull() }
+            if (cleanupFailure != null) {
+                failure.addSuppressed(cleanupFailure)
+                if (failure !is kotlinx.coroutines.CancellationException) {
+                    throw IOException("${failure.message ?: "Transcription failed."} The temporary audio file may still be stored; check File storage.", failure)
+                }
+            }
+            throw failure
+        }
+        try {
+            deleteStoredUpload(apiBase, jwt, storedPath!!)
+        } catch (failure: Throwable) {
+            throw IOException("Transcription finished, but removal of its temporary private audio file was not confirmed. Check File storage before retrying.", failure)
+        }
+        return transcript
+    }
+
+    private data class ServiceResponse(val code: Int, val json: JSONObject?)
+
+    private suspend fun serviceJson(apiBase: String, path: String, jwt: String, body: JSONObject): ServiceResponse {
+        val connection = (URL(apiBase + path).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15_000
+            readTimeout = 180_000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Authorization", "Bearer $jwt")
+            setRequestProperty("X-Dua-Native", "1")
+        }
+        return try {
+            connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            val code = connection.responseCode
+            val raw = (if (code in 200..299) connection.inputStream else connection.errorStream)
+                ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            if (code == 401) onUnauthorized()
+            ServiceResponse(code, runCatching { JSONObject(raw) }.getOrNull())
+        } finally { connection.disconnect() }
+    }
+
+    private fun serviceError(response: ServiceResponse): IOException = IOException(
+        response.json?.optString("error")?.takeIf(String::isNotBlank) ?: "File service request failed (HTTP ${response.code}).",
+    )
+
+    private suspend fun deleteStoredUpload(apiBase: String, jwt: String, path: String) {
+        val deleted = serviceJson(apiBase, "/api/files/delete", jwt, JSONObject().put("paths", JSONArray().put(path)))
+        if (deleted.code !in 200..299) throw serviceError(deleted)
+        val json = deleted.json ?: throw IOException("File service returned an invalid cleanup response.")
+        if (json.optInt("deleted") != 1) throw IOException("File service did not confirm removal of the temporary audio file.")
     }
 
     /** Transcribes the source recording, then asks the configured Gemini model for factual minutes. */
