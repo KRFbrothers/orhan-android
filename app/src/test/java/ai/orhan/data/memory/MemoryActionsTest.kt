@@ -200,6 +200,22 @@ class MemoryActionsTest {
         assertEquals(listOf(existingTopic), data.state.value.topics)
     }
 
+    @Test fun meetingActionBatchKeepsOneSourceAndDoesNotDropExistingMemoryOnFailureOrLimit() = runBlocking {
+        val data = ActionDataStore(MemoryEntries())
+        val store = MemoryEntriesStore(data)
+        val items = listOf("Send notes to Maya", "Book the review", "Send notes to Maya")
+        val saved = store.addMeetingActionsFromChat(items, "Planning", 77L)
+        assertEquals(MeetingActionSaveSummary(saved = 2, duplicates = 0), saved)
+        assertEquals(setOf("Send notes to Maya", "Book the review"), data.state.value.todos.map { it.title }.toSet())
+        assertTrue(data.state.value.todos.all { it.sourceChatTitle == "Planning" && it.sourceMessageId == 77L })
+        assertEquals(MeetingActionSaveSummary(saved = 0, duplicates = 2), store.addMeetingActionsFromChat(items, "Planning", 77L))
+
+        val before = data.state.value
+        data.failWrites = true
+        assertTrue(runCatching { store.addMeetingActionsFromChat(listOf("New task"), "Planning", 78L) }.isFailure)
+        assertEquals(before, data.state.value)
+    }
+
     @Test fun artifactLinkUsesTheIdAndDoesNotCopyTheBody() = runBlocking {
         val body = "artifact body that must stay in the artifact store"
         val data = ActionDataStore(MemoryEntries())

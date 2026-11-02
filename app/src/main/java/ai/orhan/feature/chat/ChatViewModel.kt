@@ -134,6 +134,7 @@ class ChatViewModel(
     private val repository: ChatRepository = ChatRepository(),
     private val threadStore: ChatThreadStore? = null,
     private val automaticMemory: AutomaticMemoryCoordinator? = null,
+    private val serviceRepository: ChatRepository = repository,
 ) : ViewModel() {
     /** Uses the signed-in Supabase session; falls back to DUA_DEV_JWT (debug only) when signed out. */
     constructor(app: Application) : this(
@@ -145,6 +146,10 @@ class ChatViewModel(
         },
         app.chatThreads(),
         AutomaticMemoryCoordinator(app.memoryPauseStore(), app.memoryEntriesStore()),
+        ChatRepository(
+            tokenProvider = { AuthRepository.get(app).accessToken() },
+            onUnauthorized = { AuthRepository.get(app).clear() },
+        ),
     )
 
     private var threadTitle: String? = null
@@ -533,10 +538,13 @@ class ChatViewModel(
     fun clearError() = _state.update { it.copy(error = null) }
 
     suspend fun translateMessage(text: String, targetLanguage: String): Result<String> =
-        repository.translateText(text, targetLanguage)
+        serviceRepository.translateText(text, targetLanguage)
 
     suspend fun transcribeAudio(attachment: ChatAttachment): Result<String> =
-        repository.transcribeAudio(attachment)
+        serviceRepository.transcribeAudio(attachment)
+
+    suspend fun createMeetingMinutes(attachment: ChatAttachment): Result<String> =
+        serviceRepository.createMeetingMinutes(attachment)
 
     private fun nextId() = (_state.value.messages.lastOrNull()?.id ?: 0L) + 1L
 }

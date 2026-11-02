@@ -78,6 +78,12 @@ import ai.orhan.feature.settings.detail.SettingsDetailScaffold
 import java.text.DateFormat
 import java.util.Date
 
+private fun artifactKindLabel(artifact: Artifact): String = when (artifact.kind) {
+    ArtifactKind.SAVED_MESSAGE -> "${artifact.kind.label} · ${artifact.author.orEmpty()}"
+    ArtifactKind.MEETING_MINUTES -> artifact.kind.label
+    ArtifactKind.DOCUMENT -> artifact.type.label
+}
+
 /** List of saved replies; tapping one shows its detail in the same screen. */
 @Composable
 fun ArtifactsScreen(
@@ -305,7 +311,7 @@ private fun CompactArtifactRow(a: Artifact, onOpen: () -> Unit) {
                 modifier = Modifier.padding(top = 2.dp),
             )
             Text(
-                if (a.kind == ArtifactKind.SAVED_MESSAGE) "${a.kind.label} · ${a.author.orEmpty()}" else a.type.label,
+                artifactKindLabel(a),
                 style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -348,7 +354,7 @@ private fun LargeArtifactPreview(a: Artifact, onOpen: () -> Unit) {
             maxLines = 6,
             overflow = TextOverflow.Ellipsis,
         )
-        Text("${if (a.kind == ArtifactKind.SAVED_MESSAGE) a.kind.label else a.type.label} · Text preview", style = OrhanTextStyles.meta,
+        Text("${artifactKindLabel(a)} · Text preview", style = OrhanTextStyles.meta,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
     }
 }
@@ -412,7 +418,7 @@ private fun ArtifactDetail(
     SettingsDetailScaffold(title = a.title, onBack = onBack, applyStatusBarPadding = applyStatusBarPadding) {
         Text(formatDate(a.createdAt), style = OrhanTextStyles.meta,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
-        Text(a.type.label, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(if (a.kind == ArtifactKind.DOCUMENT) a.type.label else a.kind.label, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (a.kind == ArtifactKind.SAVED_MESSAGE) {
             Text("${a.kind.label} · ${a.author.orEmpty()}", style = OrhanTextStyles.meta,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)

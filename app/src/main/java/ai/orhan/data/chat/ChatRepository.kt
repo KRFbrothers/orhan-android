@@ -162,6 +162,19 @@ class ChatRepository(
         )
     }
 
+    /** Transcribes the source recording, then asks the configured Gemini model for factual minutes. */
+    suspend fun createMeetingMinutes(attachment: ChatAttachment): Result<String> {
+        val transcript = transcribeAudio(attachment).getOrElse { return Result.failure(it) }
+        if (transcript.trim().trim('[', ']').equals("no speech", ignoreCase = true) || transcript.equals("No speech detected.", ignoreCase = true)) {
+            return Result.failure(IOException("No speech was detected in this recording."))
+        }
+        if (transcript.isBlank()) return Result.failure(IOException("The recording did not produce a transcript."))
+        return plainTextRequest(
+            prompt = "Create concise meeting minutes from this transcript.\n\n$transcript",
+            instruction = "Create factual meeting minutes using only the supplied transcript. Use headings Summary, Decisions, Action items, and Open questions. Mark missing owners or dates as unspecified. Do not invent attendees, decisions, dates, or actions. Return only the minutes.",
+        )
+    }
+
     private suspend fun plainTextRequest(prompt: String, instruction: String, attachment: ChatAttachment? = null): Result<String> {
         val output = StringBuilder()
         return stream(
