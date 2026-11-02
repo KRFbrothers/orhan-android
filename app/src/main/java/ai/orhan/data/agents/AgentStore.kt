@@ -151,7 +151,7 @@ fun navigationAfterAgentSave(creating: Boolean, result: AgentSaveResult): AgentS
 fun SavedAgent.toInstalledAgent(): InstalledAgent = InstalledAgent(
     name = name,
     blurb = blurb,
-    category = tools.firstOrNull() ?: "Custom",
+    category = "Custom",
     working = false,
     avatar = R.drawable.agent_webpage,
 )

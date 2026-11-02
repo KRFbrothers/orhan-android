@@ -383,10 +383,10 @@ fun OrhanNavHost(isDark: Boolean) {
             val title = canon(entry.arguments?.getString("title").orEmpty())
             LaunchedEffect(title) { chatViewModel.loadThread(title) }
             val agent = savedAgents.firstOrNull { it.name.equals(title, ignoreCase = true) }
-            chatViewModel.setAgent(agent?.name ?: title, agent?.instructions.orEmpty(), agent?.tools.orEmpty())
+            chatViewModel.setAgent(agent?.name ?: title, agent?.instructions.orEmpty())
             chatViewModel.setRoster(
                 if (agent != null) emptyList()
-                else savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions, it.tools) },
+                else savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions) },
             )
             chatViewModel.setPersonalMemory(personalMemory, memoryPaused)
             chatViewModel.setTopicContext(

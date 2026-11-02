@@ -94,13 +94,13 @@ fun CreateAgentScreen(
         )
         SectionLabel("Tools")
         Text(
-            "Per-agent tool restrictions are unavailable in the current request contract. No tool allowlist is sent, so these preferences cannot restrict the tools exposed by the service.",
+            "Per-agent tool restrictions are unavailable in the current request contract. No tool allowlist is sent, and saved legacy preferences are not sent to the chat model. The service does not publish a capability catalog here, so availability of Web, Files, Code, and Image cannot be confirmed.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
         )
         val savedTools = existing?.tools.orEmpty()
         if (savedTools.isNotEmpty()) {
-            FootNote("Saved legacy tool preferences are preserved but are not enforced: ${savedTools.joinToString()}")
+            FootNote("Saved legacy preferences are preserved for compatibility but are inactive: ${savedTools.joinToString()}")
         } else {
             FootNote("No per-agent tool selection is stored.")
         }

@@ -34,7 +34,7 @@ import java.util.Date
 import java.util.Locale
 
 /** A specialist agent Orhan can delegate to. */
-data class RosterAgent(val name: String, val blurb: String, val instructions: String, val tools: List<String> = emptyList())
+data class RosterAgent(val name: String, val blurb: String, val instructions: String)
 
 /** Visible label prefix on a specialist reply inside the Orhan thread. */
 const val SPECIALIST_PREFIX = "\uD83E\uDD1D "
@@ -183,11 +183,10 @@ class ChatViewModel(
 
     private var agentName: String = ""
     private var instructions: String = ""
-    private var tools: List<String> = emptyList()
 
     /** Sets the agent personality used for API turns. Idempotent; safe to call on every recomposition. */
-    fun setAgent(name: String, instructions: String, tools: List<String> = emptyList()) {
-        agentName = name; this.instructions = instructions.trim(); this.tools = tools
+    fun setAgent(name: String, instructions: String) {
+        agentName = name; this.instructions = instructions.trim()
     }
 
     /** Other agents Orhan may delegate to (only set when chatting as Orhan, not a specialist). */
@@ -281,7 +280,7 @@ class ChatViewModel(
             (replyLanguage?.let { " The user's chosen app language is $it: reply in $it unless they explicitly ask for another language." } ?: "")
     }
 
-    /** Hidden context blocks (identity, profile, memory, roster, agent instructions + tools) for the main chat. */
+    /** Hidden context blocks (identity, profile, memory, roster and agent instructions) for the main chat. */
     internal fun contextBlocks(): List<String> = buildList {
         add(orhanIdentity(agentName))
         userProfile?.let { add(it) }
@@ -291,7 +290,7 @@ class ChatViewModel(
         replyStyleBlock(replyStyle)?.let { add(it) }
         toneBlock(tone)?.let { add(it) }
         rosterPreface()?.let { add(it) }
-        agentConfigurationBlock(agentName, instructions, tools)?.let { add(it) }
+        agentInstructionsBlock(agentName, instructions)?.let { add(it) }
     }
 
     /** Top-level `systemInstruction` for /api/chat (Dua-ai #494): all hidden context in one string. */
@@ -412,7 +411,7 @@ class ChatViewModel(
             askBeforeActingBlock(askBeforeActing)?.let { add(it) }
             replyStyleBlock(replyStyle)?.let { add(it) }
             toneBlock(tone)?.let { add(it) }
-            agentConfigurationBlock(agent.name, agent.instructions, agent.tools)?.let { add(it) }
+            agentInstructionsBlock(agent.name, agent.instructions)?.let { add(it) }
         }
         val system = if (USE_SYSTEM_INSTRUCTION) systemInstructionOf(blocks) else null
         val turns = buildList {
