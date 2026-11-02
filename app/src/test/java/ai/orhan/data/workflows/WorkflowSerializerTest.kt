@@ -10,11 +10,25 @@ class WorkflowSerializerTest {
         val run = WorkflowRun(
             id = "run-1", workflowId = "w1", workflowTitle = "Research", chatTitle = "Analyst",
             agentId = "agent-7", agentName = "Analyst", status = WorkflowRunStatus.FAILED,
-            startedAt = 100L, finishedAt = 120L, error = "Provider unavailable",
+            startedAt = 100L, finishedAt = 120L, error = "Provider unavailable", engineRunId = "engine-task-9",
         )
         val bytes = ByteArrayOutputStream()
         WorkflowRunsSerializer.writeTo(listOf(run), bytes)
         assertEquals(run, WorkflowRunsSerializer.readFrom(bytes.toByteArray().inputStream()).single())
+    }
+
+    @Test fun legacyRunHistoryReadsWithoutRemoteEngineId() = kotlinx.coroutines.runBlocking {
+        val legacy = ByteArrayOutputStream()
+        DataOutputStream(legacy).apply {
+            writeInt(1); writeInt(1)
+            writeUTF("run-legacy"); writeUTF("workflow-1"); writeUTF("Old workflow"); writeUTF("Orhan")
+            writeBoolean(false); writeUTF("Orhan"); writeInt(WorkflowRunStatus.INTERRUPTED.ordinal)
+            writeLong(100L); writeLong(120L); writeBoolean(false); flush()
+        }
+        val run = WorkflowRunsSerializer.readFrom(legacy.toByteArray().inputStream()).single()
+        assertEquals("run-legacy", run.id)
+        assertEquals(null, run.engineRunId)
+        assertEquals(WorkflowRunStatus.INTERRUPTED, run.status)
     }
 
     @Test fun v2PersistsStableAgentIdAndV1ReadsWithoutOne() = kotlinx.coroutines.runBlocking {
