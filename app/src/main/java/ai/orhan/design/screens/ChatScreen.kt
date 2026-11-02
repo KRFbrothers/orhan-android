@@ -51,6 +51,7 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import android.app.Activity
+import android.media.MediaPlayer
 import android.content.ActivityNotFoundException
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -79,10 +80,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -664,7 +667,9 @@ private fun MessageBubble(
 
 @Composable
 private fun AttachmentMessagePreview(attachment: ChatAttachment) {
-    if (attachment.mimeType.startsWith("image/")) {
+    if (attachment.mimeType.startsWith("audio/")) {
+        AudioAttachmentPlayer(attachment)
+    } else if (attachment.mimeType.startsWith("image/")) {
         val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, attachment.base64) {
             value = withContext(Dispatchers.Default) {
                 runCatching {
@@ -685,6 +690,76 @@ private fun AttachmentMessagePreview(attachment: ChatAttachment) {
         ) else Text("Image unavailable · ${attachment.name}", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
     } else {
         Text("${attachment.mimeType} · ${attachment.name}", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun AudioAttachmentPlayer(attachment: ChatAttachment) {
+    val context = LocalContext.current
+    val audioFile by produceState<java.io.File?>(null, attachment.base64, attachment.name) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                val suffix = attachment.name.substringAfterLast('.', "audio").filter { it.isLetterOrDigit() }.take(8).ifBlank { "audio" }
+                java.io.File.createTempFile("orhan-audio-", ".$suffix", context.cacheDir).also { file ->
+                    file.writeBytes(Base64.decode(attachment.base64, Base64.DEFAULT))
+                }
+            }.getOrNull()
+        }
+    }
+    val player = remember(audioFile) { mutableStateOf<MediaPlayer?>(null) }
+    val playing = remember(audioFile) { mutableStateOf(false) }
+    val loading = remember(audioFile) { mutableStateOf(false) }
+    val error = remember(audioFile) { mutableStateOf(false) }
+    DisposableEffect(audioFile) {
+        onDispose {
+            player.value?.release()
+            player.value = null
+            audioFile?.delete()
+        }
+    }
+    androidx.compose.material3.Row(verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.material3.TextButton(
+            enabled = audioFile != null && !loading.value,
+            onClick = {
+                if (playing.value) {
+                    player.value?.pause()
+                    playing.value = false
+                } else {
+                    val existing = player.value
+                    if (existing != null) {
+                        runCatching { existing.start(); playing.value = true }.onFailure { error.value = true }
+                    } else {
+                        val file = audioFile ?: return@TextButton
+                        loading.value = true
+                        runCatching {
+                            MediaPlayer().also { mp ->
+                                player.value = mp
+                                mp.setDataSource(file.absolutePath)
+                                mp.setOnPreparedListener { ready ->
+                                    loading.value = false
+                                    ready.start()
+                                    playing.value = true
+                                }
+                                mp.setOnCompletionListener { playing.value = false; player.value?.release(); player.value = null }
+                                mp.setOnErrorListener { failed, _, _ ->
+                                    loading.value = false
+                                    playing.value = false
+                                    error.value = true
+                                    failed.release()
+                                    player.value = null
+                                    true
+                                }
+                                mp.prepareAsync()
+                            }
+                        }.onFailure { loading.value = false; error.value = true; player.value?.release(); player.value = null }
+                    }
+                }
+            },
+        ) { Text(when { loading.value -> "Loading audio…"; playing.value -> "Pause audio"; else -> "Play audio" }) }
+        Text(attachment.name, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    if (error.value || (audioFile == null && attachment.base64.isNotBlank())) {
+        Text("Audio unavailable", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.error)
     }
 }
 
