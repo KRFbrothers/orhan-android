@@ -196,8 +196,8 @@ fun HomeScreen(
     onOpenMemorySource: (String, Long) -> Unit = { _, _ -> },
     onOpenArtifacts: () -> Unit = {},
     artifacts: List<Artifact> = emptyList(),
-    onUpsertArtifact: (Artifact) -> Unit = {},
-    onDeleteArtifact: (String) -> Unit = {},
+    onUpsertArtifact: suspend (Artifact) -> Boolean = { false },
+    onDeleteArtifact: suspend (String) -> Boolean = { false },
     artifactCount: Int = 0,
     /** Unread Memory topics. The tab badge uses this count and hides at zero. */
     memoryUpdates: Int = 0,

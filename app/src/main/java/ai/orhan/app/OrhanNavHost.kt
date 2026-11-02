@@ -190,8 +190,8 @@ fun OrhanNavHost(isDark: Boolean) {
                     navController.navigate(AppRoutes.artifacts()) { launchSingleTop = true }
                 },
                 artifacts = artifacts,
-                onUpsertArtifact = { item -> scope.launch { artifactStore.upsert(item) } },
-                onDeleteArtifact = { id -> scope.launch { artifactStore.delete(id) } },
+                onUpsertArtifact = { item -> artifactStore.upsert(item) },
+                onDeleteArtifact = { id -> artifactStore.delete(id) },
                 artifactCount = artifacts.size,
                 memoryUpdates = updatesCount(memoryTopics),
                 onOpenChatPreferences = { navController.openSettingsPage(SettingsRoutes.CHAT_PREFERENCES) },
@@ -254,8 +254,8 @@ fun OrhanNavHost(isDark: Boolean) {
             var pendingOpen by rememberSaveable(requested) { mutableStateOf(requested.ifBlank { null }) }
             ArtifactsScreen(
                 artifacts = artifacts,
-                onUpsert = { a -> scope.launch { artifactStore.upsert(a) } },
-                onDelete = { id -> scope.launch { artifactStore.delete(id) } },
+                onUpsert = { a -> artifactStore.upsert(a) },
+                onDelete = { id -> artifactStore.delete(id) },
                 onBack = { navController.popBackStack() },
                 pendingOpenId = pendingOpen,
                 onPendingOpenConsumed = { pendingOpen = null },
@@ -400,7 +400,11 @@ fun OrhanNavHost(isDark: Boolean) {
                 showActivityCards = chatPrefs.agentActivityCards,
                 previewBeforeSending = chatPrefs.previewBeforeSending,
                 onSaveArtifact = { artTitle, content ->
-                    scope.launch { artifactStore.upsert(artTitle, content) }
+                    scope.launch {
+                        val saved = artifactStore.upsert(artTitle, content)
+                        val notice = if (saved) "Saved to Artifacts" else "Couldn't save this artifact."
+                        android.widget.Toast.makeText(context, notice, android.widget.Toast.LENGTH_LONG).show()
+                    }
                 },
                 onSaveAction = { messageId, text ->
                     scope.launch {

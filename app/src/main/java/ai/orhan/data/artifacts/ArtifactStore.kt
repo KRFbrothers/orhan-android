@@ -5,6 +5,7 @@ import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.Serializer
 import androidx.datastore.dataStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -83,26 +84,48 @@ val Context.artifactsDataStore: DataStore<List<Artifact>> by dataStore(
 fun List<Artifact>.upserted(a: Artifact): List<Artifact> =
     (listOf(a) + filterNot { it.id == a.id }).take(MAX_ARTIFACTS)
 
+/** Case-insensitive title and content search. A blank query keeps the current order. */
+fun List<Artifact>.matching(query: String): List<Artifact> {
+    val needle = query.trim()
+    if (needle.isEmpty()) return this
+    return filter { it.title.contains(needle, ignoreCase = true) || it.content.contains(needle, ignoreCase = true) }
+}
+
 class ArtifactStore(private val dataStore: DataStore<List<Artifact>>) {
     val artifacts: Flow<List<Artifact>> = dataStore.data
         .catch { if (it is IOException) emit(emptyList()) else throw it }
         .map { list -> list.sortedByDescending { it.createdAt } }
 
-    suspend fun upsert(artifact: Artifact) {
-        if (artifact.content.isBlank()) return
+    /**
+     * Inserts or replaces one artifact by id. Blank content is rejected and
+     * nothing is written. A failed write returns false and leaves the saved
+     * list unchanged. The id and created time passed in are kept.
+     */
+    suspend fun upsert(artifact: Artifact): Boolean {
+        if (artifact.content.isBlank()) return false
         val clean = artifact.copy(
             title = artifact.title.trim().ifBlank { artifact.content.trim().take(42) },
             content = artifact.content.take(MAX_ARTIFACT_CONTENT),
         )
-        dataStore.updateData { it.upserted(clean) }
+        return write { it.upserted(clean) }
     }
 
-    suspend fun upsert(title: String, content: String) = upsert(
+    suspend fun upsert(title: String, content: String): Boolean = upsert(
         Artifact(UUID.randomUUID().toString(), title, content, System.currentTimeMillis()),
     )
 
-    suspend fun delete(id: String) {
-        dataStore.updateData { list -> list.filterNot { it.id == id } }
+    /** Removes one artifact. A failed write returns false and keeps the list. */
+    suspend fun delete(id: String): Boolean = write { list -> list.filterNot { it.id == id } }
+
+    private suspend fun write(transform: (List<Artifact>) -> List<Artifact>): Boolean {
+        return try {
+            dataStore.updateData(transform)
+            true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        }
     }
 }
 

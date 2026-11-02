@@ -206,7 +206,11 @@ fun MemoryScreen(
                 onOpenSource = onOpenSource,
                 snackbar = snackbar,
             )
-            page == "artifacts" -> ArtifactsPage(onBack = { page = "home" })
+            page == "artifacts" -> ArtifactsPage(
+                artifacts = artifacts,
+                onBack = { page = "home" },
+                onOpen = onOpenArtifact,
+            )
             page == "meetings" -> MeetingsPage(onBack = { page = "home" })
             else -> TopicHome(
                 topics = topics,
@@ -774,57 +778,23 @@ private fun ActionsPage(
 }
 
 @Composable
-private fun ArtifactsPage(onBack: () -> Unit) {
-    val context = LocalContext.current
-    val store = remember(context) { context.artifactStore() }
-    val artifacts by store.artifacts.collectAsState(initial = emptyList())
-    var openId by rememberSaveable { mutableStateOf<String?>(null) }
-    var editing by rememberSaveable { mutableStateOf(false) }
-    var deleting by remember { mutableStateOf(false) }
-    val open = artifacts.firstOrNull { it.id == openId }
-    val scope = rememberCoroutineScope()
-    if (open != null && editing) {
-        ArtifactDraft(
-            initial = open,
-            onBack = { editing = false },
-            onSave = { title, content ->
-                scope.launch { store.upsert(open.copy(title = title, content = content)) }
-                editing = false
-            },
-        )
-        return
-    }
-    if (open != null) {
-        PageColumn(open.title, onBack = { openId = null }) {
-            Text(memoryTimestamp(open.createdAt, System.currentTimeMillis(), ::relativeTime), style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row {
-                TextButton(onClick = { editing = true }) { Text("Edit") }
-                TextButton(onClick = { deleting = true }) { Text("Delete") }
-            }
-            Text(open.content, style = OrhanTextStyles.bubble, color = MaterialTheme.colorScheme.onBackground)
-        }
-        if (deleting) {
-            ConfirmDelete(
-                title = "Delete artifact?",
-                body = "\"${open.title}\" will be removed from this device.",
-                onDismiss = { deleting = false },
-                onConfirm = {
-                    scope.launch { store.delete(open.id) }
-                    deleting = false
-                    openId = null
-                },
-            )
-        }
-        return
-    }
+private fun ArtifactsPage(
+    artifacts: List<Artifact>?,
+    onBack: () -> Unit,
+    onOpen: (String) -> Unit,
+) {
     PageColumn("My Artifacts", onBack) {
         Text(
             "Documents saved in Orhan. Nothing here is generated from Memory topics.",
             style = OrhanTextStyles.snippet,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (artifacts.isEmpty()) EmptyCopy("No artifacts yet — save a reply from chat, or create a document from the Artifacts tab.")
-        artifacts.forEach { artifact ->
+        if (artifacts == null) {
+            EmptyCopy("Checking the saved documents…")
+        } else if (artifacts.isEmpty()) {
+            EmptyCopy("No artifacts yet — save a reply from chat, or create a document from the Artifacts tab.")
+        }
+        artifacts.orEmpty().forEach { artifact ->
             TopicRow(
                 MemoryTopic(
                     id = artifact.id,
@@ -837,7 +807,7 @@ private fun ArtifactsPage(onBack: () -> Unit) {
                     createdAt = artifact.createdAt,
                     updatedAt = artifact.createdAt,
                 ),
-                onClick = { openId = artifact.id },
+                onClick = { onOpen(artifact.id) },
             )
         }
     }
@@ -1149,23 +1119,6 @@ private fun TodoDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !saving) { Text("Cancel") } },
     )
-}
-
-@Composable
-private fun ArtifactDraft(initial: Artifact, onBack: () -> Unit, onSave: (String, String) -> Unit) {
-    var title by rememberSaveable(initial.id) { mutableStateOf(initial.title) }
-    var content by rememberSaveable(initial.id) { mutableStateOf(initial.content) }
-    PageColumn("Edit document", onBack) {
-        OutlinedTextField(value = title, onValueChange = { title = it.take(MAX_ENTRY_TITLE) }, label = { Text("Title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(
-            value = content,
-            onValueChange = { content = it.take(ai.orhan.data.artifacts.MAX_ARTIFACT_CONTENT) },
-            label = { Text("Content") },
-            minLines = 6,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 160.dp),
-        )
-        TextButton(enabled = content.isNotBlank(), onClick = { onSave(title, content) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Save") }
-    }
 }
 
 @Composable
