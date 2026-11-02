@@ -327,3 +327,88 @@ and the signer SHA-256 remains
 not installed because ADB listed no devices after the AVD shutdown. The next
 phone install target is versionCode 298, which supersedes the pending v297
 reference above.
+
+## Emulator-only continuation — latest — 2026-11-02
+
+The owner made the physical phone unavailable and directed all remaining work
+to the emulator. This section supersedes the phone-reconnection requests above;
+no physical-device connection is required to continue this stage.
+
+### Host, AVD and responsiveness
+
+- Host inspection: Intel Core i3-7100U, 4 logical CPUs, 11.9 GiB visible RAM;
+  initial free RAM was about 2.1 GiB and Windows reported 88% CPU load. The host
+  GPU is Intel HD Graphics 620 (driver 31.0.101.2140, status OK). WHPX was
+  reported usable by `emulator -accel-check` in the same setup.
+- Only the existing `Pixel_8` API 36 Google Play x86_64 AVD was used. It was
+  configured for 2 virtual CPUs and 2048 MiB RAM; `hw.gpu.mode=host` was
+  requested. Runtime inspection showed SwiftShader as the actual GLES renderer
+  (`hardware-qemu.ini` also reported `swiftshader`), so host GPU rendering did
+  not engage. The AVD image is the installed Play Store image; no alternative
+  Google APIs image was present.
+- After boot, serial `emulator-5554` reported `sys.boot_completed=1`; Orhan
+  `ai.orhan` versionCode 298 was installed. A normal warm `MainActivity` launch
+  returned `Status: ok`, `LaunchState: WARM`, `TotalTime: 692 ms`, and
+  `WaitTime: 932 ms`. The activity was resumed and had a live process. The
+  post-launch error-log sample contained no Orhan ANR or fatal exception.
+  This confirms current home-screen responsiveness, not a root-cause diagnosis
+  of the earlier startup ANR.
+- The 4-test instrumentation transcript completed all four cases with
+  `OK (4 tests)`: failed delete retains detail/confirmation; failed save retains
+  title/source/type and permits retry; legacy plain-text sharing is unchanged;
+  typed sharing grants only the source file with expected MIME and bytes. The
+  shell transport nevertheless returned 255 and the transcript ended with
+  `INSTRUMENTATION_CODE: -1`. Record this as 4 passing runner assertions with an
+  abnormal ADB completion status, not a clean Gradle connected-test result.
+  This exact command was not retried.
+- The AVD was stopped using `adb -s emulator-5554 emu kill` before Gradle ran.
+  After shutdown free host RAM returned to about 4.2 GiB; there was no emulator
+  process during Gradle verification.
+
+### Current checks and evidence separation
+
+- Fresh repository-root command:
+  `./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain`
+  completed **BUILD SUCCESSFUL** in 4m22s (54 actionable tasks; 11 executed,
+  43 up-to-date). The fresh unit XML is **35 suites, 155 tests, 0 failures,
+  0 errors, 0 skipped**. Artifact migration, rendering, store, typed model,
+  editor state and write-failure-preservation tests are included.
+- `assembleDebug` was **UP-TO-DATE** in that run; the APK remains the existing
+  `ai.orhan` 0.2.0/versionCode **298** build with SHA-256
+  `E4D6BDFF52E2E92EFF91A02BE6DEFAB0CEC9A3C008977B80638593A1C9D3D380`.
+  The emulator package metadata read back versionCode 298. This run does not
+  claim a newly packaged binary.
+- Fresh lint report (`app/build/reports/lint-results-debug.xml`, 14:49 local):
+  **0 errors, 50 warnings** (same warning count as prior reports).
+- Instrumentation result is separate from those unit/build/lint checks and is
+  recorded in the ignored local file `captures/artifacts-typed/instrumentation.txt`.
+- A direct emulator screenshot `captures/artifacts-typed/emulator-v298-home.png`
+  shows the actual app home after tests and a successful relaunch. The earlier
+  `emulator-v298-home.png` and `emulator-after-instrument.png` captures were
+  visually inspected; both show the home screen, not an artifact flow. They are
+  local ignored captures, not committed evidence. Screenshot capture did not
+  run inside the instrumentation process.
+
+### Artifact UI limitation and next slice
+
+Manual Markdown/HTML entry and the full create/edit/delete, Memory shortcut,
+restart, export/share device flows remain **pending** on this emulator. The
+previous synthetic UI attempt was blocked when Gboard opened its stylus
+handwriting tutorial over text fields; ADB text injection did not populate the
+title/source and no artifact was saved. This is an emulator input-method
+limitation, not a passing UI check. There is no physical phone to fall back to.
+
+Next actionable Artifacts slice: remove the emulator's stylus-handwriting input
+obstruction or establish a normal keyboard input path, then create synthetic
+Markdown and HTML in the app and verify preview, original-source share/export,
+edit/delete, Memory's My Artifacts shortcut and restart persistence. Capture
+each UI result separately from automated test output. Do not seed records by
+rewriting the app's history file.
+
+The actual GLES renderer remains SwiftShader and the host was under high
+background CPU load, so future emulator work should continue with only one AVD
+and no Gradle/build work during AVD startup. Focused instrumentation assertions
+passed in the recorded runner output; manual typed-artifact UI checks remain
+pending. Live agent-reply save still requires ordinary sign-in. DOCX/media,
+saved-message semantics and hosted-share access behavior remain unverified.
+Agents stage has not started.
