@@ -454,7 +454,6 @@ fun ChatScreen(
                     agentName.ifBlank { actionMessage.text.take(42) },
                     actionMessage.text,
                 )
-                Toast.makeText(context, "Saved to Artifacts", Toast.LENGTH_SHORT).show()
                 actionMessageId = null
             },
             onSaveAction = {

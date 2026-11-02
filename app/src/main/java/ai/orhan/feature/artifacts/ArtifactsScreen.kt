@@ -28,13 +28,21 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
@@ -45,6 +53,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ai.orhan.data.artifacts.Artifact
 import ai.orhan.data.artifacts.MAX_ARTIFACT_CONTENT
+import ai.orhan.data.artifacts.artifactListPreferences
+import ai.orhan.data.artifacts.matching
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.layout.heightIn
@@ -58,8 +68,8 @@ import java.util.Date
 @Composable
 fun ArtifactsScreen(
     artifacts: List<Artifact>,
-    onUpsert: (Artifact) -> Unit,
-    onDelete: (String) -> Unit,
+    onUpsert: suspend (Artifact) -> Boolean,
+    onDelete: suspend (String) -> Boolean,
     onBack: () -> Unit,
     /** True when shown under the home tabs, which already inset the status bar. */
     embedded: Boolean = false,
@@ -91,11 +101,14 @@ fun ArtifactsScreen(
             onCancel = close,
             applyStatusBarPadding = !embedded,
             onSave = { title, content ->
-                onUpsert(
+                val saved = onUpsert(
                     Artifact(editing, title, content, existing?.createdAt ?: System.currentTimeMillis()),
                 )
-                openId = editing
-                editId = null
+                if (saved) {
+                    openId = editing
+                    editId = null
+                }
+                saved
             },
         )
         return
@@ -107,11 +120,21 @@ fun ArtifactsScreen(
             open,
             onBack = { openId = null },
             onEdit = { editId = open.id },
-            onDelete = { onDelete(open.id); openId = null },
+            onDelete = {
+                val removed = onDelete(open.id)
+                if (removed) openId = null
+                removed
+            },
             applyStatusBarPadding = !embedded,
         )
         return
     }
+    val context = LocalContext.current
+    val listPrefs = remember(context) { context.artifactListPreferences() }
+    val largePreview by listPrefs.largePreview.collectAsStateWithLifecycle(initialValue = false)
+    val scope = rememberCoroutineScope()
+    var switchingLayout by remember { mutableStateOf(false) }
+    var layoutError by rememberSaveable { mutableStateOf<String?>(null) }
     SettingsDetailScaffold(
         title = "Artifacts",
         onBack = onBack,
@@ -119,12 +142,7 @@ fun ArtifactsScreen(
         applyStatusBarPadding = !embedded,
     ) {
         val colors = OrhanTheme.colors
-        val shown = artifacts
-            .filter {
-                filter.isBlank() || it.title.contains(filter, ignoreCase = true) ||
-                    it.content.contains(filter, ignoreCase = true)
-            }
-            .sortedByDescending { it.createdAt }
+        val shown = artifacts.matching(filter).sortedByDescending { it.createdAt }
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -163,11 +181,46 @@ fun ArtifactsScreen(
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surface)
                     .border(1.dp, colors.fieldEdge, CircleShape)
+                    .semantics { stateDescription = if (largePreview) "Large preview" else "Compact" }
+                    .clickable(role = Role.Button, enabled = !switchingLayout) {
+                        if (switchingLayout) return@clickable
+                        switchingLayout = true
+                        layoutError = null
+                        val next = !largePreview
+                        scope.launch {
+                            try {
+                                val saved = listPrefs.setLargePreview(next)
+                                if (!saved) layoutError = "Couldn't change the layout."
+                            } finally {
+                                switchingLayout = false
+                            }
+                        }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.GridView, contentDescription = "Switch layout", tint = MaterialTheme.colorScheme.onSurface)
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, colors.fieldEdge, CircleShape)
                     .clickable { editId = UUID.randomUUID().toString() },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(Icons.Rounded.Add, contentDescription = "New document", tint = MaterialTheme.colorScheme.onSurface)
             }
+        }
+        val layoutMessage = layoutError
+        if (layoutMessage != null) {
+            Text(
+                layoutMessage,
+                style = OrhanTextStyles.snippet,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(bottom = 8.dp, start = 4.dp),
+            )
         }
         if (artifacts.isEmpty()) {
             Text(
@@ -185,44 +238,92 @@ fun ArtifactsScreen(
             )
         }
         shown.forEach { a ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 6.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, colors.hairline, RoundedCornerShape(16.dp))
-                    .clickable { openId = a.id }
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.brandSoft),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Rounded.Description, contentDescription = null, tint = colors.onBrandSoft)
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        a.title.ifBlank { "Untitled" },
-                        style = OrhanTextStyles.rowTitle,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        formatDate(a.createdAt),
-                        style = OrhanTextStyles.meta,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
+            if (largePreview) {
+                LargeArtifactPreview(a, onOpen = { openId = a.id })
+            } else {
+                CompactArtifactRow(a, onOpen = { openId = a.id })
             }
         }
+    }
+}
+
+@Composable
+private fun CompactArtifactRow(a: Artifact, onOpen: () -> Unit) {
+    val colors = OrhanTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, colors.hairline, RoundedCornerShape(16.dp))
+            .clickable(onClick = onOpen)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(colors.brandSoft),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Rounded.Description, contentDescription = null, tint = colors.onBrandSoft)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                a.title.ifBlank { "Untitled" },
+                style = OrhanTextStyles.rowTitle,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                formatDate(a.createdAt),
+                style = OrhanTextStyles.meta,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
+}
+
+/** Larger card for a plain-text document. The body is the saved text, not a web or media preview. */
+@Composable
+private fun LargeArtifactPreview(a: Artifact, onOpen: () -> Unit) {
+    val colors = OrhanTheme.colors
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .heightIn(min = 148.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, colors.hairline, RoundedCornerShape(20.dp))
+            .clickable(onClick = onOpen)
+            .padding(16.dp),
+    ) {
+        Text(
+            a.title.ifBlank { "Untitled" },
+            style = OrhanTextStyles.rowTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            formatDate(a.createdAt),
+            style = OrhanTextStyles.meta,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+        )
+        Text(
+            a.content,
+            style = OrhanTextStyles.snippet,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 6,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -231,18 +332,43 @@ private fun ArtifactDetail(
     a: Artifact,
     onBack: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit,
+    onDelete: suspend () -> Boolean,
     applyStatusBarPadding: Boolean = true,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var confirm by rememberSaveable { mutableStateOf(false) }
+    var deleting by rememberSaveable { mutableStateOf(false) }
+    var deleteError by rememberSaveable { mutableStateOf<String?>(null) }
     if (confirm) {
         AlertDialog(
-            onDismissRequest = { confirm = false },
+            onDismissRequest = { if (!deleting) confirm = false },
             title = { Text("Delete artifact?") },
-            text = { Text("\u201c${a.title}\u201d will be removed from this device.") },
-            confirmButton = { TextButton(onClick = { confirm = false; onDelete() }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
+            text = {
+                Text(deleteError ?: "\u201c${a.title}\u201d will be removed from this device.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (deleting) return@TextButton
+                        deleting = true
+                        scope.launch {
+                            val removed = onDelete()
+                            deleting = false
+                            if (removed) {
+                                deleteError = null
+                                confirm = false
+                            } else {
+                                deleteError = "Couldn't delete this document. It is still saved on this device."
+                            }
+                        }
+                    },
+                    enabled = !deleting,
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirm = false }, enabled = !deleting) { Text("Cancel") }
+            },
         )
     }
     SettingsDetailScaffold(title = a.title, onBack = onBack, applyStatusBarPadding = applyStatusBarPadding) {
@@ -272,11 +398,14 @@ private fun ArtifactDetail(
 private fun ArtifactEditor(
     initial: Artifact?,
     onCancel: () -> Unit,
-    onSave: (String, String) -> Unit,
+    onSave: suspend (String, String) -> Boolean,
     applyStatusBarPadding: Boolean = true,
 ) {
+    val scope = rememberCoroutineScope()
     var title by rememberSaveable { mutableStateOf(initial?.title.orEmpty()) }
     var content by rememberSaveable { mutableStateOf(initial?.content.orEmpty()) }
+    var saving by rememberSaveable { mutableStateOf(false) }
+    var saveError by rememberSaveable { mutableStateOf<String?>(null) }
     SettingsDetailScaffold(
         title = if (initial == null) "New document" else "Edit document",
         onBack = onCancel,
@@ -296,9 +425,32 @@ private fun ArtifactEditor(
             supportingText = { Text("${content.length} / $MAX_ARTIFACT_CONTENT") },
             modifier = Modifier.fillMaxWidth().heightIn(min = 240.dp).padding(vertical = 4.dp),
         )
+        val message = saveError
+        if (message != null) {
+            Text(
+                message,
+                style = OrhanTextStyles.snippet,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
-            Button(onClick = { onSave(title, content) }, enabled = content.isNotBlank()) { Text("Save") }
-            OutlinedButton(onClick = onCancel) { Text("Cancel") }
+            Button(
+                onClick = {
+                    if (saving) return@Button
+                    saving = true
+                    saveError = null
+                    scope.launch {
+                        val saved = onSave(title, content)
+                        saving = false
+                        if (!saved) {
+                            saveError = "Couldn't save this document. Your edits are still here."
+                        }
+                    }
+                },
+                enabled = content.isNotBlank() && !saving,
+            ) { Text("Save") }
+            OutlinedButton(onClick = onCancel, enabled = !saving) { Text("Cancel") }
         }
     }
 }
