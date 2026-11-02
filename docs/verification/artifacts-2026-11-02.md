@@ -503,3 +503,39 @@ repair. Android Studio's live Device Manager UI could not be reopened because
 the Computer Use approval review rejected Android Studio UI access, so UI
 refresh and the new-AVD flow are not yet confirmed. The root parse error is
 fixed; runtime responsiveness and artifact-flow checks remain pending.
+
+### Post-repair CLI boot and focused Artifacts checks
+
+The repaired config was byte-checked (no `EF BB BF` prefix; first line
+`AvdId=Pixel_8`), and `emulator -list-avds` returned only `Pixel_8`. Host
+inspection before launch showed 4 logical CPUs, 33% CPU load and about 2.83
+GiB free RAM. One Pixel_8 API 36 emulator was started with 2 vCPUs and a
+1536 MiB RAM request; every ADB operation used explicit serial
+`emulator-5554`. `sys.boot_completed=1`, `ro.kernel.qemu=1`, and SDK 36 were
+read back. The existing package read back as `ai.orhan` versionCode 299; this
+was the same latest local APK already present from the prior install.
+
+After a 15-second post-boot settle, `am start -W -n ai.orhan/.MainActivity`
+returned `Status: timeout`, `WaitTime: 28878`, and `LaunchState: UNKNOWN (-1)`.
+The process existed and was top-resumed, but that does not establish app/touch
+responsiveness. Runtime `hardware-qemu.ini` still reported 2560 MiB, 1080×2400
+at 420 dpi, and SwiftShader despite the 1536 MiB launch request. At the timeout,
+qemu used about 3.07 GiB host working set, free host RAM was about 0.49 GiB and
+CPU load was 69%. The sampled log contained ActivityManager CPU summaries for
+`ai.orhan`; it did not contain a fresh explicit ANR record. The emulator was
+stopped; qemu exited and free host RAM returned to about 4.05 GiB. No UI
+screenshot was captured in this attempt and no Artifacts UI action was taken.
+
+Separately, with the emulator stopped, the six focused JVM Artifacts suites
+were freshly executed: **19 tests, 0 failures, 0 errors** across migration,
+layout preferences, rendering, store, typed serialization and editor state.
+These pass the local behavior assertions but do not resolve the emulator
+launch timeout or the abnormal instrumentation transport result. The
+instrumentation command was not repeated.
+
+The latest local APK remained v299 (SHA-256
+`2BAE04DB15A396DB5515B8ECA09183C0284C580851762042D1A81A9820C8FBAE`); app
+source has not changed since that build. No fresh install was sent during this
+boot because responsiveness had not been established. Next: diagnose the
+effective guest RAM/rendering settings after the repaired AVD read, then
+confirm a warm launch and touch response before installing/running UI checks.
