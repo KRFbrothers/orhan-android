@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.orhan.design.screens.HomeScreen
 import ai.orhan.design.screens.OrhanChat
+import ai.orhan.design.screens.ChatSearchMessage
 import ai.orhan.data.history.recentChats
 import ai.orhan.data.history.pinnedChats
 import ai.orhan.data.agents.AgentSaveNav
@@ -157,8 +158,26 @@ fun OrhanNavHost(isDark: Boolean) {
                 deletableAgentNames = savedAgents.map { it.name }.toSet(),
                 onDeleteAgent = { agent -> agentStore.delete(agent.name) },
                 recentChats = recent.map {
-                    val lastText = threads.firstOrNull { t -> t.title == it.title }?.messages?.lastOrNull()?.text
-                    OrhanChat(it.title, previewSnippet(lastText), relativeTime(it.openedAt), isAgent = true)
+                    val savedThread = threads.firstOrNull { t -> t.title == it.title }
+                    val lastText = savedThread?.messages?.lastOrNull()?.text
+                    OrhanChat(
+                        it.title,
+                        previewSnippet(lastText),
+                        relativeTime(it.openedAt),
+                        isAgent = true,
+                        searchableMessages = savedThread?.messages.orEmpty().map { message -> ChatSearchMessage(message.id, message.text) },
+                    )
+                },
+                searchChats = threads.map { savedThread ->
+                    val openedAt = recent.firstOrNull { it.title == savedThread.title }?.openedAt ?: savedThread.updatedAt
+                    val lastText = savedThread.messages.lastOrNull()?.text
+                    OrhanChat(
+                        savedThread.title,
+                        previewSnippet(lastText),
+                        relativeTime(openedAt),
+                        isAgent = true,
+                        searchableMessages = savedThread.messages.map { message -> ChatSearchMessage(message.id, message.text) },
+                    )
                 },
                 pinnedTitles = pinnedTitles,
                 onTogglePin = { chat -> scope.launch { pinRepo.toggle(chat.title) } },
@@ -173,6 +192,11 @@ fun OrhanNavHost(isDark: Boolean) {
                     val t = canon(it.title)
                     scope.launch { recentRepo.recordOpened(t) }
                     navController.navigate(AppRoutes.chat(t))
+                },
+                onOpenChatSearchResult = { chat, messageId ->
+                    val t = canon(chat.title)
+                    scope.launch { recentRepo.recordOpened(t) }
+                    navController.navigate(AppRoutes.chat(t, messageId = messageId))
                 },
                 onOpenSettings = {
                     navController.navigate(SettingsRoutes.SETTINGS) { launchSingleTop = true }

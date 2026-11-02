@@ -124,7 +124,11 @@ data class OrhanChat(
     val members: Int = 0,
     val unread: Int = 0,
     val working: Boolean = false,
+    /** Persisted local message text used by chat-wide search; never uploaded for indexing. */
+    val searchableMessages: List<ChatSearchMessage> = emptyList(),
 )
+
+data class ChatSearchMessage(val id: Long, val text: String)
 
 /** An agent card \u2014 name, what it does, its current state. */
 data class OrhanAgent(
@@ -213,6 +217,8 @@ fun HomeScreen(
     profile: UserProfile = UserProfile(),
     /** Recently opened chats (local history), newest first; shown above the samples. */
     recentChats: List<OrhanChat> = emptyList(),
+    /** Every locally persisted conversation, including older threads outside the recent list. */
+    searchChats: List<OrhanChat> = recentChats,
     /** Titles of pinned chats (persisted locally). */
     pinnedTitles: Set<String> = emptySet(),
     onTogglePin: (OrhanChat) -> Unit = {},
@@ -229,6 +235,7 @@ fun HomeScreen(
     onEditWorkflow: (ai.orhan.data.workflows.Workflow) -> Unit = {},
     onDeleteWorkflow: ((ai.orhan.data.workflows.Workflow) -> Unit)? = null,
     onOpenPlaybook: (ai.orhan.feature.discover.Playbook) -> Unit = {},
+    onOpenChatSearchResult: ((OrhanChat, Long) -> Unit)? = null,
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
     var profileOpen by rememberSaveable { mutableStateOf(false) }
@@ -237,13 +244,18 @@ fun HomeScreen(
     if (searchOpen) {
         BackHandler { searchOpen = false }
         LocalSearchScreen(
-            chats = recentChats,
+            chats = searchChats,
             agents = agents,
             artifacts = artifacts,
             onCancel = { searchOpen = false },
             onOpenChat = { chat ->
                 searchOpen = false
                 onOpenChat(chat)
+            },
+            onOpenChatMessage = { chat, messageId ->
+                searchOpen = false
+                val openResult = onOpenChatSearchResult
+                if (openResult != null) openResult(chat, messageId) else onOpenChat(chat)
             },
             onOpenAgent = { agent ->
                 searchOpen = false
