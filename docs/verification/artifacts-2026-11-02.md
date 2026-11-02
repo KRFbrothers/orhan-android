@@ -484,3 +484,22 @@ SDK has no `cmdline-tools`/`avdmanager`, so a second AVD could not be created
 through the installed tools in this run. Next step is to use an approved
 Device Manager path or install Android's command-line AVD management tooling,
 then inspect the generated runtime settings before testing.
+
+### Android Device Manager config parse repair
+
+Follow-up inspection found the concrete Device Manager setup error in the
+active Android Studio `idea.log`: `AvdManager` repeatedly rejected
+`Pixel_8.avd/config.ini` because its first line parsed as
+`"ï»¿AvdId=Pixel_8"` (invalid syntax). The prior PowerShell
+`Set-Content -Encoding utf8` edits had inserted the UTF-8 BOM bytes `EF BB BF`.
+This was the cause of the Device Manager config parse warnings.
+
+Before repair, a byte-for-byte backup was saved beside the AVD config as
+`config.ini.pre-device-manager-bom-20261102.bak`. Only those three BOM bytes
+were removed; the existing 2-core/2048 MiB, 1080×2400/420 dpi and host-GPU
+settings were preserved. The repaired file begins with `AvdId=Pixel_8`, and
+`emulator -list-avds` lists `Pixel_8`. No emulator was running during this
+repair. Android Studio's live Device Manager UI could not be reopened because
+the Computer Use approval review rejected Android Studio UI access, so UI
+refresh and the new-AVD flow are not yet confirmed. The root parse error is
+fixed; runtime responsiveness and artifact-flow checks remain pending.
