@@ -2,6 +2,7 @@ package ai.orhan.feature.workflows
 
 import ai.orhan.data.workflows.WORKFLOW_MAX_CONTENT
 import ai.orhan.data.workflows.Workflow
+import ai.orhan.data.workflows.WorkflowRun
 import ai.orhan.feature.settings.detail.FootNote
 import ai.orhan.feature.settings.detail.SectionLabel
 import ai.orhan.feature.settings.detail.SettingsDetailScaffold
@@ -36,8 +37,10 @@ import kotlinx.coroutines.launch
 @Composable
 fun WorkflowEditorScreen(
     existing: Workflow?,
+    runs: List<WorkflowRun> = emptyList(),
     agentNames: List<String>,
     onBack: () -> Unit,
+    onOpenRunChat: (String) -> Unit = {},
     onSave: suspend (Workflow) -> Boolean,
     onDelete: (suspend (Workflow) -> Boolean)? = null,
 ) {
@@ -106,7 +109,16 @@ fun WorkflowEditorScreen(
         if (agent.isNotBlank() && agentNames.none { it.equals(agent, ignoreCase = true) }) {
             FootNote("Saved agent \"$agent\" is unavailable. Choose Default or an available agent before opening this workflow.")
         }
-        FootNote("Opening a workflow starts a chat with the prompt ready to send.")
+        FootNote("Open prepares a chat draft. Run sends the prompt immediately and records its outcome in run history.")
+        if (existing != null && runs.isNotEmpty()) {
+            SectionLabel("Run history")
+            runs.take(10).forEach { run ->
+                TextButton(onClick = { onOpenRunChat(run.chatTitle) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Text("${run.status.name.lowercase().replace('_', ' ')} · ${run.agentName} · ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(run.startedAt))}")
+                }
+                run.error?.let { FootNote(it) }
+            }
+        }
         writeError?.takeIf { !confirmDelete }?.let { FootNote(it) }
         Spacer(Modifier.height(24.dp))
         Button(

@@ -81,6 +81,8 @@ import ai.orhan.data.chat.ChatRepository
 import ai.orhan.feature.artifacts.ArtifactsScreen
 import ai.orhan.data.workflows.workflowStore
 import ai.orhan.data.workflows.resolveWorkflowAgentName
+import ai.orhan.data.workflows.WorkflowRunStatus
+import ai.orhan.data.workflows.workflowRunStore
 import ai.orhan.feature.workflows.WorkflowEditorScreen
 
 /** Top-level routes. Settings routes live in [SettingsRoutes]. */
@@ -97,9 +99,9 @@ object AppRoutes {
     const val ARTIFACTS = "artifacts?open={open}"
     fun artifacts(openId: String = ""): String =
         if (openId.isBlank()) "artifacts" else "artifacts?open=${Uri.encode(openId)}"
-    const val CHAT = "chat/{title}?draft={draft}&message={message}"
-    fun chat(title: String, draft: String = "", messageId: Long = 0L) =
-        "chat/${Uri.encode(title)}?draft=${Uri.encode(draft)}&message=$messageId"
+    const val CHAT = "chat/{title}?draft={draft}&message={message}&run={run}"
+    fun chat(title: String, draft: String = "", messageId: Long = 0L, runId: String = "") =
+        "chat/${Uri.encode(title)}?draft=${Uri.encode(draft)}&message=$messageId&run=${Uri.encode(runId)}"
     const val WORKFLOW_EDIT = "workflow_edit?id={id}"
     fun workflowEdit(id: String? = null) = if (id == null) "workflow_edit" else "workflow_edit?id=${Uri.encode(id)}"
 }
@@ -141,6 +143,9 @@ fun OrhanNavHost(isDark: Boolean) {
     val artifacts by artifactStore.artifacts.collectAsStateWithLifecycle(initialValue = emptyList())
     val workflowStore = remember(context) { context.workflowStore() }
     val workflows by workflowStore.workflows.collectAsStateWithLifecycle(initialValue = emptyList())
+    val workflowRunStore = remember(context) { context.workflowRunStore() }
+    val workflowRuns by workflowRunStore.runs.collectAsStateWithLifecycle(initialValue = emptyList())
+    LaunchedEffect(workflowRunStore) { workflowRunStore.interruptOrphanedRuns() }
     val personalMemory by memoryStore.memory.collectAsStateWithLifecycle(initialValue = "")
     // Missing key stays not-paused, matching the installed preference. A failed
     // read makes [MemoryPauseStore.paused] true so personal context is withheld.
@@ -223,6 +228,30 @@ fun OrhanNavHost(isDark: Boolean) {
                     { scope.launch { homeAuth.signOut() } }
                 } else null,
                 workflows = workflows,
+                onRunWorkflow = { wf ->
+                    val requested = wf.agentName.trim()
+                    val linked = wf.agentId?.let { id -> savedAgents.firstOrNull { it.id == id } }
+                    val legacyMatch = if (wf.agentId == null) savedAgents.firstOrNull { it.name.equals(requested, ignoreCase = true) } else null
+                    val selected = linked ?: legacyMatch
+                    val isDefault = wf.agentId == null && (requested.isBlank() || requested.equals("Orhan", ignoreCase = true))
+                    val chatTitle = selected?.name ?: if (isDefault) "Orhan" else requested
+                    scope.launch {
+                        val run = try { workflowRunStore.start(if (selected != null) wf.copy(agentId = selected.id) else wf, chatTitle, chatTitle) }
+                        catch (cancel: CancellationException) { throw cancel }
+                        catch (_: Exception) {
+                            android.widget.Toast.makeText(context, "Workflow run could not be saved.", android.widget.Toast.LENGTH_LONG).show()
+                            return@launch
+                        }
+                        if (!isDefault && selected == null) {
+                            workflowRunStore.update(run.id, WorkflowRunStatus.FAILED, "The selected agent is missing or was deleted. Edit this workflow to choose an available saved agent.")
+                            android.widget.Toast.makeText(context, "Workflow could not run: selected agent is unavailable.", android.widget.Toast.LENGTH_LONG).show()
+                        } else {
+                            if (wf.agentId == null && selected != null) runCatching { workflowStore.upsert(wf.copy(agentId = selected.id)) }
+                            scope.launch { recentRepo.recordOpened(chatTitle) }
+                            navController.navigate(AppRoutes.chat(chatTitle, wf.content, runId = run.id))
+                        }
+                    }
+                },
                 onOpenWorkflow = { wf ->
                     val available = mergeWithSamples(savedAgents.map { it.toInstalledAgent(agentAvatars) }).map { it.name }
                     val titleMatchedAgent = savedAgents.firstOrNull { it.name.equals(wf.agentName, ignoreCase = true) }
@@ -314,8 +343,10 @@ fun OrhanNavHost(isDark: Boolean) {
             val existing = id?.let { wid -> workflows.firstOrNull { it.id == wid } }
             WorkflowEditorScreen(
                 existing = existing,
-                agentNames = mergeWithSamples(savedAgents.map { it.toInstalledAgent(agentAvatars) }).map { it.name },
+                runs = workflowRuns.filter { it.workflowId == existing?.id },
+                agentNames = savedAgents.map { it.name },
                 onBack = { navController.popBackStack() },
+                onOpenRunChat = { runChat -> navController.navigate(AppRoutes.chat(runChat)) },
                 onSave = { wf ->
                     val selected = savedAgents.firstOrNull { it.name.equals(wf.agentName, ignoreCase = true) }
                     workflowStore.upsert(wf.copy(agentId = if (wf.agentName.isBlank()) null else selected?.id ?: wf.agentId))
@@ -426,6 +457,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 navArgument("title") { type = NavType.StringType },
                 navArgument("draft") { type = NavType.StringType; defaultValue = "" },
                 navArgument("message") { type = NavType.StringType; defaultValue = "0" },
+                navArgument("run") { type = NavType.StringType; defaultValue = "" },
             ),
         ) { entry ->
             val auth = remember(context) { AuthRepository.get(context) }
@@ -446,8 +478,45 @@ fun OrhanNavHost(isDark: Boolean) {
             val chatViewModel: ChatViewModel = viewModel { ChatViewModel(context as Application) }
             val chat by chatViewModel.state.collectAsStateWithLifecycle()
             val title = canon(entry.arguments?.getString("title").orEmpty())
+            val workflowRunId = entry.arguments?.getString("run").orEmpty()
+            val workflowRun = workflowRuns.firstOrNull { it.id == workflowRunId }
+            var observedWorkflowBusy by rememberSaveable(workflowRunId) { mutableStateOf(false) }
+            var workflowCancelRequested by rememberSaveable(workflowRunId) { mutableStateOf(false) }
             LaunchedEffect(title) { chatViewModel.loadThread(title) }
-            val threadAgentId = threads.firstOrNull { it.title == title }?.agentId ?: chat.agentId
+            LaunchedEffect(workflowRunId, chat.threadRestored, workflowRun?.status) {
+                if (workflowRunId.isNotBlank() && chat.threadRestored && workflowRun?.status == WorkflowRunStatus.QUEUED) {
+                    val run = workflowRun ?: return@LaunchedEffect
+                    val currentAgentExists = (run.agentId == null && run.agentName.equals("Orhan", ignoreCase = true)) ||
+                        savedAgents.any { saved ->
+                            if (run.agentId != null) saved.id == run.agentId
+                            else saved.name.equals(run.agentName, ignoreCase = true)
+                        }
+                    when {
+                        !currentAgentExists -> workflowRunStore.update(workflowRunId, WorkflowRunStatus.FAILED, "The selected agent is missing or was deleted before this run started.")
+                        chat.busy -> workflowRunStore.update(workflowRunId, WorkflowRunStatus.FAILED, "This chat already has a request in progress. Run the workflow again when it finishes.")
+                        else -> {
+                            workflowRunStore.update(workflowRunId, WorkflowRunStatus.RUNNING)
+                            chatViewModel.send(entry.arguments?.getString("draft").orEmpty())
+                        }
+                    }
+                }
+            }
+            LaunchedEffect(workflowRunId, chat.busy, chat.error, workflowRun?.status) {
+                if (workflowRunId.isBlank() || workflowRun == null || workflowRun.status in setOf(
+                        WorkflowRunStatus.SUCCEEDED, WorkflowRunStatus.FAILED, WorkflowRunStatus.CANCELLED, WorkflowRunStatus.INTERRUPTED,
+                    )) return@LaunchedEffect
+                if (chat.busy) observedWorkflowBusy = true
+                else if (observedWorkflowBusy) {
+                    val status = when {
+                        workflowCancelRequested -> WorkflowRunStatus.CANCELLED
+                        chat.error != null -> WorkflowRunStatus.FAILED
+                        else -> WorkflowRunStatus.SUCCEEDED
+                    }
+                    workflowRunStore.update(workflowRunId, status, chat.error)
+                    observedWorkflowBusy = false
+                }
+            }
+            val threadAgentId = workflowRun?.agentId ?: threads.firstOrNull { it.title == title }?.agentId ?: chat.agentId
             val agent = if (threadAgentId != null) savedAgents.firstOrNull { it.id == threadAgentId }
                 else savedAgents.firstOrNull { it.name.equals(title, ignoreCase = true) }
             val missingSavedAgent = !title.equals("Orhan", ignoreCase = true) && agent == null
@@ -511,7 +580,13 @@ fun OrhanNavHost(isDark: Boolean) {
                     else chatViewModel.send(text, file)
                 },
                 onRetry = chatViewModel::retry,
-                onStopGeneration = { chatViewModel.stop() },
+                onStopGeneration = {
+                    if (workflowRunId.isNotBlank() && workflowRun?.status == WorkflowRunStatus.RUNNING) {
+                        workflowCancelRequested = true
+                        scope.launch { workflowRunStore.update(workflowRunId, WorkflowRunStatus.CANCELLED, "Cancelled by the user.") }
+                    }
+                    chatViewModel.stop()
+                },
                 sendWithEnter = chatPrefs.sendWithEnter,
                 showTypingIndicator = chatPrefs.typingIndicators,
                 showActivityCards = chatPrefs.agentActivityCards,
@@ -550,7 +625,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 },
                 onTranslateMessage = { text -> chatViewModel.translateMessage(text, languageName(languagePrefs.code)) },
                 onTranscribeAudio = chatViewModel::transcribeAudio,
-                initialComposerText = entry.arguments?.getString("draft").orEmpty(),
+                initialComposerText = if (workflowRunId.isBlank()) entry.arguments?.getString("draft").orEmpty() else "",
                 focusMessageId = entry.arguments?.getString("message")?.toLongOrNull() ?: 0L,
                 threadRestored = chat.threadRestored,
                 onOpenChatPreferences = { navController.openSettingsPage(SettingsRoutes.CHAT_PREFERENCES) },
