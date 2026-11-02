@@ -201,13 +201,19 @@ class ChatRepository(
             transcript = result.json?.optString("transcript")?.trim()?.takeIf(String::isNotEmpty)
                 ?: throw IOException("The configured transcription provider returned no transcript.")
         } catch (failure: Throwable) {
-            storedPath?.let { path -> runCatching { deleteStoredUpload(apiBase, jwt, path) }.onFailure(failure::addSuppressed) }
+            val cleanupFailure = storedPath?.let { path -> runCatching { deleteStoredUpload(apiBase, jwt, path) }.exceptionOrNull() }
+            if (cleanupFailure != null) {
+                failure.addSuppressed(cleanupFailure)
+                if (failure !is kotlinx.coroutines.CancellationException) {
+                    throw IOException("${failure.message ?: "Transcription failed."} The temporary audio file may still be stored; check File storage.", failure)
+                }
+            }
             throw failure
         }
         try {
             deleteStoredUpload(apiBase, jwt, storedPath!!)
         } catch (failure: Throwable) {
-            throw IOException("Transcription finished, but its temporary private audio file could not be removed. Retry after checking File storage.", failure)
+            throw IOException("Transcription finished, but removal of its temporary private audio file was not confirmed. Check File storage before retrying.", failure)
         }
         return transcript
     }
