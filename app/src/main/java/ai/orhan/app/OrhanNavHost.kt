@@ -42,6 +42,7 @@ import ai.orhan.feature.settings.detail.chatPreferences
 import ai.orhan.feature.auth.SignInScreen
 import ai.orhan.feature.auth.SignInViewModel
 import ai.orhan.feature.chat.ChatViewModel
+import ai.orhan.feature.chat.explicitAgentMention
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.orhan.design.screens.HomeScreen
@@ -412,10 +413,11 @@ fun OrhanNavHost(isDark: Boolean) {
             val agent = savedAgents.firstOrNull { it.name.equals(title, ignoreCase = true) }
             val missingSavedAgent = !title.equals("Orhan", ignoreCase = true) && agent == null
             val persona = chatPersonaName(title, savedAgents.map { it.name })
+            val mentionRoster = savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions) }
             chatViewModel.setAgent(persona, agent?.instructions.orEmpty())
             chatViewModel.setRoster(
                 if (agent != null && !missingSavedAgent) emptyList()
-                else savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions) },
+                else mentionRoster,
             )
             chatViewModel.setPersonalMemory(personalMemory, memoryPaused)
             chatViewModel.setTopicContext(
@@ -443,8 +445,17 @@ fun OrhanNavHost(isDark: Boolean) {
                 activityLabel = chat.activityLabel,
                 error = chat.error,
                 systemNotice = if (missingSavedAgent) "This saved agent is unavailable; new replies in this retained conversation use Orhan. The existing history is preserved." else null,
-                onSendMessage = { chatViewModel.send(it) },
-                onSendAttachment = { text, file -> chatViewModel.send(text, file) },
+                agentMentions = if (title.equals("Orhan", ignoreCase = true)) mentionRoster.map { it.name } else emptyList(),
+                onSendMessage = { text ->
+                    val mention = explicitAgentMention(text, mentionRoster)
+                    if (title.equals("Orhan", true) && mention != null) chatViewModel.sendToAgent(text, mention.first, mention.second)
+                    else chatViewModel.send(text)
+                },
+                onSendAttachment = { text, file ->
+                    val mention = explicitAgentMention(text, mentionRoster)
+                    if (title.equals("Orhan", true) && mention != null) chatViewModel.sendToAgent(text, mention.first, mention.second, file)
+                    else chatViewModel.send(text, file)
+                },
                 onRetry = chatViewModel::retry,
                 onStopGeneration = { chatViewModel.stop() },
                 sendWithEnter = chatPrefs.sendWithEnter,

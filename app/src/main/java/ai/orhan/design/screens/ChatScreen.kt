@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -219,6 +221,7 @@ fun ChatScreen(
     activityLabel: String? = null,
     error: String? = null,
     systemNotice: String? = null,
+    agentMentions: List<String> = emptyList(),
     onSendMessage: ((String) -> Unit)? = null,
     /** Sends text plus one inline file to the engine. When null, Attach explains files aren't available here. */
     onSendAttachment: ((text: String, attachment: ChatAttachment) -> Unit)? = null,
@@ -551,6 +554,22 @@ fun ChatScreen(
             }
         }
 
+        val mentionStart = input.indexOfLast { it.isWhitespace() } + 1
+        val mentionToken = input.substring(mentionStart)
+        val mentionQuery = mentionToken.takeIf { it.startsWith("@") }?.drop(1)
+        val mentionMatches = mentionQuery?.let { query ->
+            agentMentions.filter { it.startsWith(query, ignoreCase = true) }.take(8)
+        }.orEmpty()
+        if (mentionMatches.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp)) {
+                mentionMatches.forEach { name ->
+                    TextButton(onClick = {
+                        val prefix = input.substring(0, mentionStart)
+                        input = "${prefix}@$name "
+                    }) { Text("@$name") }
+                }
+            }
+        }
         Composer(
             value = input,
             onValueChange = { input = it },
