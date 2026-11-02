@@ -129,6 +129,7 @@ android {
 
     defaultConfig {
         applicationId = "ai.orhan"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = orhanVersionCode
@@ -228,7 +229,13 @@ dependencies {
     implementation(libs.bundles.settings.feature)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.commonmark)
+    implementation(libs.commonmark.tables)
+    implementation(libs.jsoup)
     debugImplementation(libs.bundles.compose.debug)
     testImplementation(libs.junit)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.bundles.compose.test)
     testImplementation("org.json:json:20240303") // real org.json for request-shape tests (android.jar stubs throw)
 }

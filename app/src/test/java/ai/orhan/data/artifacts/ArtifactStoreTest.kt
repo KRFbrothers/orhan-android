@@ -26,11 +26,14 @@ class ArtifactStoreTest {
         assertEquals(original, restored)
     }
 
-    @Test fun emptyOrUnknownFileOpensAsNoDocuments() = runBlocking {
+    @Test fun emptyFileOpensAsNoDocumentsButUnknownVersionFailsClosed() = runBlocking {
         assertEquals(emptyList<Artifact>(), ArtifactsSerializer.readFrom(ByteArray(0).inputStream()))
         val unknown = ByteArrayOutputStream()
         java.io.DataOutputStream(unknown).use { it.writeInt(99) }
-        assertEquals(emptyList<Artifact>(), ArtifactsSerializer.readFrom(unknown.toByteArray().inputStream()))
+        try {
+            ArtifactsSerializer.readFrom(unknown.toByteArray().inputStream())
+            org.junit.Assert.fail("Future formats must not be overwritten as an empty list")
+        } catch (_: IOException) { }
     }
 
     @Test fun saveEditAndDeleteKeepTheIdAndCreatedTime() = runBlocking {

@@ -79,6 +79,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ai.orhan.app.relativeTime
 import ai.orhan.data.artifacts.Artifact
+import ai.orhan.data.artifacts.previewText
 import ai.orhan.data.artifacts.artifactStore
 import ai.orhan.data.memory.ActionSaveResult
 import ai.orhan.data.memory.ArtifactLink
@@ -799,7 +800,7 @@ private fun ArtifactsPage(
                 MemoryTopic(
                     id = artifact.id,
                     title = artifact.title,
-                    summary = artifact.content,
+                    summary = remember(artifact) { artifact.previewText() },
                     content = artifact.content,
                     group = "",
                     tags = emptyList(),

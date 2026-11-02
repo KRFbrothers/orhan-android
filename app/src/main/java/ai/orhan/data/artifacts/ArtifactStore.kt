@@ -17,15 +17,22 @@ import java.io.OutputStream
 import java.util.UUID
 
 /* Local store for agent replies saved as artifacts (no backend). */
-private const val FORMAT_VERSION = 1
+private const val FORMAT_VERSION = 2
 const val MAX_ARTIFACT_CONTENT = 64_000
 const val MAX_ARTIFACTS = 500
+
+enum class ArtifactType(val wireName: String, val label: String, val mimeType: String, val extension: String) {
+    PLAIN_TEXT("text", "Plain text", "text/plain", "txt"),
+    MARKDOWN("markdown", "Markdown", "text/markdown", "md"),
+    HTML("html", "Web page (HTML)", "text/html", "html"),
+}
 
 data class Artifact(
     val id: String,
     val title: String,
     val content: String,
     val createdAt: Long,
+    val type: ArtifactType = ArtifactType.PLAIN_TEXT,
 )
 
 object ArtifactsSerializer : Serializer<List<Artifact>> {
@@ -36,17 +43,25 @@ object ArtifactsSerializer : Serializer<List<Artifact>> {
         if (bytes.isEmpty()) return defaultValue
         return try {
             DataInputStream(bytes.inputStream()).use { d ->
-                if (d.readInt() != FORMAT_VERSION) return defaultValue
-                List(d.readInt()) {
+                val version = d.readInt()
+                if (version !in 1..FORMAT_VERSION) throw IOException("Unsupported artifact format")
+                val count = d.readInt()
+                if (count !in 0..MAX_ARTIFACTS) throw IOException("Invalid artifact count")
+                List(count) {
                     Artifact(
                         id = d.readUTF(),
                         title = d.readUTF(),
                         content = d.readLongString(),
                         createdAt = d.readLong(),
+                        type = if (version == 1) ArtifactType.PLAIN_TEXT else {
+                            val name = d.readUTF()
+                            ArtifactType.entries.firstOrNull { it.wireName == name }
+                                ?: throw IOException("Unsupported artifact type")
+                        },
                     )
                 }
             }
-        } catch (e: IOException) { defaultValue }
+        } catch (e: IOException) { throw CorruptionException("Cannot read saved artifacts", e) }
     }
 
     override suspend fun writeTo(t: List<Artifact>, output: OutputStream) {
@@ -57,6 +72,7 @@ object ArtifactsSerializer : Serializer<List<Artifact>> {
             d.writeUTF(a.id); d.writeUTF(a.title.take(200))
             d.writeLongString(a.content)
             d.writeLong(a.createdAt)
+            d.writeUTF(a.type.wireName)
         }
         d.flush()
     }
@@ -104,7 +120,7 @@ class ArtifactStore(private val dataStore: DataStore<List<Artifact>>) {
     suspend fun upsert(artifact: Artifact): Boolean {
         if (artifact.content.isBlank()) return false
         val clean = artifact.copy(
-            title = artifact.title.trim().ifBlank { artifact.content.trim().take(42) },
+            title = artifact.title.trim().ifBlank { artifact.content.trim().take(42) }.take(200),
             content = artifact.content.take(MAX_ARTIFACT_CONTENT),
         )
         return write { it.upserted(clean) }

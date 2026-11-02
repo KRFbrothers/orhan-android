@@ -1,6 +1,19 @@
 package ai.orhan.feature.artifacts
 
 import android.content.Intent
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.material3.FilterChip
+import androidx.compose.runtime.saveable.listSaver
+import ai.orhan.data.artifacts.ArtifactType
+import ai.orhan.data.artifacts.exportDocument
+import ai.orhan.data.artifacts.previewText
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -100,9 +113,9 @@ fun ArtifactsScreen(
             initial = existing,
             onCancel = close,
             applyStatusBarPadding = !embedded,
-            onSave = { title, content ->
+            onSave = { title, content, type ->
                 val saved = onUpsert(
-                    Artifact(editing, title, content, existing?.createdAt ?: System.currentTimeMillis()),
+                    Artifact(editing, title, content, existing?.createdAt ?: System.currentTimeMillis(), type),
                 )
                 if (saved) {
                     openId = editing
@@ -285,14 +298,16 @@ private fun CompactArtifactRow(a: Artifact, onOpen: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp),
             )
+            Text(a.type.label, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
-/** Larger card for a plain-text document. The body is the saved text, not a web or media preview. */
+/** Bounded text excerpt from the actual type; full formatting is rendered in detail. */
 @Composable
 private fun LargeArtifactPreview(a: Artifact, onOpen: () -> Unit) {
     val colors = OrhanTheme.colors
+    val excerpt = remember(a) { a.previewText() }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -318,16 +333,19 @@ private fun LargeArtifactPreview(a: Artifact, onOpen: () -> Unit) {
             modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
         )
         Text(
-            a.content,
+            excerpt,
             style = OrhanTextStyles.snippet,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 6,
             overflow = TextOverflow.Ellipsis,
         )
+        Text("${a.type.label} · Text preview", style = OrhanTextStyles.meta,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun ArtifactDetail(
     a: Artifact,
     onBack: () -> Unit,
@@ -337,95 +355,139 @@ private fun ArtifactDetail(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var confirm by rememberSaveable { mutableStateOf(false) }
-    var deleting by rememberSaveable { mutableStateOf(false) }
-    var deleteError by rememberSaveable { mutableStateOf<String?>(null) }
-    if (confirm) {
+    val deletion = remember(a.id) { ArtifactDeleteState() }
+    var transferMessage by rememberSaveable(a.id) { mutableStateOf<String?>(null) }
+    var transferring by remember { mutableStateOf(false) }
+    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data
+        if (result.resultCode == Activity.RESULT_OK && uri != null) {
+            transferring = true
+            scope.launch {
+                try {
+                    val document = a.exportDocument()
+                    withContext(Dispatchers.IO) {
+                        val output = context.contentResolver.openOutputStream(uri, "wt")
+                            ?: error("Cannot open export destination")
+                        output.use { it.write(document.bytes) }
+                    }
+                    transferMessage = "Exported ${document.fileName}"
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    transferMessage = "Couldn't export this document. The saved original is unchanged."
+                } finally { transferring = false }
+            }
+        }
+    }
+    if (deletion.confirming) {
         AlertDialog(
-            onDismissRequest = { if (!deleting) confirm = false },
+            onDismissRequest = { if (!deletion.deleting) deletion.confirming = false },
             title = { Text("Delete artifact?") },
             text = {
-                Text(deleteError ?: "\u201c${a.title}\u201d will be removed from this device.")
+                Text(deletion.error ?: "\u201c${a.title}\u201d will be removed from this device.")
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (deleting) return@TextButton
-                        deleting = true
-                        scope.launch {
-                            val removed = onDelete()
-                            deleting = false
-                            if (removed) {
-                                deleteError = null
-                                confirm = false
-                            } else {
-                                deleteError = "Couldn't delete this document. It is still saved on this device."
-                            }
-                        }
+                        scope.launch { deletion.delete(onDelete) }
                     },
-                    enabled = !deleting,
+                    enabled = !deletion.deleting,
                 ) { Text("Delete") }
             },
             dismissButton = {
-                TextButton(onClick = { confirm = false }, enabled = !deleting) { Text("Cancel") }
+                TextButton(onClick = { deletion.confirming = false }, enabled = !deletion.deleting) { Text("Cancel") }
             },
         )
     }
     SettingsDetailScaffold(title = a.title, onBack = onBack, applyStatusBarPadding = applyStatusBarPadding) {
         Text(formatDate(a.createdAt), style = OrhanTextStyles.meta,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+        Text(a.type.label, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
             OutlinedButton(onClick = onEdit) { Text("Edit") }
-            OutlinedButton(onClick = {
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_SUBJECT, a.title)
-                    putExtra(Intent.EXTRA_TEXT, a.content)
+            OutlinedButton(enabled = !transferring, onClick = {
+                transferring = true
+                transferMessage = null
+                scope.launch {
+                    try {
+                        val send = artifactShareIntent(context, a)
+                        context.startActivity(Intent.createChooser(send, "Share artifact"))
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        transferMessage = "Couldn't share this document. The saved original is unchanged."
+                    } finally { transferring = false }
                 }
-                context.startActivity(Intent.createChooser(send, "Share artifact").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }) { Text("Share") }
-            OutlinedButton(onClick = { confirm = true }) { Text("Delete") }
+            OutlinedButton(enabled = !transferring, onClick = {
+                val document = a.exportDocument()
+                transferMessage = null
+                try {
+                    exporter.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = document.mimeType
+                        putExtra(Intent.EXTRA_TITLE, document.fileName)
+                    })
+                } catch (_: Exception) { transferMessage = "No document picker is available." }
+            }) { Text("Export") }
+            OutlinedButton(onClick = { deletion.confirming = true }) { Text("Delete") }
         }
+        transferMessage?.let { Text(it, style = OrhanTextStyles.snippet) }
         Spacer(Modifier.height(4.dp))
-        SelectionContainer {
+        if (a.type == ArtifactType.PLAIN_TEXT) SelectionContainer {
             Text(a.content, style = OrhanTextStyles.bubble, color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(horizontal = 4.dp))
+        } else {
+            Text("Offline preview · links and external resources are disabled.",
+                style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            ArtifactPreview(a)
         }
     }
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun ArtifactEditor(
     initial: Artifact?,
     onCancel: () -> Unit,
-    onSave: suspend (String, String) -> Boolean,
+    onSave: suspend (String, String, ArtifactType) -> Boolean,
     applyStatusBarPadding: Boolean = true,
 ) {
     val scope = rememberCoroutineScope()
-    var title by rememberSaveable { mutableStateOf(initial?.title.orEmpty()) }
-    var content by rememberSaveable { mutableStateOf(initial?.content.orEmpty()) }
-    var saving by rememberSaveable { mutableStateOf(false) }
-    var saveError by rememberSaveable { mutableStateOf<String?>(null) }
+    val draft = rememberSaveable(initial?.id, saver = listSaver<ArtifactEditorState, String>(
+        save = { listOf(it.title, it.content, it.type.wireName) },
+        restore = { values -> ArtifactEditorState(values[0], values[1],
+            ArtifactType.entries.first { it.wireName == values[2] }) },
+    )) { ArtifactEditorState(initial?.title.orEmpty(), initial?.content.orEmpty(), initial?.type ?: ArtifactType.PLAIN_TEXT) }
+    BackHandler(enabled = draft.saving) { }
     SettingsDetailScaffold(
         title = if (initial == null) "New document" else "Edit document",
-        onBack = onCancel,
+        onBack = { if (!draft.saving) onCancel() },
         applyStatusBarPadding = applyStatusBarPadding,
     ) {
+        if (initial == null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ArtifactType.entries.forEach { type ->
+                FilterChip(selected = draft.type == type, onClick = { draft.type = type },
+                    enabled = !draft.saving, label = { Text(type.label) })
+            }
+        } else Text(draft.type.label, style = OrhanTextStyles.meta)
         OutlinedTextField(
-            value = title,
-            onValueChange = { title = it },
+            value = draft.title,
+            onValueChange = { draft.title = it.take(200) },
+            enabled = !draft.saving,
             label = { Text("Title") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         )
         OutlinedTextField(
-            value = content,
-            onValueChange = { content = it.take(MAX_ARTIFACT_CONTENT) },
-            label = { Text("Content") },
-            supportingText = { Text("${content.length} / $MAX_ARTIFACT_CONTENT") },
+            value = draft.content,
+            onValueChange = { draft.content = it.take(MAX_ARTIFACT_CONTENT) },
+            enabled = !draft.saving,
+            label = { Text(when (draft.type) { ArtifactType.PLAIN_TEXT -> "Content"; ArtifactType.MARKDOWN -> "Markdown source"; ArtifactType.HTML -> "HTML source" }) },
+            supportingText = { Text("${draft.content.length} / $MAX_ARTIFACT_CONTENT") },
             modifier = Modifier.fillMaxWidth().heightIn(min = 240.dp).padding(vertical = 4.dp),
         )
-        val message = saveError
+        val message = draft.error
         if (message != null) {
             Text(
                 message,
@@ -437,20 +499,11 @@ private fun ArtifactEditor(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
             Button(
                 onClick = {
-                    if (saving) return@Button
-                    saving = true
-                    saveError = null
-                    scope.launch {
-                        val saved = onSave(title, content)
-                        saving = false
-                        if (!saved) {
-                            saveError = "Couldn't save this document. Your edits are still here."
-                        }
-                    }
+                    scope.launch { draft.save(onSave) }
                 },
-                enabled = content.isNotBlank() && !saving,
+                enabled = draft.content.isNotBlank() && !draft.saving,
             ) { Text("Save") }
-            OutlinedButton(onClick = onCancel, enabled = !saving) { Text("Cancel") }
+            OutlinedButton(onClick = onCancel, enabled = !draft.saving) { Text("Cancel") }
         }
     }
 }
