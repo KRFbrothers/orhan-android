@@ -105,6 +105,7 @@ fun AgentsScreen(
     onDeleteAgent: (suspend (InstalledAgent) -> Boolean)? = null,
     workflows: List<Workflow> = emptyList(),
     onOpenWorkflow: (Workflow) -> Unit = {},
+    onRunWorkflow: (Workflow) -> Unit = {},
     onCreateWorkflow: () -> Unit = {},
     onEditWorkflow: (Workflow) -> Unit = {},
     onDeleteWorkflow: (suspend (Workflow) -> Boolean)? = null,
@@ -225,6 +226,7 @@ fun AgentsScreen(
                     WorkflowRow(
                         wf,
                         onOpen = { onOpenWorkflow(wf) },
+                        onRun = { onRunWorkflow(wf) },
                         onEdit = { onEditWorkflow(wf) },
                         onLongPress = if (onDeleteWorkflow != null) ({ workflowDeleteError = null; pendingWorkflowDelete = wf }) else null,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
@@ -362,6 +364,7 @@ internal fun AgentAvatarImage(path: String?, fallback: Int, size: Dp, descriptio
 private fun WorkflowRow(
     wf: Workflow,
     onOpen: () -> Unit,
+    onRun: () -> Unit,
     onEdit: () -> Unit,
     modifier: Modifier = Modifier,
     onLongPress: (() -> Unit)? = null,
@@ -407,6 +410,9 @@ private fun WorkflowRow(
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
+        }
+        TextButton(onClick = onRun, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text("Run", style = OrhanTextStyles.meta)
         }
         TextButton(onClick = onEdit, modifier = Modifier.heightIn(min = 48.dp)) {
             Text("Edit", style = OrhanTextStyles.meta)

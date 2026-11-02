@@ -6,6 +6,17 @@ import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 
 class WorkflowSerializerTest {
+    @Test fun workflowRunHistoryRoundTripsStatusAndAgentIdentity() = kotlinx.coroutines.runBlocking {
+        val run = WorkflowRun(
+            id = "run-1", workflowId = "w1", workflowTitle = "Research", chatTitle = "Analyst",
+            agentId = "agent-7", agentName = "Analyst", status = WorkflowRunStatus.FAILED,
+            startedAt = 100L, finishedAt = 120L, error = "Provider unavailable",
+        )
+        val bytes = ByteArrayOutputStream()
+        WorkflowRunsSerializer.writeTo(listOf(run), bytes)
+        assertEquals(run, WorkflowRunsSerializer.readFrom(bytes.toByteArray().inputStream()).single())
+    }
+
     @Test fun v2PersistsStableAgentIdAndV1ReadsWithoutOne() = kotlinx.coroutines.runBlocking {
         val current = Workflow("w1", "Draft", "Write a draft", "Writer", 9L, "agent-id-1")
         val out = ByteArrayOutputStream()
