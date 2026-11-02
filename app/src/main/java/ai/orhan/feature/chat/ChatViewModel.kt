@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.FlowPreview
 import ai.orhan.data.history.ChatThreadStore
 import ai.orhan.data.history.StoredHandoffRetry
+import ai.orhan.data.history.messagesWithAttachments
 import ai.orhan.data.history.chatThreads
 import ai.orhan.data.history.toStored
 import ai.orhan.data.memory.AutomaticMemoryCoordinator
@@ -160,7 +161,8 @@ class ChatViewModel(
             }
             if (saved.messages.isNotEmpty() && _state.value.messages.isEmpty()) {
                 saved.attachments.forEach { (id, a) -> attachmentsById.putIfAbsent(id, a) }
-                _state.update { it.copy(messages = saved.messages, threadRestored = true, error = interruptedHandoffError ?: it.error) }
+                val restoredMessages = saved.messagesWithAttachments()
+                _state.update { it.copy(messages = restoredMessages, threadRestored = true, error = interruptedHandoffError ?: it.error) }
             } else {
                 _state.update { it.copy(threadRestored = true, error = interruptedHandoffError ?: it.error) }
             }
@@ -345,7 +347,7 @@ class ChatViewModel(
         if ((text.isEmpty() && attachment == null) || _state.value.busy) return
         pendingHandoffRetry = null
         val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
-        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis())
+        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis(), attachment = attachment)
         if (attachment != null) attachmentsById[user.id] = attachment
         _state.update { it.copy(messages = it.messages + user, loading = true, activityLabel = null, busy = true, error = null) }
         streamReply()

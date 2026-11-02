@@ -54,6 +54,7 @@ import ai.orhan.data.agents.agentStore
 import ai.orhan.data.agents.agentAvatarFiles
 import ai.orhan.data.agents.mergeWithSamples
 import ai.orhan.data.agents.canonicalAgentTitle
+import ai.orhan.data.agents.chatPersonaName
 import ai.orhan.data.agents.navigationAfterAgentSave
 import ai.orhan.data.agents.toInstalledAgent
 import ai.orhan.design.theme.ThemeMode
@@ -409,9 +410,11 @@ fun OrhanNavHost(isDark: Boolean) {
             val title = canon(entry.arguments?.getString("title").orEmpty())
             LaunchedEffect(title) { chatViewModel.loadThread(title) }
             val agent = savedAgents.firstOrNull { it.name.equals(title, ignoreCase = true) }
-            chatViewModel.setAgent(agent?.name ?: title, agent?.instructions.orEmpty())
+            val missingSavedAgent = !title.equals("Orhan", ignoreCase = true) && agent == null
+            val persona = chatPersonaName(title, savedAgents.map { it.name })
+            chatViewModel.setAgent(persona, agent?.instructions.orEmpty())
             chatViewModel.setRoster(
-                if (agent != null) emptyList()
+                if (agent != null && !missingSavedAgent) emptyList()
                 else savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions) },
             )
             chatViewModel.setPersonalMemory(personalMemory, memoryPaused)
@@ -439,6 +442,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 busy = chat.busy,
                 activityLabel = chat.activityLabel,
                 error = chat.error,
+                systemNotice = if (missingSavedAgent) "This saved agent is unavailable; new replies in this retained conversation use Orhan. The existing history is preserved." else null,
                 onSendMessage = { chatViewModel.send(it) },
                 onSendAttachment = { text, file -> chatViewModel.send(text, file) },
                 onRetry = chatViewModel::retry,

@@ -43,6 +43,11 @@ fun SavedAgent.capped(): SavedAgent = copy(
 fun canonicalAgentTitle(title: String, agentNames: List<String>): String =
     agentNames.firstOrNull { it.equals(title.trim(), ignoreCase = true) } ?: title
 
+/** A deleted/renamed custom-agent thread has history but no longer has that persona. */
+fun chatPersonaName(title: String, agentNames: List<String>): String =
+    if (title.equals("Orhan", ignoreCase = true)) "Orhan"
+    else agentNames.firstOrNull { it.equals(title.trim(), ignoreCase = true) } ?: "Orhan"
+
 data class SavedAgent(
     val name: String,
     val blurb: String,

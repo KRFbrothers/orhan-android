@@ -82,6 +82,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -94,6 +95,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -134,6 +136,8 @@ data class ChatMessage(
     val artifact: ChatArtifact? = null,
     /** Epoch millis. Zero for bubbles saved before automatic memory existed. */
     val createdAt: Long = 0L,
+    /** Inline payload restored from the local attachment store; never serialized in the thread record. */
+    val attachment: ChatAttachment? = null,
 )
 
 /**
@@ -199,6 +203,7 @@ fun ChatScreen(
     /** Optional live status (e.g. "Thinking…") shown beside the typing indicator. */
     activityLabel: String? = null,
     error: String? = null,
+    systemNotice: String? = null,
     onSendMessage: ((String) -> Unit)? = null,
     /** Sends text plus one inline file to the engine. When null, Attach explains files aren't available here. */
     onSendAttachment: ((text: String, attachment: ChatAttachment) -> Unit)? = null,
@@ -354,6 +359,14 @@ fun ChatScreen(
             onShareChat = { shareTranscript(context, agentName, messages) },
             onOpenChatPreferences = onOpenChatPreferences,
         )
+        if (systemNotice != null) {
+            Text(
+                text = systemNotice,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 16.dp, vertical = 10.dp),
+            )
+        }
 
         LazyColumn(
             state = listState,
@@ -627,6 +640,10 @@ private fun MessageBubble(
                     )
                 }
             }
+            message.attachment?.let { payload ->
+                Spacer(modifier = Modifier.height(6.dp))
+                AttachmentMessagePreview(payload)
+            }
 
             if (showActivityCards) message.artifact?.let { artifact ->
                 Spacer(modifier = Modifier.height(6.dp))
@@ -642,6 +659,32 @@ private fun MessageBubble(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun AttachmentMessagePreview(attachment: ChatAttachment) {
+    if (attachment.mimeType.startsWith("image/")) {
+        val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, attachment.base64) {
+            value = withContext(Dispatchers.Default) {
+                runCatching {
+                    val bytes = Base64.decode(attachment.base64, Base64.DEFAULT)
+                    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                    if (bounds.outWidth !in 1..12000 || bounds.outHeight !in 1..12000) return@runCatching null
+                    val sample = maxOf(1, maxOf(bounds.outWidth, bounds.outHeight) / 512)
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
+                }.getOrNull()
+            }
+        }
+        if (bitmap != null) Image(
+            bitmap!!,
+            contentDescription = attachment.name,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.widthIn(max = 260.dp).heightIn(max = 260.dp).clip(RoundedCornerShape(12.dp)),
+        ) else Text("Image unavailable · ${attachment.name}", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    } else {
+        Text("${attachment.mimeType} · ${attachment.name}", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
