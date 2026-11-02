@@ -16,9 +16,6 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.isDialog
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
-import android.graphics.Bitmap
-import java.io.File
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,7 +47,6 @@ class ArtifactFailureUiTest {
             org.junit.Assert.assertEquals(ArtifactType.MARKDOWN, attempted?.type)
             org.junit.Assert.assertEquals("# Draft survives", attempted?.content)
         }
-        captureFailure("save-light")
     }
 
     @Test fun failedDeleteKeepsDetailAndConfirmation() {
@@ -64,18 +60,7 @@ class ArtifactFailureUiTest {
         compose.onNodeWithText("Delete").performClick()
         compose.onNode(hasText("Delete") and hasAnyAncestor(isDialog())).performClick()
         compose.onNodeWithText("Couldn't delete this document. It is still saved on this device.").assertIsDisplayed()
-        captureFailure("delete-dark")
         compose.onNodeWithText("Cancel").performClick()
         compose.onNodeWithText("Original stays").assertIsDisplayed()
-    }
-
-    private fun captureFailure(name: String) {
-        compose.waitForIdle()
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val image = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
-        File(instrumentation.targetContext.cacheDir, "artifact-failure-$name.png").outputStream().use {
-            check(image.compress(Bitmap.CompressFormat.PNG, 100, it))
-        }
-        image.recycle()
     }
 }

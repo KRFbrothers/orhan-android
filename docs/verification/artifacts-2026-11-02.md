@@ -240,3 +240,90 @@ APK has been reinstalled to that phone yet. Fresh phone installation and
 functional checks are pending device reconnection. Do not claim the APK is
 present on either target until its package/version and APK identity are read
 back from that target.
+
+## Emulator runner follow-up and current handoff — 2026-11-02
+
+The owner authorized a fresh install and explicitly waived backup recovery.
+This supersedes the earlier “owner must choose a recovery path” wording above.
+No instrumentation command was run against the personal phone. The APK was
+built and verified on the emulator only; the emulator was then shut down to
+free resources as requested.
+
+### Passing checks
+
+- Fresh focused JVM artifact suites (`--rerun-tasks`): **19 tests, 0 failures,
+  0 errors** across `ArtifactDiskMigrationTest`, `ArtifactListPreferencesTest`,
+  `ArtifactRenderingTest`, `ArtifactStoreTest`, `TypedArtifactsTest`, and
+  `ArtifactEditorStateTest`. XML reports were written under
+  `app/build/test-results/testDebugUnitTest/` at 14:00 local time.
+- Full unit suite, debug assemble and lint command: **BUILD SUCCESSFUL**. The
+  full unit task and assemble were Gradle `UP-TO-DATE` in this run; the earlier
+  completed full-suite report remains **155 tests, 0 failures/errors** and is
+  not being presented as a fresh rerun. Lint completed at 12:52 local time:
+  **0 errors, 50 warnings**. Report: `app/build/reports/lint-results-debug.txt`.
+- APK: `ai.orhan`, versionName `0.2.0`, versionCode **297**, SHA-256
+  `0C3ABF30DF0F6120308B404B1BFE2B736454ADE5CC3F57BDB6278BD9197FF1CD`; signer
+  SHA-256 `8de8c2e46e572df1a7dcedce00b48a6ba0e53c042d52079c510f2923be88e06e`.
+- `git diff --check`: passed. The emulator-only installer read back matching
+  package APK hashes and skipped reinstalling both app and test APK. The
+  connected UTP task remains disabled, so it cannot run its uninstall-after-test
+  cleanup on a connected phone.
+
+### Emulator instrumentation: pending
+
+The first direct attempt failed before a TestRunner event: ADB exited 255 with
+no instrumentation output. Its startup trace showed `ActivityThread.main` in
+ART `DexFileVerifier::CheckIntraSection`; the API 36 Pixel_8 AVD had 2 virtual
+cores and 2 GB RAM, while host CPU pressure exceeded 90% during Google Play
+first-boot work.
+
+After load fell, the guarded emulator run started all **4** instrumentation
+cases. `failedDeleteKeepsDetailAndConfirmation` completed; the runner then
+started `failedSaveKeepsEditorTitleSourceAndTypeThenAllowsRetry`. ADB exited
+255 before a final status/result code, so the Gradle task correctly failed and
+the remaining tests have **no result**. A later launch screenshot showed
+Orhan's splash screen, but follow-up logs recorded `ANR in ai.orhan` because
+MainActivity did not answer an input-focus event within 5 seconds. These are
+emulator resource/startup blockers, not passing instrumentation results. No
+unchanged emulator test command was retried afterward. The AVD was shut down
+through `adb emu kill`; no emulator process remains active.
+
+The only new screenshot from this follow-up is ignored local evidence at
+`captures/artifacts-typed/emulator-after-launch.png`; it shows the app splash
+only and does not verify a feature flow. Historical phone captures listed
+above predate the test-runner incident and remain historical evidence, not
+verification of versionCode 297.
+
+### Fresh physical install and remaining gaps
+
+After AVD shutdown, `adb devices -l` listed no devices. In particular, the
+previous RMX5051 serial `9cefa3cb` was absent, so the authorized versionCode
+297 fresh install and physical UI verification could not proceed. No install,
+uninstall, app-data clear, or manual history rewrite was sent to the phone.
+Reconnect it to ADB to continue with normal install/UI checks; do not run
+instrumentation on it.
+
+- **Partial:** local Markdown/static HTML and source-preserving export/share;
+  automated failed-save and failed-delete assertions remain in the Android
+  test source, with screenshot capture separated from instrumentation.
+- **Pending:** Android instrumentation completion on an adequately resourced
+  emulator; fresh APK install and typed Markdown/HTML, save/edit/delete,
+  Memory shortcut, restart, export/share and light/dark checks on the phone.
+- **Blocked:** live agent-reply save until ordinary sign-in is available. No
+  auth bypass or embedded development JWT was used.
+- **Unverified:** DOCX, media, saved-message objects, collaborative Studio,
+  hosted links/ACL and revocation. Next actionable Artifacts slice is to install
+  v297 on the reconnected phone and finish the local typed-document flows;
+  then inspect a synthetic saved-message payload/source ID before implementing
+  any saved-message model. Do not start Agents.
+
+### Post-commit APK identity
+
+After the runner/report commit, the existing version derivation produced the
+latest APK as `ai.orhan` 0.2.0/versionCode **298**. `assembleDebug` passed;
+SHA-256 is `E4D6BDFF52E2E92EFF91A02BE6DEFAB0CEC9A3C008977B80638593A1C9D3D380`
+and the signer SHA-256 remains
+`8de8c2e46e572df1a7dcedce00b48a6ba0e53c042d52079c510f2923be88e06e`. It was
+not installed because ADB listed no devices after the AVD shutdown. The next
+phone install target is versionCode 298, which supersedes the pending v297
+reference above.
