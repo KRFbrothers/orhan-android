@@ -84,6 +84,7 @@ import ai.orhan.data.workflows.resolveWorkflowAgentName
 import ai.orhan.data.workflows.WorkflowRunStatus
 import ai.orhan.data.workflows.workflowRunStore
 import ai.orhan.feature.workflows.WorkflowEditorScreen
+import ai.orhan.feature.workflows.AutomationsScreen
 import ai.orhan.feature.workflows.WorkflowExecutionPanel
 import ai.orhan.data.workflows.WorkflowExecutionRepository
 
@@ -105,6 +106,7 @@ object AppRoutes {
     fun chat(title: String, draft: String = "", messageId: Long = 0L, runId: String = "") =
         "chat/${Uri.encode(title)}?draft=${Uri.encode(draft)}&message=$messageId&run=${Uri.encode(runId)}"
     const val WORKFLOW_EDIT = "workflow_edit?id={id}"
+    const val AUTOMATIONS = "automations"
     fun workflowEdit(id: String? = null) = if (id == null) "workflow_edit" else "workflow_edit?id=${Uri.encode(id)}"
 }
 
@@ -273,6 +275,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 onCreateWorkflow = {
                     navController.navigate(AppRoutes.workflowEdit()) { launchSingleTop = true }
                 },
+                onOpenAutomations = { navController.navigate(AppRoutes.AUTOMATIONS) { launchSingleTop = true } },
                 onEditWorkflow = { wf ->
                     navController.navigate(AppRoutes.workflowEdit(wf.id)) { launchSingleTop = true }
                 },
@@ -323,6 +326,25 @@ fun OrhanNavHost(isDark: Boolean) {
                 },
                 pendingOpenId = pendingOpen,
                 onPendingOpenConsumed = { pendingOpen = null },
+            )
+        }
+        composable(AppRoutes.AUTOMATIONS) {
+            AutomationsScreen(
+                workflows = workflows,
+                agents = savedAgents,
+                onBack = { navController.popBackStack() },
+                onSetUpManually = { navController.navigate(AppRoutes.workflowEdit()) },
+                onEditWorkflow = { navController.navigate(AppRoutes.workflowEdit(it.id)) },
+                onGenerate = { draft ->
+                    val currentAgent = draft.agentId?.let { id -> agentStore.agents.first().firstOrNull { it.id == id } }
+                    if (draft.agentId != null && currentAgent == null) false
+                    else {
+                        val saved = draft.copy(agentName = currentAgent?.name.orEmpty())
+                        workflowStore.upsert(saved)
+                        navController.navigate(AppRoutes.chat(saved.agentName.ifBlank { "Orhan" }, saved.content))
+                        true
+                    }
+                },
             )
         }
         composable(

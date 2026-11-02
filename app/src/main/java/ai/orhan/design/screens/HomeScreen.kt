@@ -231,6 +231,7 @@ fun HomeScreen(
     onOpenWorkflow: (ai.orhan.data.workflows.Workflow) -> Unit = {},
     onRunWorkflow: (ai.orhan.data.workflows.Workflow) -> Unit = {},
     onCreateWorkflow: () -> Unit = {},
+    onOpenAutomations: () -> Unit = {},
     onEditWorkflow: (ai.orhan.data.workflows.Workflow) -> Unit = {},
     onDeleteWorkflow: (suspend (ai.orhan.data.workflows.Workflow) -> Boolean)? = null,
     onOpenPlaybook: (ai.orhan.feature.discover.Playbook) -> Unit = {},
@@ -286,6 +287,7 @@ fun HomeScreen(
                 onNewChat = {
                     onOpenChat(OrhanChat(title = "Orhan", snippet = "", time = "", isAgent = true))
                 },
+                onOpenAutomations = onOpenAutomations,
             )
         }
         if (profileOpen) {
@@ -412,8 +414,10 @@ private fun HomeTopBar(
     profile: UserProfile,
     onOpenProfile: () -> Unit,
     onNewChat: () -> Unit,
+    onOpenAutomations: () -> Unit,
 ) {
     val colors = OrhanTheme.colors
+    var createMenuOpen by rememberSaveable { mutableStateOf(false) }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -448,19 +452,23 @@ private fun HomeTopBar(
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .size(40.dp)
+                .size(48.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surface)
                 .border(1.dp, colors.fieldEdge, CircleShape)
-                .clickable(onClick = onNewChat),
+                .clickable(onClick = { createMenuOpen = true }),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Rounded.Add,
-                contentDescription = "Chat with Orhan",
+                contentDescription = "Create menu",
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(22.dp),
             )
+            DropdownMenu(expanded = createMenuOpen, onDismissRequest = { createMenuOpen = false }) {
+                DropdownMenuItem(text = { Text("New chat") }, onClick = { createMenuOpen = false; onNewChat() })
+                DropdownMenuItem(text = { Text("Automations") }, onClick = { createMenuOpen = false; onOpenAutomations() })
+            }
         }
     }
 }
