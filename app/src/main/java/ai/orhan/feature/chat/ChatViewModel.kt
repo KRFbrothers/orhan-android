@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.FlowPreview
 import ai.orhan.data.history.ChatThreadStore
 import ai.orhan.data.history.StoredHandoffRetry
+import ai.orhan.data.history.messagesWithAttachments
 import ai.orhan.data.history.chatThreads
 import ai.orhan.data.history.toStored
 import ai.orhan.data.memory.AutomaticMemoryCoordinator
@@ -61,6 +62,19 @@ internal fun parseHandoff(reply: String, roster: List<RosterAgent>): Pair<Roster
 internal fun messagesForHandoffRetry(messages: List<ChatMessage>, sourceReplyId: Long): List<ChatMessage> {
     val sourceIndex = messages.indexOfLast { it.id == sourceReplyId && it.role == ChatRole.Agent }
     return if (sourceIndex < 0) emptyList() else messages.take(sourceIndex + 1)
+}
+
+/** Resolves an explicit leading @Agent mention only when it names a known roster entry. */
+internal fun explicitAgentMention(text: String, roster: List<RosterAgent>): Pair<RosterAgent, String>? {
+    val input = text.trimStart()
+    val agent = roster
+        .filter { input.startsWith("@${it.name}", ignoreCase = true) }
+        .maxByOrNull { it.name.length }
+        ?: return null
+    val afterName = input.drop(agent.name.length + 1)
+    if (afterName.isNotEmpty() && !afterName.first().isWhitespace() && afterName.first() != ':' && afterName.first() != ',') return null
+    val task = afterName.trimStart().trimStart(':', ',').trim()
+    return if (task.isBlank()) null else agent to task
 }
 
 internal fun stripHandoff(reply: String): String {
@@ -160,7 +174,8 @@ class ChatViewModel(
             }
             if (saved.messages.isNotEmpty() && _state.value.messages.isEmpty()) {
                 saved.attachments.forEach { (id, a) -> attachmentsById.putIfAbsent(id, a) }
-                _state.update { it.copy(messages = saved.messages, threadRestored = true, error = interruptedHandoffError ?: it.error) }
+                val restoredMessages = saved.messagesWithAttachments()
+                _state.update { it.copy(messages = restoredMessages, threadRestored = true, error = interruptedHandoffError ?: it.error) }
             } else {
                 _state.update { it.copy(threadRestored = true, error = interruptedHandoffError ?: it.error) }
             }
@@ -345,10 +360,25 @@ class ChatViewModel(
         if ((text.isEmpty() && attachment == null) || _state.value.busy) return
         pendingHandoffRetry = null
         val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
-        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis())
+        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis(), attachment = attachment)
         if (attachment != null) attachmentsById[user.id] = attachment
         _state.update { it.copy(messages = it.messages + user, loading = true, activityLabel = null, busy = true, error = null) }
         streamReply()
+    }
+
+    /** Explicit @mentions use the same specialist engine path and retry persistence as model handoffs. */
+    fun sendToAgent(raw: String, agent: RosterAgent, task: String, attachment: ChatAttachment? = null) {
+        val text = raw.trim()
+        val requestedTask = task.trim()
+        if (text.isEmpty() || requestedTask.isEmpty() || _state.value.busy) return
+        pendingHandoffRetry = null
+        val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
+        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis())
+        if (attachment != null) attachmentsById[user.id] = attachment
+        val sourceId = nextId()
+        val assignment = ChatMessage(sourceId, ChatRole.Agent, "I assigned this request to ${agent.name}: $requestedTask", currentTimeString())
+        _state.update { it.copy(messages = it.messages + user + assignment, loading = true, activityLabel = null, busy = true, error = null) }
+        streamJob = viewModelScope.launch { runHandoff(sourceId, agent, requestedTask) }
     }
 
     /**

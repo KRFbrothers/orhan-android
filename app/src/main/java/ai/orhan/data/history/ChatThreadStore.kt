@@ -161,6 +161,10 @@ data class LoadedThread(
     val pendingHandoffRetry: StoredHandoffRetry? = null,
 )
 
+/** Reattaches file payloads to visible message models after loading local metadata and bytes. */
+fun LoadedThread.messagesWithAttachments(): List<ChatMessage> =
+    messages.map { message -> message.copy(attachment = attachments[message.id]) }
+
 /**
  * File-backed attachment bytes under [dir] (app filesDir/chat_attachments). Raw bytes, not base64,
  * so the DataStore file stays small. Pure java.io so it is unit-testable.

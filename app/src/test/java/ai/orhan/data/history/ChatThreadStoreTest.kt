@@ -35,6 +35,14 @@ class ChatAttachmentPersistenceTest {
         assertEquals(list, ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()))
     }
 
+    @Test fun restoredMessagesCarryTheirPersistedAttachmentPayloadForPreview() {
+        val message = ChatMessage(7, ChatRole.User, "📎 photo.png", "now")
+        val payload = ai.orhan.data.chat.ChatAttachment("photo.png", "image/png", "AQID", 3)
+        val loaded = LoadedThread(listOf(message), mapOf(message.id to payload))
+        assertEquals(payload, loaded.messagesWithAttachments().single().attachment)
+        assertEquals(message.text, loaded.messagesWithAttachments().single().text)
+    }
+
     @Test fun serializerRoundTripsPendingHandoffRetryState() = kotlinx.coroutines.runBlocking {
         val retry = StoredHandoffRetry(17L, "Slides", "Use a concise style", "Make a 5-slide deck")
         val thread = ChatThread("Orhan", 30L, listOf(StoredMessage(17L, "agent", "Assigned to Slides", "now")), retry)

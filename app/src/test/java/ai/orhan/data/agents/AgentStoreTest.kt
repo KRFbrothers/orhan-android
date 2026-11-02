@@ -71,6 +71,12 @@ class AgentStoreTest {
         assertEquals("Unknown", canonicalAgentTitle("Unknown", listOf("Writer")))
     }
 
+    @Test fun missingAgentChatKeepsHistoryTitleButUsesDefaultPersona() {
+        assertEquals("Writer", chatPersonaName("writer", listOf("Writer")))
+        assertEquals("Orhan", chatPersonaName("Deleted Writer", listOf("Writer")))
+        assertEquals("Orhan", chatPersonaName("orhan", emptyList()))
+    }
+
     private fun agent(name: String, blurb: String = "blurb", instructions: String = "do it", createdAt: Long = 10) =
         SavedAgent(name, blurb, instructions, listOf("Web"), createdAt)
 

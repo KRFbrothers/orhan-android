@@ -1,0 +1,47 @@
+# Included-feature source backlog — 2026-11-02
+
+This is a source inventory for planning, not a runtime or parity report. `TEAMLY_FEATURE_REFERENCE.md` is reference material; its labels and third-party handbook claims are not Android observations. No tests, build, lint, emulator, USB, or device checks were run for this update (**NOT RUN—deferred by user**).
+
+## Stage order
+
+The active work has been Agents, following the earlier Artifacts work. Continue with Chats/voice/attachments, then integration. Memory remains an earlier-stage concern: do not rewrite completed behavior without a concrete source defect. Meetings stay an included gap inventory until actual recording, minutes, and playback can be implemented with provider/data contracts.
+
+## Source coverage and next slices
+
+| Reference scope | Current Orhan source (static finding) | Status | Next actionable work / external gap |
+|---|---|---|---|
+| F1.1 text, mentions | Chat composer sends to `/api/chat`; model handoff uses roster/instructions. Orhan composer now offers saved-agent mention suggestions and a valid leading `@Agent task` dispatches to that specialist through the existing handoff request/retry path. | Partial | Verify mention/cancel/error presentation at runtime; reference-specific semantics beyond this explicit dispatch remain unverified. |
+| F1.2 message actions | Long-press supports copy/share and save agent reply as artifact; user message supports action/to-do path. No complete reply/forward/translate/transcribe/react/unsend/report implementation identified. | Partial | Add only actions with local/service owners; translate/transcribe/report/reactions need explicit API/provider semantics. Social reactions remain excluded by AGENTS.md. |
+| F1.3 attachments | File picker allows supported MIME types and inline request payloads; bytes and metadata persist in local chat history. Restored payloads render bounded image thumbnails. Camera capture uses a temporary FileProvider URI and shared type/size validation. Non-image/non-audio payloads expose explicit open-in-installed-app with read-grant URI. | Partial | Add any missing viewer behavior only with evidence; establish upload failure/retry semantics and verify camera/viewer path at runtime. |
+| F1.4 voice | Android speech recognizer remains available for voice typing. Press-and-hold on the empty composer mic records AAC/M4A with runtime microphone permission; release stages it as a regular 4 MiB-limited audio attachment for review/send. Persisted audio attachment payloads play locally. No waveform, duration display or transcription-in-place exists. | Partial | Confirm voice-specific server handling and any transcript association contract; add duration/recording affordance refinements only with observed reference evidence. This source implementation is not device-verified. |
+| F1.5 history/search | Local persisted title-keyed threads and search are present. Attachment bytes persist locally within bounded store policy. | Partial | Verify ordering, cross-chat search results, source jumps and deletion edge cases later; reference-only result semantics remain unknown. |
+| F1.6 conversation controls | Pin/unpin, remove recent and clear/remove thread paths exist in local stores/UI. Mute and remote delete semantics not established. | Partial | Inventory confirm dialogs/failure behavior and any local-only controls; mute/remote deletion require product/service semantics. |
+| F2.1–F2.3 agent identity/persona | Local create/edit/rename/delete, private avatar, profile, persisted instructions, per-agent chat and handoff roster exist. Avatar metadata schema is v3 with v1/v2 reads. Delete write failure is surfaced and confirmation is retained. | Partial | Stable agent IDs/config snapshots are absent; legacy thread history is keyed by names. Deleted/renamed history is retained and now uses Orhan for future replies with a notice; old persona cannot be reconstructed. |
+| F2.4 capabilities | Legacy string preferences are preserved but not sent as prompt guidance or enforced. `/api/chat` has no allowlist/catalog contract in this client. | Blocked | Shared service must define capability IDs, supported-capability discovery, enforcement and unsupported-tool errors. Do not change another repository without explicit task scope. |
+| F2.5 workflows | Local reusable prompt records with name resolution, stale-agent notice and chat-prefill launch. | Partial / blocked | Multi-step Agent Flows, triggers, scheduling, execution log and durable retries need workflow execution/provider contracts. Current local prompt flow is not equivalent. |
+| F2.6 handoffs | Orhan can hand off to saved agents, display specialist replies, surface failure and retry; interrupted retry state persists in thread v4 with v1-v3 read compatibility. | Partial | Validate ordering/cancellation and deleted/renamed specialist during pending retry; stable identity snapshots or explicit stale-target handling are needed. |
+| F3.1–F3.8 Memory | Private memory store, topic entries, pause controls, private profile/context, actions and source connections are present from prior Memory work. | Partial; prior slices preserved | Read `artifacts-2026-11-02.md` and source owners before edits. Remaining server-driven extraction, graph and update semantics must be separated from local support; only fix concrete actionable gaps. |
+| F4.1–F4.7 Artifacts | Typed Markdown/HTML/document source and rendering/export/share plus saved-message provenance were implemented in preceding Artifacts work. Coverage and unknown media/Studio behaviors are tracked separately. | Partial | Keep PR #93 artifact-only. Media payload types, DOCX conversion and collaborative Studio behaviors need actual payload/reference/service evidence. Check integration links without rewriting completed slices. |
+| F5.1–F5.3 Meetings | No complete recording→minutes→playback feature found in this source pass. | Not implemented / blocked | Requires recording permissions/lifecycle, transcription/minutes provider, durable meeting ownership and playback source. Implement only when those contracts are available. |
+
+## Source-only changes in progress
+
+- Deleted/renamed custom-agent chat keeps the old thread title/history, but resolves future requests to Orhan instead of impersonating an unavailable saved persona. A visible notice explains this behavior.
+- Orhan chat offers saved-agent mention suggestions; a recognized leading mention dispatches the exact task to that specialist through the persisted handoff/retry path. Unknown/malformed mentions remain ordinary user text. Tests were added but not run.
+- Persisted image attachments are decoded off the main thread and rendered with dimension bounds in the message. Audio payloads have a player; other non-image payloads remain MIME/name labels. This is not a PDF/video viewer.
+- Press-and-hold recording in the empty composer requests microphone permission, captures AAC/M4A to cache, enforces the engine's existing 4 MiB attachment limit, and stages the real payload for review/send. Tap still launches speech-to-text; release does not auto-send. Navigation while recording releases the recorder and removes the temporary source file. This is not runtime-verified.
+- Persisted audio attachment payloads are materialized to a temporary cache file and played with Android `MediaPlayer`; errors are surfaced in the bubble and the player/file are released when the bubble leaves composition.
+- The attachment sheet launches a camera app with a temporary FileProvider URI; captured photos pass through shared MIME and 4 MiB validation before becoming a draft attachment. Cancel/failure removes the temporary file. This is not runtime-verified.
+
+## Concrete blockers
+
+- `/api/chat` selected-tool enforcement and capability catalog contract.
+- Agent Flows execution/trigger/scheduling contract; current workflow persistence stores reusable prompt text only.
+- Stable agent identifier/migration policy for existing name-keyed chats and name-linked workflows.
+- Audio-specific server processing/transcription contract; local AAC recording and payload playback are source-implemented but unverified.
+- Meeting recording/minutes/playback data and provider contract.
+- Reference evidence for media artifacts and collaborative Studio features. Existing reference prose remains unverified behavior.
+
+## Validation status
+
+`git diff --check` is run for the source slices. All tests, build/lint, emulator and connected-device checks are **NOT RUN—deferred by user**. Do not use older reports as evidence for the new changes.

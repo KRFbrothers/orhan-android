@@ -54,4 +54,12 @@ class HandoffParseTest {
         val messages = listOf(ChatMessage(5, ChatRole.Agent, "partial", "now"))
         assertTrue(messagesForHandoffRetry(messages, sourceReplyId = 4L).isEmpty())
     }
+
+    @Test fun explicitMentionResolvesKnownAgentAndPreservesTaskText() {
+        val roster = listOf(RosterAgent("Writer", "", "concise"), RosterAgent("Writer Plus", "", "expanded"))
+        assertEquals(roster[0] to "Draft a report", explicitAgentMention("@writer Draft a report", roster))
+        assertEquals(roster[1] to "Draft a report", explicitAgentMention("@Writer Plus: Draft a report", roster))
+        assertEquals(null, explicitAgentMention("@Writerish Draft a report", roster))
+        assertEquals(null, explicitAgentMention("@Unknown Draft a report", roster))
+    }
 }
