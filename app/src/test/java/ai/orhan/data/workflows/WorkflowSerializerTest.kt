@@ -20,4 +20,16 @@ class WorkflowSerializerTest {
         assertEquals("Writer", migrated.agentName)
         assertEquals(null, migrated.agentId)
     }
+
+    @Test fun renameRelinksLegacyNameAndExistingIdWithoutChangingPromptContent() {
+        val legacy = Workflow("legacy", "Draft", "Keep this text", "Writer", 1L)
+        val linked = Workflow("linked", "Outline", "Also keep", "Writer", 2L, "agent-id")
+        val unrelated = Workflow("other", "Other", "No change", "Coder", 3L, "coder-id")
+        val after = listOf(legacy, linked, unrelated).relinkRenamedAgent("Writer", "Editor", "agent-id")
+        assertEquals("Editor", after[0].agentName)
+        assertEquals("agent-id", after[0].agentId)
+        assertEquals("Editor", after[1].agentName)
+        assertEquals("Keep this text", after[0].content)
+        assertEquals(unrelated, after[2])
+    }
 }

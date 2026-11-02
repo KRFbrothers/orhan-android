@@ -66,6 +66,15 @@ class ChatAttachmentPersistenceTest {
         assertEquals(null, migrated.agentId)
     }
 
+    @Test fun renameAssociatesOnlyLegacyTitleMatchedChatsAndPreservesMessages() {
+        val legacy = ChatThread("Writer", 3L, listOf(StoredMessage(1L, "user", "keep", "now")))
+        val alreadyLinked = ChatThread("Writer", 2L, emptyList(), agentId = "other-agent")
+        val linked = listOf(legacy, alreadyLinked).associatingLegacyAgent("writer", "agent-id")
+        assertEquals("agent-id", linked[0].agentId)
+        assertEquals(legacy.messages, linked[0].messages)
+        assertEquals("other-agent", linked[1].agentId)
+    }
+
     @Test fun v3ThreadMigratesWithoutPendingHandoff() = kotlinx.coroutines.runBlocking {
         val out = java.io.ByteArrayOutputStream()
         java.io.DataOutputStream(out).apply {

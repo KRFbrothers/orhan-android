@@ -53,6 +53,13 @@ data class ChatThread(
     val agentId: String? = null,
 )
 
+/** Link an old title-keyed thread only when it has no identity yet. */
+fun List<ChatThread>.associatingLegacyAgent(title: String, agentId: String): List<ChatThread> =
+    map { thread ->
+        if (thread.title.equals(title, ignoreCase = true) && thread.agentId == null) thread.copy(agentId = agentId)
+        else thread
+    }
+
 object ChatThreadsSerializer : Serializer<List<ChatThread>> {
     override val defaultValue: List<ChatThread> = emptyList()
 
@@ -269,11 +276,13 @@ class ChatThreadStore(
     /** Associates a legacy title-matched thread with its current agent identity without rewriting messages. */
     suspend fun associateAgent(title: String, agentId: String) {
         if (title.isBlank() || agentId.isBlank()) return
-        dataStore.updateData { threads ->
-            threads.map { thread ->
-                if (thread.title == title && thread.agentId == null) thread.copy(agentId = agentId) else thread
-            }
-        }
+        dataStore.updateData { threads -> threads.associatingLegacyAgent(title, agentId) }
+    }
+
+    /** Rename-time migration for chats whose old title still identifies the renamed profile. */
+    suspend fun associateLegacyChatsForRename(previousName: String, agentId: String) {
+        if (previousName.isBlank() || agentId.isBlank()) return
+        dataStore.updateData { threads -> threads.associatingLegacyAgent(previousName, agentId) }
     }
 
     suspend fun remove(title: String) {
