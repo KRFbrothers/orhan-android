@@ -125,8 +125,10 @@ data class OrhanChat(
     val unread: Int = 0,
     val working: Boolean = false,
     /** Persisted local message text used by chat-wide search; never uploaded for indexing. */
-    val searchableMessages: List<String> = emptyList(),
+    val searchableMessages: List<ChatSearchMessage> = emptyList(),
 )
+
+data class ChatSearchMessage(val id: Long, val text: String)
 
 /** An agent card \u2014 name, what it does, its current state. */
 data class OrhanAgent(
@@ -233,6 +235,7 @@ fun HomeScreen(
     onEditWorkflow: (ai.orhan.data.workflows.Workflow) -> Unit = {},
     onDeleteWorkflow: ((ai.orhan.data.workflows.Workflow) -> Unit)? = null,
     onOpenPlaybook: (ai.orhan.feature.discover.Playbook) -> Unit = {},
+    onOpenChatSearchResult: ((OrhanChat, Long) -> Unit)? = null,
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
     var profileOpen by rememberSaveable { mutableStateOf(false) }
@@ -248,6 +251,11 @@ fun HomeScreen(
             onOpenChat = { chat ->
                 searchOpen = false
                 onOpenChat(chat)
+            },
+            onOpenChatMessage = { chat, messageId ->
+                searchOpen = false
+                val openResult = onOpenChatSearchResult
+                if (openResult != null) openResult(chat, messageId) else onOpenChat(chat)
             },
             onOpenAgent = { agent ->
                 searchOpen = false

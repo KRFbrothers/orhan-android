@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.orhan.design.screens.HomeScreen
 import ai.orhan.design.screens.OrhanChat
+import ai.orhan.design.screens.ChatSearchMessage
 import ai.orhan.data.history.recentChats
 import ai.orhan.data.history.pinnedChats
 import ai.orhan.data.agents.AgentSaveNav
@@ -164,7 +165,7 @@ fun OrhanNavHost(isDark: Boolean) {
                         previewSnippet(lastText),
                         relativeTime(it.openedAt),
                         isAgent = true,
-                        searchableMessages = savedThread?.messages.orEmpty().map { message -> message.text },
+                        searchableMessages = savedThread?.messages.orEmpty().map { message -> ChatSearchMessage(message.id, message.text) },
                     )
                 },
                 searchChats = threads.map { savedThread ->
@@ -175,7 +176,7 @@ fun OrhanNavHost(isDark: Boolean) {
                         previewSnippet(lastText),
                         relativeTime(openedAt),
                         isAgent = true,
-                        searchableMessages = savedThread.messages.map { message -> message.text },
+                        searchableMessages = savedThread.messages.map { message -> ChatSearchMessage(message.id, message.text) },
                     )
                 },
                 pinnedTitles = pinnedTitles,
@@ -191,6 +192,11 @@ fun OrhanNavHost(isDark: Boolean) {
                     val t = canon(it.title)
                     scope.launch { recentRepo.recordOpened(t) }
                     navController.navigate(AppRoutes.chat(t))
+                },
+                onOpenChatSearchResult = { chat, messageId ->
+                    val t = canon(chat.title)
+                    scope.launch { recentRepo.recordOpened(t) }
+                    navController.navigate(AppRoutes.chat(t, messageId = messageId))
                 },
                 onOpenSettings = {
                     navController.navigate(SettingsRoutes.SETTINGS) { launchSingleTop = true }

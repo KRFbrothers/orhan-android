@@ -2,6 +2,7 @@ package ai.orhan.feature.search
 
 import ai.orhan.data.artifacts.Artifact
 import ai.orhan.design.screens.OrhanChat
+import ai.orhan.design.screens.ChatSearchMessage
 import ai.orhan.design.theme.OrhanTextStyles
 import ai.orhan.design.theme.OrhanTheme
 import ai.orhan.feature.agents.InstalledAgent
@@ -59,13 +60,17 @@ private enum class SearchTab(val label: String) { All("All"), Chats("Chats"), Ag
 
 internal fun OrhanChat.matchesLocalQuery(query: String): Boolean {
     val q = query.trim()
-    return q.isEmpty() || title.contains(q, true) || snippet.contains(q, true) || searchableMessages.any { it.contains(q, true) }
+    return q.isEmpty() || title.contains(q, true) || snippet.contains(q, true) || searchableMessages.any { it.text.contains(q, true) }
+}
+
+internal fun OrhanChat.matchingLocalMessage(query: String): ChatSearchMessage? {
+    val q = query.trim()
+    return searchableMessages.firstOrNull { q.isNotEmpty() && it.text.contains(q, true) }
 }
 
 internal fun OrhanChat.localSearchSnippet(query: String): String {
-    val q = query.trim()
-    val matched = searchableMessages.firstOrNull { q.isNotEmpty() && it.contains(q, true) } ?: return snippet.ifBlank { "Recent chat" }
-    val index = matched.indexOf(q, ignoreCase = true).coerceAtLeast(0)
+    val matched = matchingLocalMessage(query)?.text ?: return snippet.ifBlank { "Recent chat" }
+    val index = matched.indexOf(query.trim(), ignoreCase = true).coerceAtLeast(0)
     val start = (index - 45).coerceAtLeast(0)
     return matched.substring(start, (start + 120).coerceAtMost(matched.length))
 }
@@ -81,6 +86,7 @@ fun LocalSearchScreen(
     artifacts: List<Artifact>,
     onCancel: () -> Unit,
     onOpenChat: (OrhanChat) -> Unit,
+    onOpenChatMessage: ((OrhanChat, Long) -> Unit)? = null,
     onOpenAgent: (InstalledAgent) -> Unit,
     onOpenArtifact: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -197,7 +203,10 @@ fun LocalSearchScreen(
             if (showChats && matchedChats.isNotEmpty()) {
                 item(key = "h-chats") { SectionLabel("Chats", matchedChats.size > 3 && tab == SearchTab.All) { tab = SearchTab.Chats } }
                 items(if (tab == SearchTab.All) matchedChats.take(3) else matchedChats, key = { "c:" + it.title }) { chat ->
-                    ResultRow(chat.title, chat.localSearchSnippet(q)) { onOpenChat(chat) }
+                    ResultRow(chat.title, chat.localSearchSnippet(q)) {
+                        val match = chat.matchingLocalMessage(q)
+                        if (match != null && onOpenChatMessage != null) onOpenChatMessage(chat, match.id) else onOpenChat(chat)
+                    }
                 }
             }
             if (showAgents && matchedAgents.isNotEmpty()) {
