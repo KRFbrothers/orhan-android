@@ -30,6 +30,7 @@ enum class ArtifactType(val wireName: String, val label: String, val mimeType: S
 enum class ArtifactKind(val wireName: String, val label: String) {
     DOCUMENT("document", "Document"),
     SAVED_MESSAGE("saved_message", "Saved message"),
+    MEETING_MINUTES("meeting_minutes", "Meeting minutes"),
 }
 
 data class Artifact(

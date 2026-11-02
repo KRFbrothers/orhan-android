@@ -463,7 +463,8 @@ fun OrhanNavHost(isDark: Boolean) {
             val auth = remember(context) { AuthRepository.get(context) }
             val session by auth.session.collectAsStateWithLifecycle(initialValue = null)
             val hasDevJwt = BuildConfig.DUA_DEV_JWT.isNotBlank()
-            if (session == null && !hasDevJwt) {
+            val workflowRunId = entry.arguments?.getString("run").orEmpty()
+            if (session == null && (!hasDevJwt || workflowRunId.isNotBlank())) {
                 val signIn: SignInViewModel = viewModel()
                 val signInState by signIn.state.collectAsStateWithLifecycle()
                 SignInScreen(
@@ -478,7 +479,6 @@ fun OrhanNavHost(isDark: Boolean) {
             val chatViewModel: ChatViewModel = viewModel { ChatViewModel(context as Application) }
             val chat by chatViewModel.state.collectAsStateWithLifecycle()
             val title = canon(entry.arguments?.getString("title").orEmpty())
-            val workflowRunId = entry.arguments?.getString("run").orEmpty()
             val workflowRun = workflowRuns.firstOrNull { it.id == workflowRunId }
             var observedWorkflowBusy by rememberSaveable(workflowRunId) { mutableStateOf(false) }
             var workflowCancelRequested by rememberSaveable(workflowRunId) { mutableStateOf(false) }
@@ -625,6 +625,30 @@ fun OrhanNavHost(isDark: Boolean) {
                 },
                 onTranslateMessage = { text -> chatViewModel.translateMessage(text, languageName(languagePrefs.code)) },
                 onTranscribeAudio = chatViewModel::transcribeAudio,
+                onCreateMeetingMinutes = chatViewModel::createMeetingMinutes,
+                onSaveMeetingMinutes = { artifactTitle, content, chatId, messageId, author ->
+                    artifactStore.upsert(
+                        ai.orhan.data.artifacts.Artifact(
+                            id = java.util.UUID.randomUUID().toString(),
+                            title = artifactTitle,
+                            content = content,
+                            createdAt = System.currentTimeMillis(),
+                            kind = ai.orhan.data.artifacts.ArtifactKind.MEETING_MINUTES,
+                            sourceChatId = chatId,
+                            sourceMessageId = messageId,
+                            author = author,
+                        ),
+                    )
+                },
+                onSaveMeetingActions = { items, chatId, messageId ->
+                    val result = memoryEntries.addMeetingActionsFromChat(items, chatId, messageId)
+                    when {
+                        result.dismissed -> Result.failure(IllegalStateException("These source actions were previously dismissed and were not restored."))
+                        result.saved == 0 && result.duplicates > 0 -> Result.success("All action items already exist.")
+                        result.notAdded > 0 -> Result.success("Saved ${result.saved}; ${result.notAdded} could not be added because Memory is full.")
+                        else -> Result.success("Saved ${result.saved} action items to Memory.")
+                    }
+                },
                 initialComposerText = if (workflowRunId.isBlank()) entry.arguments?.getString("draft").orEmpty() else "",
                 focusMessageId = entry.arguments?.getString("message")?.toLongOrNull() ?: 0L,
                 threadRestored = chat.threadRestored,

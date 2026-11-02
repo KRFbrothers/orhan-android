@@ -57,6 +57,16 @@ class TypedArtifactsTest {
         assertEquals(listOf(saved), listOf(saved).matching("research"))
     }
 
+    @Test fun meetingMinutesKeepTheirSourceMessageAcrossSerialization() = runBlocking {
+        val meeting = Artifact(
+            "minutes-1", "Meeting minutes", "Summary\nDecisions\nAction items", 10,
+            kind = ArtifactKind.MEETING_MINUTES, sourceChatId = "Planning", sourceMessageId = 99L, author = "Orhan",
+        )
+        val bytes = ByteArrayOutputStream()
+        ArtifactsSerializer.writeTo(listOf(meeting), bytes)
+        assertEquals(meeting, ArtifactsSerializer.readFrom(bytes.toByteArray().inputStream()).single())
+    }
+
     @Test fun damagedAndFutureFilesCannotBecomeAnEmptyWritableStore() = runBlocking {
         for (bytes in listOf(byteArrayOf(0, 0, 0, 99), byteArrayOf(0, 0, 0, 2, 0, 0, 0, 1))) {
             try { ArtifactsSerializer.readFrom(bytes.inputStream()); fail("Unreadable data must fail") }

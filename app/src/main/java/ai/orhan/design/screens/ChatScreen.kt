@@ -1,5 +1,6 @@
 package ai.orhan.design.screens
 
+import ai.orhan.feature.chat.meetingActionItems
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -240,6 +241,12 @@ fun ChatScreen(
     onTranslateMessage: (suspend (String) -> Result<String>)? = null,
     /** Sends the original persisted audio payload to the configured speech-capable model. */
     onTranscribeAudio: (suspend (ChatAttachment) -> Result<String>)? = null,
+    /** Creates factual minutes from an audio message through the configured model provider. */
+    onCreateMeetingMinutes: (suspend (ChatAttachment) -> Result<String>)? = null,
+    /** Persists minutes with a source link to the original chat message. */
+    onSaveMeetingMinutes: (suspend (String, String, String, Long, String) -> Boolean)? = null,
+    /** Saves explicitly reviewed action bullets with the original source-message reference. */
+    onSaveMeetingActions: (suspend (List<String>, String, Long) -> Result<String>)? = null,
     /** Prefills the composer once (e.g. from a workflow). Never auto-sent; a restored draft wins. */
     initialComposerText: String = "",
     /** Scrolls to this message when opening a memory source. Zero means no source. */
@@ -272,12 +279,18 @@ fun ChatScreen(
     var textActionResult by rememberSaveable { mutableStateOf<String?>(null) }
     var textActionError by rememberSaveable { mutableStateOf<String?>(null) }
     var textActionLoading by rememberSaveable { mutableStateOf(false) }
+    var textActionSourceMessageId by rememberSaveable { mutableStateOf(0L) }
+    var textActionNotice by rememberSaveable { mutableStateOf<String?>(null) }
+    var meetingMinutesSaved by rememberSaveable { mutableStateOf(false) }
 
-    fun runTextAction(title: String, action: suspend () -> Result<String>) {
+    fun runTextAction(title: String, sourceMessageId: Long = 0L, action: suspend () -> Result<String>) {
         actionMessageId = null
         textActionTitle = title
+        textActionSourceMessageId = sourceMessageId
         textActionResult = null
         textActionError = null
+        textActionNotice = null
+        meetingMinutesSaved = false
         textActionLoading = true
         scope.launch {
             val result = try { action() } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
@@ -629,6 +642,7 @@ fun ChatScreen(
             canSaveAction = actionMessage.role == ChatRole.User && onSaveAction != null && actionMessage.id != 0L,
             canTranslate = onTranslateMessage != null,
             canTranscribe = onTranscribeAudio != null && actionMessage.attachment?.mimeType?.startsWith("audio/") == true,
+            canCreateMinutes = onCreateMeetingMinutes != null && actionMessage.attachment?.mimeType?.startsWith("audio/") == true,
             onDismiss = { actionMessageId = null },
             onCopy = {
                 copyText(context, actionMessage.text)
@@ -657,26 +671,70 @@ fun ChatScreen(
                 val audio = actionMessage.attachment
                 if (audio != null) runTextAction("Transcript") { onTranscribeAudio?.invoke(audio) ?: Result.failure(IllegalStateException("Transcription is unavailable.")) }
             },
+            onCreateMinutes = {
+                val audio = actionMessage.attachment
+                if (audio != null) runTextAction("Meeting minutes", actionMessage.id) { onCreateMeetingMinutes?.invoke(audio) ?: Result.failure(IllegalStateException("Meeting minutes are unavailable.")) }
+            },
         )
     }
     textActionTitle?.let { title ->
         AlertDialog(
-            onDismissRequest = { if (!textActionLoading) { textActionTitle = null; textActionResult = null; textActionError = null } },
+            onDismissRequest = { if (!textActionLoading) { textActionTitle = null; textActionResult = null; textActionError = null; textActionNotice = null } },
             title = { Text(title) },
             text = {
                 when {
                     textActionLoading -> Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text("Waiting for the signed-in service…")
+                        Text("Waiting for the configured model service…")
                     }
-                    textActionError != null -> Text(textActionError!!, color = MaterialTheme.colorScheme.error)
-                    else -> SelectionContainer { Text(textActionResult.orEmpty()) }
+                    textActionError != null -> Column {
+                        Text(textActionError!!, color = MaterialTheme.colorScheme.error)
+                        if (textActionResult != null) {
+                            Spacer(Modifier.height(8.dp))
+                            SelectionContainer { Text(textActionResult.orEmpty()) }
+                        }
+                    }
+                    else -> Column {
+                        textActionNotice?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+                        SelectionContainer { Text(textActionResult.orEmpty()) }
+                    }
                 }
             },
             confirmButton = {
-                TextButton(enabled = !textActionLoading, onClick = { textActionTitle = null; textActionResult = null; textActionError = null }) { Text("Done") }
+                TextButton(enabled = !textActionLoading, onClick = { textActionTitle = null; textActionResult = null; textActionError = null; textActionNotice = null }) { Text("Done") }
             },
+            dismissButton = if (title == "Meeting minutes" && textActionResult != null) ({
+                Column(horizontalAlignment = Alignment.End) {
+                    val actions = meetingActionItems(textActionResult.orEmpty())
+                    if (actions.isNotEmpty() && onSaveMeetingActions != null) {
+                        TextButton(enabled = !textActionLoading, onClick = {
+                            if (!textActionLoading) scope.launch {
+                                textActionLoading = true
+                                val result = try { onSaveMeetingActions(actions, sourceChatId, textActionSourceMessageId) }
+                                catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+                                catch (error: Exception) { Result.failure(error) }
+                                finally { textActionLoading = false }
+                                result.onSuccess { textActionError = null; textActionNotice = it }.onFailure { textActionError = it.message ?: "Couldn't save these action items." }
+                            }
+                        }) { Text("Save ${actions.size} action items") }
+                    }
+                    if (onSaveMeetingMinutes != null) {
+                        TextButton(enabled = !textActionLoading && !meetingMinutesSaved, onClick = {
+                            if (!textActionLoading && !meetingMinutesSaved) scope.launch {
+                                textActionLoading = true
+                                val saved = try {
+                                    onSaveMeetingMinutes("Meeting minutes", textActionResult.orEmpty(), sourceChatId, textActionSourceMessageId, agentName)
+                                } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+                                catch (_: Exception) { false }
+                                finally { textActionLoading = false }
+                                if (saved) { meetingMinutesSaved = true; textActionError = null; textActionNotice = "Minutes saved to Artifacts." }
+                                else textActionError = "Couldn't save these minutes. The result is still here."
+                            }
+                        }) { Text(if (meetingMinutesSaved) "Saved to Artifacts" else "Save minutes to Artifacts") }
+                    }
+                }
+            }) else null,
         )
     }
 }
@@ -1424,6 +1482,7 @@ private fun MessageActionsSheet(
     canSaveAction: Boolean,
     canTranslate: Boolean,
     canTranscribe: Boolean,
+    canCreateMinutes: Boolean,
     onDismiss: () -> Unit,
     onCopy: () -> Unit,
     onShare: () -> Unit,
@@ -1431,6 +1490,7 @@ private fun MessageActionsSheet(
     onSaveAction: () -> Unit,
     onTranslate: () -> Unit,
     onTranscribe: () -> Unit,
+    onCreateMinutes: () -> Unit,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1446,8 +1506,9 @@ private fun MessageActionsSheet(
             )
             SheetAction(Icons.Rounded.ContentCopy, "Copy", null, onCopy)
             SheetAction(Icons.Rounded.Share, "Share", null, onShare)
-            if (canTranslate) SheetAction(Icons.Rounded.Description, "Translate", "Uses the signed-in language service.", onTranslate)
+            if (canTranslate) SheetAction(Icons.Rounded.Description, "Translate", "Uses the configured language model.", onTranslate)
             if (canTranscribe) SheetAction(Icons.Rounded.Mic, "Transcribe audio", "Sends this saved audio to the speech-capable model.", onTranscribe)
+            if (canCreateMinutes) SheetAction(Icons.Rounded.Description, "Create meeting minutes", "Transcribes this saved recording and drafts factual minutes.", onCreateMinutes)
             if (canSave) {
                 SheetAction(Icons.Rounded.Description, "Save as artifact", null, onSave)
             }

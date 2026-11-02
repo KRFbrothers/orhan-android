@@ -34,6 +34,7 @@ data class MemoryEntry(
 )
 
 enum class ActionSaveResult { Saved, Duplicate, Dismissed, Blank, WriteFailed }
+data class MeetingActionSaveSummary(val saved: Int, val duplicates: Int, val notAdded: Int = 0, val dismissed: Boolean = false)
 
 data class MemoryEntries(
     val notes: List<MemoryEntry> = emptyList(),
@@ -210,6 +211,42 @@ class MemoryEntriesStore(private val dataStore: DataStore<MemoryEntries>) {
         } catch (_: Exception) {
             ActionSaveResult.WriteFailed
         }
+    }
+
+    /** Adds only explicitly selected meeting action items, preserving their shared message source link. */
+    suspend fun addMeetingActionsFromChat(items: List<String>, chatTitle: String, messageId: Long): MeetingActionSaveSummary {
+        val cleanItems = items.map { it.trim().take(MAX_TODO_CONTENT) }
+            .filter(String::isNotBlank).distinctBy { actionTitleFromMessage(it).lowercase() }.take(20)
+        val chat = chatTitle.trim()
+        if (cleanItems.isEmpty() || chat.isEmpty() || messageId == 0L) return MeetingActionSaveSummary(0, 0)
+        val key = sourceKey(chat, messageId)
+        var saved = 0
+        var duplicates = 0
+        var notAdded = 0
+        var dismissed = false
+        dataStore.updateData { raw ->
+            val current = raw.withNotesMigrated()
+            if (key in current.dismissedActionSources) {
+                dismissed = true
+                return@updateData current
+            }
+            val additions = cleanItems.mapNotNull { text ->
+                val title = actionTitleFromMessage(text)
+                if (title.isBlank() || current.todos.any { it.title.equals(title, ignoreCase = true) }) {
+                    duplicates++
+                    null
+                } else MemoryEntry(
+                    id = UUID.randomUUID().toString(), title = title, content = text, done = false,
+                    createdAt = System.currentTimeMillis(), sourceChatTitle = chat, sourceMessageId = messageId,
+                )
+            }
+            val available = (MAX_ENTRIES - current.todos.size).coerceAtLeast(0)
+            val accepted = additions.take(available)
+            saved = accepted.size
+            notAdded = additions.size - accepted.size
+            current.copy(todos = accepted + current.todos)
+        }
+        return MeetingActionSaveSummary(saved, duplicates, notAdded, dismissed)
     }
 
     /**
