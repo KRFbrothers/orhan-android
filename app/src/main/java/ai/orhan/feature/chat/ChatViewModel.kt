@@ -532,6 +532,12 @@ class ChatViewModel(
 
     fun clearError() = _state.update { it.copy(error = null) }
 
+    suspend fun translateMessage(text: String, targetLanguage: String): Result<String> =
+        repository.translateText(text, targetLanguage)
+
+    suspend fun transcribeAudio(attachment: ChatAttachment): Result<String> =
+        repository.transcribeAudio(attachment)
+
     private fun nextId() = (_state.value.messages.lastOrNull()?.id ?: 0L) + 1L
 }
 

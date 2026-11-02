@@ -30,4 +30,18 @@ class ChatRequestBodyTest {
         assertEquals(0, ChatRepository.body(turns, true, allowedTools = emptyList()).getJSONArray("allowedTools").length())
         assertFalse(ChatRepository.body(turns, true).has("allowedTools"))
     }
+
+    @Test fun plainServiceActionsAreToolFreeAndAudioStaysOnItsUserTurn() {
+        val audio = ChatAttachment("voice.m4a", "audio/mp4", "AQID", 3)
+        val body = ChatRepository.body(
+            listOf(ChatTurn("user", "Transcribe this.", listOf(audio))),
+            stream = true,
+            systemInstruction = "Transcribe only.",
+            mode = "auto",
+        )
+        assertEquals("auto", body.getString("mode"))
+        val turn = body.getJSONArray("messages").getJSONObject(0)
+        assertEquals("audio/mp4", turn.getJSONArray("attachments").getJSONObject(0).getString("mimeType"))
+        assertFalse(body.has("allowedTools"))
+    }
 }

@@ -65,9 +65,9 @@ class ChatRepository(
          * (Dua-ai #494) only when non-blank, so older engines just see the plain messages array.
          */
         internal fun body(turns: List<ChatTurn>, stream: Boolean, systemInstruction: String? = null,
-                          allowedTools: List<String>? = null) = JSONObject()
+                          allowedTools: List<String>? = null, mode: String = "agent") = JSONObject()
             .put("stream", stream)
-            .put("mode", "agent") // always agent pipeline (server uses AGENT_ENGINE=adk when configured)
+            .put("mode", mode)
             .put("messages", JSONArray().apply {
                 turns.takeLast(20).forEach { turn ->
                     val obj = JSONObject().put("role", turn.role).put("text", turn.text)
@@ -141,6 +141,37 @@ class ChatRepository(
         if (missing.isNotEmpty()) throw IOException("Selected tools are unavailable: ${missing.joinToString()}")
     }
 
+    /** Uses the signed-in engine's real model provider without enabling Agent tool dispatch. */
+    suspend fun translateText(text: String, targetLanguage: String): Result<String> {
+        val source = text.trim()
+        val language = targetLanguage.trim().take(80)
+        if (source.isEmpty() || language.isEmpty()) return Result.failure(IllegalArgumentException("Text and target language are required."))
+        return plainTextRequest(
+            prompt = source,
+            instruction = "Translate the supplied text into $language. Preserve its meaning, names, formatting and tone. Return only the translation, with no explanation or quotation marks.",
+        )
+    }
+
+    /** Sends the original audio attachment to the configured Gemini engine for transcription. */
+    suspend fun transcribeAudio(attachment: ChatAttachment): Result<String> {
+        if (!attachment.mimeType.lowercase().startsWith("audio/")) return Result.failure(IllegalArgumentException("Choose an audio attachment to transcribe."))
+        return plainTextRequest(
+            prompt = "Transcribe the speech in the attached audio.",
+            instruction = "Transcribe speech in the attached audio verbatim in its original language. Return only the transcript. If no speech is audible, say [no speech].",
+            attachment = attachment,
+        )
+    }
+
+    private suspend fun plainTextRequest(prompt: String, instruction: String, attachment: ChatAttachment? = null): Result<String> {
+        val output = StringBuilder()
+        return stream(
+            turns = listOf(ChatTurn("user", prompt, listOfNotNull(attachment))),
+            systemInstruction = instruction,
+            mode = "auto",
+            onDelta = { output.append(it) },
+        ).map { output.toString().trim() }
+    }
+
     /**
      * Streams a reply. [onDelta] is called (on IO) with each text chunk. Returns the full text.
      * [onActivity] receives a short label for `thinking` / `progress` events (no-op if never sent).
@@ -151,6 +182,7 @@ class ChatRepository(
         turns: List<ChatTurn>,
         systemInstruction: String? = null,
         allowedTools: List<String>? = null,
+        mode: String = "agent",
         onActivity: suspend (String) -> Unit = {},
         onDelta: suspend (String) -> Unit,
     ): Result<String> =
@@ -161,7 +193,7 @@ class ChatRepository(
                 // Blocking SSE reads ignore coroutine cancel; disconnect on cancel so Stop is immediate.
                 val watcher = launch { try { awaitCancellation() } finally { conn.disconnect() } }
                 try {
-                    conn.outputStream.use { it.write(body(turns, true, systemInstruction, allowedTools).toString().toByteArray()) }
+                    conn.outputStream.use { it.write(body(turns, true, systemInstruction, allowedTools, mode).toString().toByteArray()) }
                     val code = conn.responseCode
                     if (code == 401) {
                         onUnauthorized()

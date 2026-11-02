@@ -548,6 +548,8 @@ fun OrhanNavHost(isDark: Boolean) {
                         android.widget.Toast.makeText(context, notice, android.widget.Toast.LENGTH_LONG).show()
                     }
                 },
+                onTranslateMessage = { text -> chatViewModel.translateMessage(text, languageName(languagePrefs.code)) },
+                onTranscribeAudio = chatViewModel::transcribeAudio,
                 initialComposerText = entry.arguments?.getString("draft").orEmpty(),
                 focusMessageId = entry.arguments?.getString("message")?.toLongOrNull() ?: 0L,
                 threadRestored = chat.threadRestored,
