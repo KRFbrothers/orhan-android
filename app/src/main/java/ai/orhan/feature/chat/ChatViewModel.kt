@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.FlowPreview
 import ai.orhan.data.history.ChatThreadStore
+import ai.orhan.data.history.StoredHandoffRetry
 import ai.orhan.data.history.chatThreads
 import ai.orhan.data.history.toStored
 import ai.orhan.data.memory.AutomaticMemoryCoordinator
@@ -151,19 +152,25 @@ class ChatViewModel(
         }
         viewModelScope.launch {
             val saved = store.loadThread(title)
+            pendingHandoffRetry = saved.pendingHandoffRetry?.let {
+                PendingHandoffRetry(it.sourceReplyId, RosterAgent(it.agentName, "", it.instructions), it.task)
+            }
+            val interruptedHandoffError = saved.pendingHandoffRetry?.let {
+                "${it.agentName} assignment was interrupted. Tap Try again to resume it."
+            }
             if (saved.messages.isNotEmpty() && _state.value.messages.isEmpty()) {
                 saved.attachments.forEach { (id, a) -> attachmentsById.putIfAbsent(id, a) }
-                _state.update { it.copy(messages = saved.messages, threadRestored = true) }
+                _state.update { it.copy(messages = saved.messages, threadRestored = true, error = interruptedHandoffError ?: it.error) }
             } else {
-                _state.update { it.copy(threadRestored = true) }
+                _state.update { it.copy(threadRestored = true, error = interruptedHandoffError ?: it.error) }
             }
             _state.filter { !it.busy }
-                .map { it.messages }
+                .map { it.messages to pendingHandoffRetry?.toStored() }
                 .distinctUntilChanged()
                 .drop(1)
                 .debounce(300)
-                .collect { msgs ->
-                    store.save(title, msgs, attachmentsById.toMap())
+                .collect { (msgs, pending) ->
+                    store.save(title, msgs, attachmentsById.toMap(), pendingHandoffRetry = pending)
                     automaticMemory?.onMessagesSaved(title, msgs.map { it.toStored() })
                 }
         }
@@ -179,7 +186,7 @@ class ChatViewModel(
         val msgs = _state.value.messages
         val atts = attachmentsById.toMap()
         if (msgs.isNotEmpty()) viewModelScope.launch {
-            store.save(title, msgs, atts)
+            store.save(title, msgs, atts, pendingHandoffRetry = pendingHandoffRetry?.toStored())
             automaticMemory?.onMessagesSaved(title, msgs.map { it.toStored() })
         }
     }
@@ -191,6 +198,12 @@ class ChatViewModel(
     private var instructions: String = ""
     private data class PendingHandoffRetry(val sourceReplyId: Long, val agent: RosterAgent, val task: String)
     private var pendingHandoffRetry: PendingHandoffRetry? = null
+    private fun PendingHandoffRetry.toStored() = StoredHandoffRetry(
+        sourceReplyId = sourceReplyId,
+        agentName = agent.name,
+        instructions = agent.instructions,
+        task = task,
+    )
 
     /** Sets the agent personality used for API turns. Idempotent; safe to call on every recomposition. */
     fun setAgent(name: String, instructions: String) {

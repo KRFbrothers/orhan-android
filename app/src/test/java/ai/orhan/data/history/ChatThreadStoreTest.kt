@@ -35,6 +35,28 @@ class ChatAttachmentPersistenceTest {
         assertEquals(list, ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()))
     }
 
+    @Test fun serializerRoundTripsPendingHandoffRetryState() = kotlinx.coroutines.runBlocking {
+        val retry = StoredHandoffRetry(17L, "Slides", "Use a concise style", "Make a 5-slide deck")
+        val thread = ChatThread("Orhan", 30L, listOf(StoredMessage(17L, "agent", "Assigned to Slides", "now")), retry)
+        val out = java.io.ByteArrayOutputStream()
+        ChatThreadsSerializer.writeTo(listOf(thread), out)
+        assertEquals(listOf(thread), ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()))
+    }
+
+    @Test fun v3ThreadMigratesWithoutPendingHandoff() = kotlinx.coroutines.runBlocking {
+        val out = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(out).apply {
+            writeInt(3); writeInt(1); writeUTF("Orhan"); writeLong(30); writeInt(1)
+            writeLong(7); writeUTF("agent")
+            val text = "existing reply".toByteArray(Charsets.UTF_8)
+            writeInt(text.size); write(text); writeUTF("now"); writeLong(12); writeBoolean(false)
+        }
+        val migrated = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
+        assertEquals("Orhan", migrated.title)
+        assertEquals(listOf(StoredMessage(7, "agent", "existing reply", "now", createdAt = 12)), migrated.messages)
+        assertEquals(null, migrated.pendingHandoffRetry)
+    }
+
     @Test fun filesRoundTripAndPrune() {
         val dir = java.nio.file.Files.createTempDirectory("att").toFile()
         val files = AttachmentFiles(dir)
