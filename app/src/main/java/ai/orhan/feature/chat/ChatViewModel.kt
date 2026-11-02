@@ -56,6 +56,12 @@ internal fun parseHandoff(reply: String, roster: List<RosterAgent>): Pair<Roster
     return if (task.isEmpty()) null else agent to task
 }
 
+/** Keeps the original Orhan assignment bubble and drops only later specialist output before retry. */
+internal fun messagesForHandoffRetry(messages: List<ChatMessage>, sourceReplyId: Long): List<ChatMessage> {
+    val sourceIndex = messages.indexOfLast { it.id == sourceReplyId && it.role == ChatRole.Agent }
+    return if (sourceIndex < 0) emptyList() else messages.take(sourceIndex + 1)
+}
+
 internal fun stripHandoff(reply: String): String {
     val trimmed = reply.trimEnd()
     val last = lastLine(trimmed)
@@ -183,6 +189,8 @@ class ChatViewModel(
 
     private var agentName: String = ""
     private var instructions: String = ""
+    private data class PendingHandoffRetry(val sourceReplyId: Long, val agent: RosterAgent, val task: String)
+    private var pendingHandoffRetry: PendingHandoffRetry? = null
 
     /** Sets the agent personality used for API turns. Idempotent; safe to call on every recomposition. */
     fun setAgent(name: String, instructions: String) {
@@ -322,6 +330,7 @@ class ChatViewModel(
     fun send(raw: String, attachment: ChatAttachment?) {
         val text = raw.trim()
         if ((text.isEmpty() && attachment == null) || _state.value.busy) return
+        pendingHandoffRetry = null
         val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
         val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis())
         if (attachment != null) attachmentsById[user.id] = attachment
@@ -336,6 +345,18 @@ class ChatViewModel(
     fun retry() {
         val s = _state.value
         if (s.busy || s.error == null) return
+        val handoff = pendingHandoffRetry
+        if (handoff != null) {
+            val retryMessages = messagesForHandoffRetry(s.messages, handoff.sourceReplyId)
+            if (retryMessages.isNotEmpty()) {
+                _state.update { it.copy(messages = retryMessages, loading = true, activityLabel = null, busy = true, error = null) }
+                streamJob = viewModelScope.launch {
+                    runHandoff(handoff.sourceReplyId, handoff.agent, handoff.task)
+                }
+                return
+            }
+            pendingHandoffRetry = null
+        }
         val msgs = s.messages.toMutableList()
         while (msgs.isNotEmpty() && msgs.last().role == ChatRole.Agent) msgs.removeAt(msgs.lastIndex)
         if (msgs.isEmpty()) { clearError(); return }
@@ -397,9 +418,14 @@ class ChatViewModel(
      * specialist's own identity + instructions and streams its reply into a bubble labeled with the agent name.
      */
     private suspend fun runHandoff(orhanReplyId: Long, agent: RosterAgent, task: String) {
+        pendingHandoffRetry = PendingHandoffRetry(orhanReplyId, agent, task)
         _state.update { s ->
             s.copy(messages = s.messages.map { m ->
-                if (m.id == orhanReplyId) m.copy(text = stripHandoff(m.text) + "\n\n\u21AA Assigned to ${agent.name}: $task") else m
+                if (m.id == orhanReplyId) {
+                    val note = "\n\n\u21AA Assigned to ${agent.name}: $task"
+                    val original = stripHandoff(m.text)
+                    m.copy(text = if (original.endsWith(note)) original else original + note)
+                } else m
             }, loading = true, activityLabel = null)
         }
         val lastUser = turnsForApi(_state.value.messages, attachmentsById).lastOrNull { it.role == "user" }
@@ -441,7 +467,10 @@ class ChatViewModel(
                 _state.update { it.copy(messages = it.messages + ChatMessage(bubbleId, ChatRole.Agent, header + reply, currentTimeString())) }
             }
         }
-            .onSuccess { _state.update { it.copy(loading = false, activityLabel = null, busy = false) } }
+            .onSuccess {
+                pendingHandoffRetry = null
+                _state.update { it.copy(loading = false, activityLabel = null, busy = false) }
+            }
             .onFailure { e ->
                 if (e is CancellationException) throw e
                 _state.update { it.copy(loading = false, activityLabel = null, busy = false, error = "${agent.name}: ${e.message ?: "Request failed"}") }
