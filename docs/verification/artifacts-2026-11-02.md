@@ -590,3 +590,5 @@ prove them. Teamly's saved-message grouping, star preservation and forwarding
 remain unverified because reference runtime provided no saved-message payload.
 The next implementation stage is Agents; DOCX, collaborative Studio, real media
 viewers and Teamly saved-message semantics remain explicitly open/evidence-bound.
+
+Agents stage handoff: the next focused slice is actual tool behavior. Current agent tool selection is serialized and passed through `ChatViewModel` as `AgentToolGuidance` prompt text (see `feature/chat/AgentToolGuidance.kt` and `ChatViewModel.contextBlocks()`); the editor itself says the shared engine retains its full tool set. Determine which capabilities the configured Orhan service actually exposes, then enforce/document selected-tool behavior against that service contract. Unknowns: no reference runtime tool invocation was inspected in this slice, and no independent backend capability contract was established here. Preserve existing agent instructions, chats and workflows while tracing this boundary.
