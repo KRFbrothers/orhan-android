@@ -817,7 +817,41 @@ private fun AttachmentMessagePreview(attachment: ChatAttachment) {
             modifier = Modifier.widthIn(max = 260.dp).heightIn(max = 260.dp).clip(RoundedCornerShape(12.dp)),
         ) else Text("Image unavailable · ${attachment.name}", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
     } else {
-        Text("${attachment.mimeType} · ${attachment.name}", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+        var opening by remember(attachment.base64) { mutableStateOf(false) }
+        androidx.compose.material3.Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("${attachment.mimeType} · ${attachment.name}", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            androidx.compose.material3.TextButton(enabled = !opening, onClick = {
+                if (!opening) scope.launch {
+                    opening = true
+                    val file = withContext(Dispatchers.IO) {
+                        runCatching {
+                            val bytes = Base64.decode(attachment.base64, Base64.DEFAULT)
+                            require(bytes.isNotEmpty() && bytes.size <= ChatAttachment.MAX_BYTES)
+                            val directory = java.io.File(context.cacheDir, "artifact_exports").apply { mkdirs() }
+                            val suffix = attachment.name.substringAfterLast('.', "file").filter { it.isLetterOrDigit() }.take(8).ifBlank { "file" }
+                            java.io.File.createTempFile("chat-attachment-", ".$suffix", directory).also { it.writeBytes(bytes) }
+                        }.getOrNull()
+                    }
+                    if (file == null) {
+                        opening = false
+                        Toast.makeText(context, "Couldn't prepare this attachment", Toast.LENGTH_SHORT).show()
+                        return@launch
+                    }
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.artifact-exports", file)
+                    val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, attachment.mimeType)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    view.clipData = ClipData.newRawUri(attachment.name, uri)
+                    runCatching { context.startActivity(Intent.createChooser(view, "Open attachment").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        .onFailure {
+                            file.delete()
+                            Toast.makeText(context, "No app can open this attachment", Toast.LENGTH_SHORT).show()
+                        }
+                    opening = false
+                }
+            }) { Text(if (opening) "Preparing…" else "Open") }
+        }
     }
 }
 
