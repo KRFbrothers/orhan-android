@@ -155,6 +155,8 @@ data class ChatMessage(
     val createdAt: Long = 0L,
     /** Inline payload restored from the local attachment store; never serialized in the thread record. */
     val attachment: ChatAttachment? = null,
+    /** Local reply relationship; null for ordinary messages and legacy threads. */
+    val replyToId: Long? = null,
 )
 
 /**
@@ -173,6 +175,7 @@ private val ChatThreadSaver: Saver<List<ChatMessage>, ArrayList<String>> = Saver
                     m.artifact?.name ?: "",
                     m.artifact?.meta ?: "",
                     m.createdAt.toString(),
+                    m.replyToId?.toString() ?: "",
                 ).joinToString("\u001f")
             },
         )
@@ -191,6 +194,7 @@ private val ChatThreadSaver: Saver<List<ChatMessage>, ArrayList<String>> = Saver
                     null
                 },
                 createdAt = p.getOrNull(6)?.toLongOrNull() ?: 0L,
+                replyToId = p.getOrNull(7)?.toLongOrNull(),
             )
         }
     },
@@ -226,6 +230,8 @@ fun ChatScreen(
     onSendMessage: ((String) -> Unit)? = null,
     /** Sends text plus one inline file to the engine. When null, Attach explains files aren't available here. */
     onSendAttachment: ((text: String, attachment: ChatAttachment) -> Unit)? = null,
+    /** Unified send hook used when a reply relationship must be persisted. */
+    onSendWithReply: ((text: String, attachment: ChatAttachment?, replyToId: Long?) -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
     onStopGeneration: (() -> Unit)? = null,
     sendWithEnter: Boolean = true,
@@ -263,6 +269,7 @@ fun ChatScreen(
     var cameraOutput by remember { mutableStateOf<java.io.File?>(null) }
     var attachSheet by rememberSaveable { mutableStateOf(false) }
     var actionMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var replyTargetId by rememberSaveable { mutableStateOf<Long?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -369,7 +376,7 @@ fun ChatScreen(
     }
 
     fun onAttach() {
-        if (onSendAttachment == null) {
+        if (onSendAttachment == null && onSendWithReply == null) {
             Toast.makeText(context, "Attaching files isn't available in this chat yet", Toast.LENGTH_SHORT).show()
         } else {
             attachSheet = true
@@ -412,7 +419,10 @@ fun ChatScreen(
 
     fun deliver(text: String) {
         val file = attachment
-        if (file != null && onSendAttachment != null) {
+        if (onSendWithReply != null) {
+            onSendWithReply(text, file, replyTargetId)
+            attachment = null
+        } else if (file != null && onSendAttachment != null) {
             onSendAttachment(text, file)
             attachment = null
         } else if (onSendMessage != null) {
@@ -423,8 +433,10 @@ fun ChatScreen(
                 role = ChatRole.User,
                 text = text,
                 time = "now",
+                replyToId = replyTargetId,
             )
         }
+        replyTargetId = null
         input = ""
     }
 
@@ -516,12 +528,14 @@ fun ChatScreen(
             }
 
             items(items = messages, key = { it.id }) { message ->
+                val quoted = message.replyToId?.let { id -> messages.firstOrNull { it.id == id } }
                 MessageBubble(
                     message = message,
                     agentName = agentName,
                     selected = message.id == actionMessageId ||
                         (actionMessageId == null && focusMessageId != 0L && message.id == focusMessageId),
                     sourceMessage = focusMessageId != 0L && message.id == focusMessageId,
+                    replyText = quoted?.text?.take(180),
                     showActivityCards = showActivityCards,
                     onLongPress = if (message.text.isNotBlank()) {
                         { actionMessageId = message.id }
@@ -571,6 +585,19 @@ fun ChatScreen(
                 }
             }
         }
+        replyTargetId?.let { id ->
+            val quoted = messages.firstOrNull { it.id == id }
+            Row(
+                modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Replying to ${if (quoted?.role == ChatRole.User) "you" else agentName}", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.primary)
+                    Text(quoted?.text?.take(120) ?: "Original message unavailable", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                IconButton(onClick = { replyTargetId = null }) { Icon(Icons.Rounded.Close, contentDescription = "Cancel reply") }
+            }
+        }
         Composer(
             value = input,
             onValueChange = { input = it },
@@ -602,6 +629,7 @@ fun ChatScreen(
     val actionMessage = actionMessageId?.let { id -> messages.firstOrNull { it.id == id } }
     if (actionMessage != null && actionMessage.text.isNotBlank()) {
         MessageActionsSheet(
+            onReply = { replyTargetId = actionMessage.id; actionMessageId = null },
             canSave = actionMessage.role == ChatRole.Agent && actionMessage.id != 0L && onSaveArtifact != null,
             canSaveAction = actionMessage.role == ChatRole.User && onSaveAction != null && actionMessage.id != 0L,
             onDismiss = { actionMessageId = null },
@@ -727,6 +755,7 @@ private fun MessageBubble(
     showActivityCards: Boolean = true,
     onLongPress: (() -> Unit)? = null,
     sourceMessage: Boolean = false,
+    replyText: String? = null,
 ) {
     val colors = OrhanTheme.colors
     val isUser = message.role == ChatRole.User
@@ -783,12 +812,18 @@ private fun MessageBubble(
                 )
                 .padding(horizontal = 14.dp, vertical = 11.dp)
             Box(modifier = bubbleModifier) {
-                SelectionContainer {
-                    Text(
-                        text = message.text,
-                        style = OrhanTextStyles.bubble,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+                Column {
+                    if (message.replyToId != null) {
+                        Text(replyText ?: "Reply to message", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.primary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Spacer(modifier = Modifier.height(5.dp))
+                    }
+                    SelectionContainer {
+                        Text(
+                            text = message.text,
+                            style = OrhanTextStyles.bubble,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
             message.attachment?.let { payload ->
@@ -1370,6 +1405,7 @@ private fun AttachSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MessageActionsSheet(
+    onReply: () -> Unit,
     canSave: Boolean,
     canSaveAction: Boolean,
     onDismiss: () -> Unit,
@@ -1392,6 +1428,7 @@ private fun MessageActionsSheet(
             )
             SheetAction(Icons.Rounded.ContentCopy, "Copy", null, onCopy)
             SheetAction(Icons.Rounded.Share, "Share", null, onShare)
+            SheetAction(Icons.Rounded.Add, "Reply", "Quote this message in your next turn", onReply)
             if (canSave) {
                 SheetAction(Icons.Rounded.Description, "Save as artifact", null, onSave)
             }
