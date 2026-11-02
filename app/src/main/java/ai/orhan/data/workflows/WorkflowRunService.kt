@@ -3,6 +3,7 @@ package ai.orhan.data.workflows
 import ai.orhan.BuildConfig
 import ai.orhan.data.auth.AuthRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -17,7 +18,7 @@ class WorkflowRunService(
     private val unauthorized: suspend () -> Unit = { auth.clear() },
 ) {
     suspend fun sync(localRuns: List<WorkflowRun>): Result<List<WorkflowRun>> = withContext(Dispatchers.IO) {
-        runCatching {
+        try {
             require(baseUrl.startsWith("https://")) { "Workflow history service requires HTTPS." }
             val token = auth.accessToken() ?: throw IOException("Sign in to synchronize workflow history.")
             if (localRuns.isNotEmpty()) {
@@ -31,7 +32,11 @@ class WorkflowRunService(
             if (code == 401) unauthorized()
             if (code !in 200..299) throw IOException(body?.optString("error")?.ifBlank { null } ?: "Workflow history could not be loaded (HTTP $code).")
             val rows = body?.optJSONArray("runs") ?: throw IOException("Workflow history returned an invalid response.")
-            List(rows.length()) { index -> rows.getJSONObject(index).toWorkflowRun() }
+            Result.success(List(rows.length()) { index -> rows.getJSONObject(index).toWorkflowRun() })
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (failure: Exception) {
+            Result.failure(failure)
         }
     }
 
