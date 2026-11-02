@@ -12,11 +12,15 @@ import java.io.OutputStream
  *
  * Version 1 files are notes + to-dos. Notes become topics in the "Notes" group
  * and are not written back, so an older file still opens and is not duplicated.
- * To-dos stay to-dos (Next Actions). Topics are sent to a chat only when the
- * user turns on "Use topics in chats", and never while memory is paused.
+ * To-dos stay to-dos (Next Actions). Version 4 stores a chat source on each
+ * to-do, an artifact id on each topic, and the source keys of deleted chat
+ * actions. The topic stores that id only. It does not copy the artifact body.
+ * Topics are sent to a chat only when the user turns on "Use topics in chats",
+ * and never while memory is paused.
  */
 
-const val TOPICS_FORMAT_VERSION = 3
+const val TOPICS_FORMAT_VERSION = 4
+private const val TOPICS_FORMAT_V3 = 3
 private const val TOPICS_FORMAT_V2 = 2
 const val DEFAULT_TOPIC_GROUP = "General"
 const val MIGRATED_NOTES_GROUP = "Notes"
@@ -39,6 +43,8 @@ data class MemoryTopic(
     val sourceChatTitle: String = "",
     /** Message id inside [sourceChatTitle]. Zero when there is no source message. */
     val sourceMessageId: Long = 0L,
+    /** Id of an artifact in the artifact store. Empty when this topic is not linked. */
+    val artifactId: String = "",
 )
 
 internal fun MemoryEntries.withNotesMigrated(): MemoryEntries {
@@ -70,6 +76,7 @@ internal fun prepareTopic(
     tags: List<String>,
     now: Long,
     newId: String,
+    artifactId: String = "",
 ): MemoryTopic? {
     val cleanTitle = title.trim().take(MAX_ENTRY_TITLE)
     if (cleanTitle.isBlank()) return null
@@ -77,12 +84,14 @@ internal fun prepareTopic(
     val cleanGroup = group.trim().ifBlank { DEFAULT_TOPIC_GROUP }.take(MAX_GROUP_NAME)
     val cleanSummary = summary.trim().take(MAX_SUMMARY)
     val cleanContent = content.trim().take(MAX_NOTE_CONTENT)
+    val cleanArtifact = artifactId.trim()
     val changed = existing == null ||
         existing.title != cleanTitle ||
         existing.summary != cleanSummary ||
         existing.content != cleanContent ||
         existing.group != cleanGroup ||
-        existing.tags != cleanTags
+        existing.tags != cleanTags ||
+        existing.artifactId != cleanArtifact
     return MemoryTopic(
         id = existing?.id ?: newId,
         title = cleanTitle,
@@ -96,6 +105,7 @@ internal fun prepareTopic(
         updatedAt = if (changed) now else existing?.updatedAt ?: now,
         sourceChatTitle = existing?.sourceChatTitle.orEmpty(),
         sourceMessageId = existing?.sourceMessageId ?: 0L,
+        artifactId = cleanArtifact,
     )
 }
 
@@ -175,9 +185,10 @@ internal fun encodeMemoryEntries(entries: MemoryEntries): ByteArray {
     val buffer = ByteArrayOutputStream()
     DataOutputStream(buffer).use { out ->
         out.writeInt(TOPICS_FORMAT_VERSION)
-        out.writeEntryList(emptyList())
-        out.writeEntryList(migrated.todos)
+        out.writeEntryList(emptyList(), withSource = true)
+        out.writeEntryList(migrated.todos, withSource = true)
         out.writeTopicList(migrated.topics)
+        out.writeDismissed(migrated.dismissedActionSources)
     }
     return buffer.toByteArray()
 }
@@ -193,11 +204,26 @@ internal fun decodeMemoryEntries(input: InputStream): MemoryEntries {
                     val todos = inputStream.readEntryList()
                     MemoryEntries(notes = notes, todos = todos).withNotesMigrated()
                 }
-                TOPICS_FORMAT_V2, TOPICS_FORMAT_VERSION -> {
-                    val notes = inputStream.readEntryList()
-                    val todos = inputStream.readEntryList()
-                    val topics = inputStream.readTopicList(withSource = version == TOPICS_FORMAT_VERSION)
+                TOPICS_FORMAT_V2, TOPICS_FORMAT_V3 -> {
+                    val notes = inputStream.readEntryList(withSource = false)
+                    val todos = inputStream.readEntryList(withSource = false)
+                    val topics = inputStream.readTopicList(
+                        withSource = version == TOPICS_FORMAT_V3,
+                        withArtifact = false,
+                    )
                     MemoryEntries(notes = notes, todos = todos, topics = topics).withNotesMigrated()
+                }
+                TOPICS_FORMAT_VERSION -> {
+                    val notes = inputStream.readEntryList(withSource = true)
+                    val todos = inputStream.readEntryList(withSource = true)
+                    val topics = inputStream.readTopicList(withSource = true, withArtifact = true)
+                    val dismissed = inputStream.readDismissed()
+                    MemoryEntries(
+                        notes = notes,
+                        todos = todos,
+                        topics = topics,
+                        dismissedActionSources = dismissed,
+                    ).withNotesMigrated()
                 }
                 else -> MemoryEntries()
             }
@@ -211,7 +237,7 @@ internal fun encodeMemoryEntries(entries: MemoryEntries, output: OutputStream) {
     output.write(encodeMemoryEntries(entries))
 }
 
-private fun DataOutputStream.writeEntryList(list: List<MemoryEntry>) {
+private fun DataOutputStream.writeEntryList(list: List<MemoryEntry>, withSource: Boolean) {
     writeInt(list.size)
     list.forEach { entry ->
         writeUTF(entry.id)
@@ -221,10 +247,14 @@ private fun DataOutputStream.writeEntryList(list: List<MemoryEntry>) {
         write(body)
         writeBoolean(entry.done)
         writeLong(entry.createdAt)
+        if (withSource) {
+            writeUTF(entry.sourceChatTitle)
+            writeLong(entry.sourceMessageId)
+        }
     }
 }
 
-private fun DataInputStream.readEntryList(): List<MemoryEntry> {
+private fun DataInputStream.readEntryList(withSource: Boolean = false): List<MemoryEntry> {
     val count = readInt()
     if (count < 0 || count > MAX_ENTRIES * 2) throw IOException("bad count")
     return List(count) {
@@ -234,6 +264,8 @@ private fun DataInputStream.readEntryList(): List<MemoryEntry> {
             content = readBoundedString(MAX_NOTE_CONTENT * 4),
             done = readBoolean(),
             createdAt = readLong(),
+            sourceChatTitle = if (withSource) readUTF() else "",
+            sourceMessageId = if (withSource) readLong() else 0L,
         )
     }
 }
@@ -254,10 +286,11 @@ private fun DataOutputStream.writeTopicList(list: List<MemoryTopic>) {
         writeLong(topic.updatedAt)
         writeUTF(topic.sourceChatTitle)
         writeLong(topic.sourceMessageId)
+        writeUTF(topic.artifactId)
     }
 }
 
-private fun DataInputStream.readTopicList(withSource: Boolean): List<MemoryTopic> {
+private fun DataInputStream.readTopicList(withSource: Boolean, withArtifact: Boolean): List<MemoryTopic> {
     val count = readInt()
     if (count < 0 || count > MAX_ENTRIES * 2) throw IOException("bad count")
     return List(count) {
@@ -281,8 +314,21 @@ private fun DataInputStream.readTopicList(withSource: Boolean): List<MemoryTopic
             updatedAt = readLong(),
             sourceChatTitle = if (withSource) readUTF() else "",
             sourceMessageId = if (withSource) readLong() else 0L,
+            artifactId = if (withArtifact) readUTF() else "",
         )
     }
+}
+
+private fun DataOutputStream.writeDismissed(keys: List<String>) {
+    val kept = keys.map { it.trim() }.filter { it.isNotEmpty() }.distinct().takeLast(MAX_DISMISSED_ACTIONS)
+    writeInt(kept.size)
+    kept.forEach { writeUTF(it) }
+}
+
+private fun DataInputStream.readDismissed(): List<String> {
+    val count = readInt()
+    if (count < 0 || count > MAX_DISMISSED_ACTIONS * 2) throw IOException("bad dismissed")
+    return List(count) { readUTF() }.map { it.trim() }.filter { it.isNotEmpty() }
 }
 
 private fun DataOutputStream.writeBoundedString(value: String) {
