@@ -218,3 +218,25 @@ actual disk-write failure on the owner data store was not reproduced.
 - **Next actionable slice:** after a safe device baseline is restored, inspect
   a synthetic saved-message payload and its source ID, then implement one
   provenance-preserving saved-message flow. Do not start Agents.
+
+## Test-runner isolation and fresh-install continuation
+
+Following the owner-approved fresh-install instruction, no backup recovery is
+being investigated. The prior connected UTP task is unsafe for a user device:
+its own result log showed `uninstall_after_test: true` and removal of both app
+packages. The Android Gradle configuration now disables app-module connected
+instrumentation tasks and provides `:app:instrumentDebugOnEmulator`. That task
+checks `ro.kernel.qemu=1` before installing either APK, then runs
+`am instrument` directly without UTP's uninstall cleanup. Use
+`-PorhanEmulatorSerial=<serial>` to select a test emulator; a physical serial is
+refused before install. A check with the old phone serial failed closed before
+install. `:app:connectedDebugAndroidTest` was also invoked and reported
+`SKIPPED`/`BUILD SUCCESSFUL`; it performed no test runner cleanup.
+
+The existing Pixel_8 AVD is currently `offline` in ADB during cold boot, so the
+new instrumentation task has not yet run on it. The ADB server no longer lists
+the physical serial `9cefa3cb`; this occurred during emulator reconnection. No
+APK has been reinstalled to that phone yet. Fresh phone installation and
+functional checks are pending device reconnection. Do not claim the APK is
+present on either target until its package/version and APK identity are read
+back from that target.

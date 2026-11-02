@@ -190,6 +190,48 @@ android {
     sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("generated/licenseAssets"))
 }
 
+// UTP connected-test tasks uninstall the target package after running. Do not
+// let an attached personal phone enter that lifecycle; use the explicit,
+// emulator-validated ADB task below, which leaves both APKs installed.
+tasks.configureEach {
+    if (name.equals("connectedAndroidTest", ignoreCase = true) ||
+        (name.contains("connected", ignoreCase = true) && name.endsWith("AndroidTest", ignoreCase = true))) {
+        enabled = false
+    }
+}
+
+val emulatorSerial = providers.gradleProperty("orhanEmulatorSerial").orElse("emulator-5554")
+val adbExecutable = android.sdkDirectory.resolve("platform-tools").resolve(
+    if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) "adb.exe" else "adb",
+)
+fun verifyEmulatorTarget() {
+    val serial = emulatorSerial.get()
+    val process = ProcessBuilder(adbExecutable.absolutePath, "-s", serial, "shell", "getprop", "ro.kernel.qemu")
+        .redirectErrorStream(true).start()
+    val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
+    check(process.waitFor() == 0 && output == "1") {
+        "Refusing instrumentation target '$serial': expected an Android emulator (ro.kernel.qemu=1), got '$output'."
+    }
+}
+val emulatorApkPrefix = listOf(adbExecutable.absolutePath, "-s", emulatorSerial.get())
+val installOrhanOnEmulator = tasks.register<Exec>("installDebugOnEmulator") {
+    dependsOn("assembleDebug")
+    doFirst { verifyEmulatorTarget() }
+    commandLine(emulatorApkPrefix + listOf("install", "-r", layout.buildDirectory.file("outputs/apk/debug/app-debug.apk").get().asFile.absolutePath))
+}
+val installTestsOnEmulator = tasks.register<Exec>("installDebugAndroidTestOnEmulator") {
+    dependsOn(installOrhanOnEmulator, "assembleDebugAndroidTest")
+    doFirst { verifyEmulatorTarget() }
+    commandLine(emulatorApkPrefix + listOf("install", "-r", "-t", layout.buildDirectory.file("outputs/apk/androidTest/debug/app-debug-androidTest.apk").get().asFile.absolutePath))
+}
+tasks.register<Exec>("instrumentDebugOnEmulator") {
+    group = "verification"
+    description = "Run Android instrumentation only on a verified emulator; leaves the app and test APK installed."
+    dependsOn(installTestsOnEmulator)
+    doFirst { verifyEmulatorTarget() }
+    commandLine(emulatorApkPrefix + listOf("shell", "am", "instrument", "-w", "-r", "ai.orhan.test/androidx.test.runner.AndroidJUnitRunner"))
+}
+
 // Fail a *signed* release build early when signing material is missing.
 //
 // `-PallowUnsignedRelease=true` is the explicit opt-out used by the PR checks
