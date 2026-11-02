@@ -221,7 +221,8 @@ fun HomeScreen(
     /** Agents tab list: user-created agents first, then samples. */
     agents: List<InstalledAgent> = SampleInstalledAgents,
     deletableAgentNames: Set<String> = emptySet(),
-    onDeleteAgent: ((InstalledAgent) -> Unit)? = null,
+    onDeleteAgent: (suspend (InstalledAgent) -> Boolean)? = null,
+    onViewAgent: (InstalledAgent) -> Unit = {},
     workflows: List<ai.orhan.data.workflows.Workflow> = emptyList(),
     onOpenWorkflow: (ai.orhan.data.workflows.Workflow) -> Unit = {},
     onCreateWorkflow: () -> Unit = {},
@@ -339,6 +340,7 @@ fun HomeScreen(
                     OrhanTab.Agents -> AgentsScreen(
                         agents = agents,
                         onOpenAgent = { onOpenChat(OrhanChat(it.name, it.blurb, "", isAgent = true)) },
+                        onViewAgent = onViewAgent,
                         onCreateAgent = onCreateAgent,
                         onEditAgent = onEditAgent,
                         deletableNames = deletableAgentNames,

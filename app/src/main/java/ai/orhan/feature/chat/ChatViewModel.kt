@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.FlowPreview
 import ai.orhan.data.history.ChatThreadStore
+import ai.orhan.data.history.StoredHandoffRetry
 import ai.orhan.data.history.chatThreads
 import ai.orhan.data.history.toStored
 import ai.orhan.data.memory.AutomaticMemoryCoordinator
@@ -34,7 +35,7 @@ import java.util.Date
 import java.util.Locale
 
 /** A specialist agent Orhan can delegate to. */
-data class RosterAgent(val name: String, val blurb: String, val instructions: String, val tools: List<String> = emptyList())
+data class RosterAgent(val name: String, val blurb: String, val instructions: String)
 
 /** Visible label prefix on a specialist reply inside the Orhan thread. */
 const val SPECIALIST_PREFIX = "\uD83E\uDD1D "
@@ -54,6 +55,12 @@ internal fun parseHandoff(reply: String, roster: List<RosterAgent>): Pair<Roster
     val agent = roster.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: return null
     val task = m.groupValues[2].trim()
     return if (task.isEmpty()) null else agent to task
+}
+
+/** Keeps the original Orhan assignment bubble and drops only later specialist output before retry. */
+internal fun messagesForHandoffRetry(messages: List<ChatMessage>, sourceReplyId: Long): List<ChatMessage> {
+    val sourceIndex = messages.indexOfLast { it.id == sourceReplyId && it.role == ChatRole.Agent }
+    return if (sourceIndex < 0) emptyList() else messages.take(sourceIndex + 1)
 }
 
 internal fun stripHandoff(reply: String): String {
@@ -145,19 +152,25 @@ class ChatViewModel(
         }
         viewModelScope.launch {
             val saved = store.loadThread(title)
+            pendingHandoffRetry = saved.pendingHandoffRetry?.let {
+                PendingHandoffRetry(it.sourceReplyId, RosterAgent(it.agentName, "", it.instructions), it.task)
+            }
+            val interruptedHandoffError = saved.pendingHandoffRetry?.let {
+                "${it.agentName} assignment was interrupted. Tap Try again to resume it."
+            }
             if (saved.messages.isNotEmpty() && _state.value.messages.isEmpty()) {
                 saved.attachments.forEach { (id, a) -> attachmentsById.putIfAbsent(id, a) }
-                _state.update { it.copy(messages = saved.messages, threadRestored = true) }
+                _state.update { it.copy(messages = saved.messages, threadRestored = true, error = interruptedHandoffError ?: it.error) }
             } else {
-                _state.update { it.copy(threadRestored = true) }
+                _state.update { it.copy(threadRestored = true, error = interruptedHandoffError ?: it.error) }
             }
             _state.filter { !it.busy }
-                .map { it.messages }
+                .map { it.messages to pendingHandoffRetry?.toStored() }
                 .distinctUntilChanged()
                 .drop(1)
                 .debounce(300)
-                .collect { msgs ->
-                    store.save(title, msgs, attachmentsById.toMap())
+                .collect { (msgs, pending) ->
+                    store.save(title, msgs, attachmentsById.toMap(), pendingHandoffRetry = pending)
                     automaticMemory?.onMessagesSaved(title, msgs.map { it.toStored() })
                 }
         }
@@ -173,7 +186,7 @@ class ChatViewModel(
         val msgs = _state.value.messages
         val atts = attachmentsById.toMap()
         if (msgs.isNotEmpty()) viewModelScope.launch {
-            store.save(title, msgs, atts)
+            store.save(title, msgs, atts, pendingHandoffRetry = pendingHandoffRetry?.toStored())
             automaticMemory?.onMessagesSaved(title, msgs.map { it.toStored() })
         }
     }
@@ -183,11 +196,18 @@ class ChatViewModel(
 
     private var agentName: String = ""
     private var instructions: String = ""
-    private var tools: List<String> = emptyList()
+    private data class PendingHandoffRetry(val sourceReplyId: Long, val agent: RosterAgent, val task: String)
+    private var pendingHandoffRetry: PendingHandoffRetry? = null
+    private fun PendingHandoffRetry.toStored() = StoredHandoffRetry(
+        sourceReplyId = sourceReplyId,
+        agentName = agent.name,
+        instructions = agent.instructions,
+        task = task,
+    )
 
     /** Sets the agent personality used for API turns. Idempotent; safe to call on every recomposition. */
-    fun setAgent(name: String, instructions: String, tools: List<String> = emptyList()) {
-        agentName = name; this.instructions = instructions.trim(); this.tools = tools
+    fun setAgent(name: String, instructions: String) {
+        agentName = name; this.instructions = instructions.trim()
     }
 
     /** Other agents Orhan may delegate to (only set when chatting as Orhan, not a specialist). */
@@ -281,7 +301,7 @@ class ChatViewModel(
             (replyLanguage?.let { " The user's chosen app language is $it: reply in $it unless they explicitly ask for another language." } ?: "")
     }
 
-    /** Hidden context blocks (identity, profile, memory, roster, agent instructions + tools) for the main chat. */
+    /** Hidden context blocks (identity, profile, memory, roster and agent instructions) for the main chat. */
     internal fun contextBlocks(): List<String> = buildList {
         add(orhanIdentity(agentName))
         userProfile?.let { add(it) }
@@ -291,11 +311,7 @@ class ChatViewModel(
         replyStyleBlock(replyStyle)?.let { add(it) }
         toneBlock(tone)?.let { add(it) }
         rosterPreface()?.let { add(it) }
-        if (instructions.isNotBlank()) {
-            add("You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions\n\n" + AgentToolGuidance.text(tools))
-        } else if (tools.isNotEmpty()) {
-            add(AgentToolGuidance.text(tools))
-        }
+        agentInstructionsBlock(agentName, instructions)?.let { add(it) }
     }
 
     /** Top-level `systemInstruction` for /api/chat (Dua-ai #494): all hidden context in one string. */
@@ -327,6 +343,7 @@ class ChatViewModel(
     fun send(raw: String, attachment: ChatAttachment?) {
         val text = raw.trim()
         if ((text.isEmpty() && attachment == null) || _state.value.busy) return
+        pendingHandoffRetry = null
         val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
         val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis())
         if (attachment != null) attachmentsById[user.id] = attachment
@@ -341,6 +358,18 @@ class ChatViewModel(
     fun retry() {
         val s = _state.value
         if (s.busy || s.error == null) return
+        val handoff = pendingHandoffRetry
+        if (handoff != null) {
+            val retryMessages = messagesForHandoffRetry(s.messages, handoff.sourceReplyId)
+            if (retryMessages.isNotEmpty()) {
+                _state.update { it.copy(messages = retryMessages, loading = true, activityLabel = null, busy = true, error = null) }
+                streamJob = viewModelScope.launch {
+                    runHandoff(handoff.sourceReplyId, handoff.agent, handoff.task)
+                }
+                return
+            }
+            pendingHandoffRetry = null
+        }
         val msgs = s.messages.toMutableList()
         while (msgs.isNotEmpty() && msgs.last().role == ChatRole.Agent) msgs.removeAt(msgs.lastIndex)
         if (msgs.isEmpty()) { clearError(); return }
@@ -402,9 +431,14 @@ class ChatViewModel(
      * specialist's own identity + instructions and streams its reply into a bubble labeled with the agent name.
      */
     private suspend fun runHandoff(orhanReplyId: Long, agent: RosterAgent, task: String) {
+        pendingHandoffRetry = PendingHandoffRetry(orhanReplyId, agent, task)
         _state.update { s ->
             s.copy(messages = s.messages.map { m ->
-                if (m.id == orhanReplyId) m.copy(text = stripHandoff(m.text) + "\n\n\u21AA Assigned to ${agent.name}: $task") else m
+                if (m.id == orhanReplyId) {
+                    val note = "\n\n\u21AA Assigned to ${agent.name}: $task"
+                    val original = stripHandoff(m.text)
+                    m.copy(text = if (original.endsWith(note)) original else original + note)
+                } else m
             }, loading = true, activityLabel = null)
         }
         val lastUser = turnsForApi(_state.value.messages, attachmentsById).lastOrNull { it.role == "user" }
@@ -416,7 +450,7 @@ class ChatViewModel(
             askBeforeActingBlock(askBeforeActing)?.let { add(it) }
             replyStyleBlock(replyStyle)?.let { add(it) }
             toneBlock(tone)?.let { add(it) }
-            if (agent.instructions.isNotBlank()) add("You are the agent named \"${agent.name}\". Follow these system instructions:\n${agent.instructions}\n\n" + AgentToolGuidance.text(agent.tools))
+            agentInstructionsBlock(agent.name, agent.instructions)?.let { add(it) }
         }
         val system = if (USE_SYSTEM_INSTRUCTION) systemInstructionOf(blocks) else null
         val turns = buildList {
@@ -446,7 +480,10 @@ class ChatViewModel(
                 _state.update { it.copy(messages = it.messages + ChatMessage(bubbleId, ChatRole.Agent, header + reply, currentTimeString())) }
             }
         }
-            .onSuccess { _state.update { it.copy(loading = false, activityLabel = null, busy = false) } }
+            .onSuccess {
+                pendingHandoffRetry = null
+                _state.update { it.copy(loading = false, activityLabel = null, busy = false) }
+            }
             .onFailure { e ->
                 if (e is CancellationException) throw e
                 _state.update { it.copy(loading = false, activityLabel = null, busy = false, error = "${agent.name}: ${e.message ?: "Request failed"}") }

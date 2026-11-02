@@ -30,6 +30,13 @@ data class Workflow(
     val createdAt: Long,
 )
 
+/** Blank workflow agent means Orhan; a missing named agent is unresolved and must not be guessed. */
+fun resolveWorkflowAgentName(requested: String, availableAgentNames: List<String>, defaultName: String = "Orhan"): String? {
+    val name = requested.trim()
+    if (name.isEmpty()) return defaultName
+    return availableAgentNames.firstOrNull { it.equals(name, ignoreCase = true) }
+}
+
 object WorkflowsSerializer : Serializer<List<Workflow>> {
     override val defaultValue: List<Workflow> = emptyList()
 

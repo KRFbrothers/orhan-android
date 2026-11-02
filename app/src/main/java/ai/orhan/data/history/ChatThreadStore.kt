@@ -25,7 +25,8 @@ import java.io.OutputStream
  * Local per-chat message threads keyed by chat title (same string as AppRoutes.chat(title)).
  * Device-only; no cloud sync.
  */
-private const val THREAD_FORMAT_VERSION = 3
+private const val THREAD_FORMAT_VERSION = 4
+private const val THREAD_FORMAT_V3 = 3
 private const val THREAD_FORMAT_V2 = 2
 private const val THREAD_FORMAT_V1 = 1
 /** Total on-disk budget for persisted chat attachment files; oldest files are pruned beyond it. */
@@ -42,7 +43,13 @@ data class StoredMessage(
     /** Epoch millis when the bubble was created. Zero on threads saved before automatic memory. */
     val createdAt: Long = 0L,
 )
-data class ChatThread(val title: String, val updatedAt: Long, val messages: List<StoredMessage>)
+data class StoredHandoffRetry(val sourceReplyId: Long, val agentName: String, val instructions: String, val task: String)
+data class ChatThread(
+    val title: String,
+    val updatedAt: Long,
+    val messages: List<StoredMessage>,
+    val pendingHandoffRetry: StoredHandoffRetry? = null,
+)
 
 object ChatThreadsSerializer : Serializer<List<ChatThread>> {
     override val defaultValue: List<ChatThread> = emptyList()
@@ -53,7 +60,7 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
         return try {
             DataInputStream(bytes.inputStream()).use { d ->
                 val version = d.readInt()
-                if (version != THREAD_FORMAT_VERSION && version != THREAD_FORMAT_V2 && version != THREAD_FORMAT_V1) {
+                if (version !in THREAD_FORMAT_V1..THREAD_FORMAT_VERSION) {
                     return defaultValue
                 }
                 val threadCount = d.readInt()
@@ -68,14 +75,17 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
                         val role = d.readUTF()
                         val text = readLongString(d)
                         val time = d.readUTF()
-                        val createdAt = if (version >= THREAD_FORMAT_VERSION) d.readLong() else 0L
+                        val createdAt = if (version >= THREAD_FORMAT_V3) d.readLong() else 0L
                         var message = StoredMessage(id, role, text, time, createdAt = createdAt)
                         if (version >= THREAD_FORMAT_V2 && d.readBoolean()) {
                             message = message.copy(attachment = StoredAttachment(d.readUTF(), d.readUTF(), d.readLong(), d.readUTF()))
                         }
                         message
                     }
-                    ChatThread(title, updatedAt, msgs)
+                    val pending = if (version >= THREAD_FORMAT_VERSION && d.readBoolean()) {
+                        StoredHandoffRetry(d.readLong(), d.readUTF(), readLongString(d), readLongString(d))
+                    } else null
+                    ChatThread(title, updatedAt, msgs, pending)
                 }
             }
         } catch (e: IOException) { defaultValue }
@@ -93,6 +103,12 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
                 val a = m.attachment
                 d.writeBoolean(a != null)
                 if (a != null) { d.writeUTF(a.name); d.writeUTF(a.mimeType); d.writeLong(a.sizeBytes); d.writeUTF(a.fileName) }
+            }
+            val handoff = th.pendingHandoffRetry
+            d.writeBoolean(handoff != null)
+            if (handoff != null) {
+                d.writeLong(handoff.sourceReplyId); d.writeUTF(handoff.agentName.take(200))
+                writeLongString(d, handoff.instructions); writeLongString(d, handoff.task)
             }
         }
         d.flush()
@@ -126,10 +142,11 @@ fun List<ChatThread>.withSaved(
     messages: List<ChatMessage>,
     now: Long,
     attachments: Map<Long, StoredAttachment> = emptyMap(),
+    pendingHandoffRetry: StoredHandoffRetry? = null,
 ): List<ChatThread> {
     val rest = filterNot { it.title == title }
     if (messages.isEmpty()) return rest
-    val th = ChatThread(title, now, messages.takeLast(MAX_THREAD_MESSAGES).map { it.toStored(attachments[it.id]) })
+    val th = ChatThread(title, now, messages.takeLast(MAX_THREAD_MESSAGES).map { it.toStored(attachments[it.id]) }, pendingHandoffRetry)
     return (rest + th).sortedByDescending { it.updatedAt }.take(MAX_THREADS)
 }
 
@@ -138,7 +155,11 @@ fun List<ChatThread>.withoutAttachments(): List<ChatThread> =
     map { t -> t.copy(messages = t.messages.map { it.copy(attachment = null) }) }
 
 /** A restored thread: UI messages plus re-sendable attachments keyed by user message id. */
-data class LoadedThread(val messages: List<ChatMessage>, val attachments: Map<Long, ChatAttachment>)
+data class LoadedThread(
+    val messages: List<ChatMessage>,
+    val attachments: Map<Long, ChatAttachment>,
+    val pendingHandoffRetry: StoredHandoffRetry? = null,
+)
 
 /**
  * File-backed attachment bytes under [dir] (app filesDir/chat_attachments). Raw bytes, not base64,
@@ -209,9 +230,10 @@ class ChatThreadStore(
 
     /** Loads messages and any attachment files still on disk (missing files are skipped; the 📎 label stays). */
     suspend fun loadThread(title: String): LoadedThread = withContext(Dispatchers.IO) {
-        val msgs = threads.first().firstOrNull { it.title == title }?.messages.orEmpty()
+        val thread = threads.first().firstOrNull { it.title == title }
+        val msgs = thread?.messages.orEmpty()
         val atts = msgs.mapNotNull { m -> m.attachment?.let { s -> files.read(s, ::b64encode)?.let { m.id to it } } }.toMap()
-        LoadedThread(msgs.map { it.toUi() }, atts)
+        LoadedThread(msgs.map { it.toUi() }, atts, thread?.pendingHandoffRetry)
     }
 
     suspend fun save(
@@ -219,13 +241,14 @@ class ChatThreadStore(
         messages: List<ChatMessage>,
         attachments: Map<Long, ChatAttachment> = emptyMap(),
         now: Long = System.currentTimeMillis(),
+        pendingHandoffRetry: StoredHandoffRetry? = null,
     ) {
         if (title.isBlank()) return
         withContext(Dispatchers.IO) {
             val kept = messages.takeLast(MAX_THREAD_MESSAGES).map { it.id }.toSet()
             val stored = attachments.filterKeys { it in kept }
                 .mapNotNull { (id, a) -> files.put(title, id, a, ::b64decode)?.let { id to it } }.toMap()
-            val all = dataStore.updateData { it.withSaved(title, messages, now, stored) }
+            val all = dataStore.updateData { it.withSaved(title, messages, now, stored, pendingHandoffRetry) }
             prune(all)
         }
     }

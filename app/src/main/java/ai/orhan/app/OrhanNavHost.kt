@@ -24,6 +24,7 @@ import ai.orhan.BuildConfig
 import ai.orhan.data.auth.AuthRepository
 import ai.orhan.design.screens.ChatScreen
 import ai.orhan.feature.agents.CreateAgentScreen
+import ai.orhan.feature.agents.AgentProfileScreen
 import ai.orhan.feature.profile.EditProfileScreen
 import ai.orhan.feature.memory.MemoryScreen
 import ai.orhan.data.memory.memoryEntriesStore
@@ -50,6 +51,7 @@ import ai.orhan.data.history.pinnedChats
 import ai.orhan.data.agents.AgentSaveNav
 import ai.orhan.data.agents.SavedAgent
 import ai.orhan.data.agents.agentStore
+import ai.orhan.data.agents.agentAvatarFiles
 import ai.orhan.data.agents.mergeWithSamples
 import ai.orhan.data.agents.canonicalAgentTitle
 import ai.orhan.data.agents.navigationAfterAgentSave
@@ -74,6 +76,7 @@ import java.util.Locale
 import ai.orhan.data.artifacts.artifactStore
 import ai.orhan.feature.artifacts.ArtifactsScreen
 import ai.orhan.data.workflows.workflowStore
+import ai.orhan.data.workflows.resolveWorkflowAgentName
 import ai.orhan.feature.workflows.WorkflowEditorScreen
 
 /** Top-level routes. Settings routes live in [SettingsRoutes]. */
@@ -81,6 +84,8 @@ object AppRoutes {
     const val HOME = "home"
     /** Optional `name` opens the same screen in edit mode for a saved agent. */
     const val CREATE_AGENT = "create_agent?name={name}"
+    const val AGENT_PROFILE = "agent_profile/{name}"
+    fun agentProfile(name: String) = "agent_profile/${Uri.encode(name)}"
     fun createAgent(name: String? = null): String =
         if (name.isNullOrBlank()) "create_agent" else "create_agent?name=${Uri.encode(name)}"
     const val EDIT_PROFILE = "edit_profile"
@@ -114,9 +119,10 @@ fun OrhanNavHost(isDark: Boolean) {
     val pinRepo = remember(context) { context.pinnedChats() }
     val pinnedTitles by pinRepo.pinned.collectAsStateWithLifecycle(initialValue = emptySet())
     val agentStore = remember(context) { context.agentStore() }
+    val agentAvatars = remember(context) { context.agentAvatarFiles() }
     val savedAgents by agentStore.agents.collectAsStateWithLifecycle(initialValue = emptyList())
     // Canonical names (saved + samples) so "writer" and "Writer" share one thread/recent/pin key.
-    val canon: (String) -> String = { t -> canonicalAgentTitle(t, mergeWithSamples(savedAgents.map { it.toInstalledAgent() }).map { it.name }) }
+    val canon: (String) -> String = { t -> canonicalAgentTitle(t, mergeWithSamples(savedAgents.map { it.toInstalledAgent(agentAvatars) }).map { it.name }) }
     val memoryStore = remember(context) { context.memoryStore() }
     val memoryEntries = remember(context) { context.memoryEntriesStore() }
     val memoryTopics by memoryEntries.topics.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -144,9 +150,9 @@ fun OrhanNavHost(isDark: Boolean) {
             HomeScreen(
                 isDark = isDark,
                 profile = profile,
-                agents = mergeWithSamples(savedAgents.map { it.toInstalledAgent() }),
+                agents = mergeWithSamples(savedAgents.map { it.toInstalledAgent(agentAvatars) }),
                 deletableAgentNames = savedAgents.map { it.name }.toSet(),
-                onDeleteAgent = { agent -> scope.launch { agentStore.delete(agent.name) } },
+                onDeleteAgent = { agent -> agentStore.delete(agent.name) },
                 recentChats = recent.map {
                     val lastText = threads.firstOrNull { t -> t.title == it.title }?.messages?.lastOrNull()?.text
                     OrhanChat(it.title, previewSnippet(lastText), relativeTime(it.openedAt), isAgent = true)
@@ -175,6 +181,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 onEditAgent = { agent ->
                     navController.navigate(AppRoutes.createAgent(agent.name)) { launchSingleTop = true }
                 },
+                onViewAgent = { agent -> navController.navigate(AppRoutes.agentProfile(agent.name)) },
                 onEditProfile = {
                     navController.navigate(AppRoutes.EDIT_PROFILE) { launchSingleTop = true }
                 },
@@ -206,9 +213,20 @@ fun OrhanNavHost(isDark: Boolean) {
                 } else null,
                 workflows = workflows,
                 onOpenWorkflow = { wf ->
-                    val chatTitle = canon(wf.agentName.ifBlank { wf.title })
-                    scope.launch { recentRepo.recordOpened(chatTitle) }
-                    navController.navigate(AppRoutes.chat(chatTitle, wf.content))
+                    val available = mergeWithSamples(savedAgents.map { it.toInstalledAgent(agentAvatars) }).map { it.name }
+                    val resolved = resolveWorkflowAgentName(wf.agentName, available)
+                    if (resolved == null) {
+                        val missing = wf.agentName.trim()
+                        android.widget.Toast.makeText(
+                            context,
+                            "Agent \"$missing\" is unavailable. Edit this workflow to choose another agent.",
+                            android.widget.Toast.LENGTH_LONG,
+                        ).show()
+                    } else {
+                        val chatTitle = canon(resolved)
+                        scope.launch { recentRepo.recordOpened(chatTitle) }
+                        navController.navigate(AppRoutes.chat(chatTitle, wf.content))
+                    }
                 },
                 onOpenPlaybook = { pb ->
                     // Chat route resolves saved/sample agent instructions by title, same as workflows.
@@ -279,7 +297,7 @@ fun OrhanNavHost(isDark: Boolean) {
             val existing = id?.let { wid -> workflows.firstOrNull { it.id == wid } }
             WorkflowEditorScreen(
                 existing = existing,
-                agentNames = mergeWithSamples(savedAgents.map { it.toInstalledAgent() }).map { it.name },
+                agentNames = mergeWithSamples(savedAgents.map { it.toInstalledAgent(agentAvatars) }).map { it.name },
                 onBack = { navController.popBackStack() },
                 onSave = { wf ->
                     scope.launch {
@@ -293,6 +311,25 @@ fun OrhanNavHost(isDark: Boolean) {
                         navController.popBackStack()
                     }
                 },
+            )
+        }
+        composable(
+            AppRoutes.AGENT_PROFILE,
+            arguments = listOf(navArgument("name") { type = NavType.StringType }),
+        ) { entry ->
+            val name = entry.arguments?.getString("name").orEmpty()
+            val saved = savedAgents.firstOrNull { it.name.equals(name, ignoreCase = true) }
+            AgentProfileScreen(
+                agent = saved,
+                onBack = { navController.popBackStack() },
+                onChat = { navController.navigate(AppRoutes.chat(saved?.name ?: name)) },
+                onEdit = saved?.let { current -> ({ navController.navigate(AppRoutes.createAgent(current.name)) }) },
+                onDelete = saved?.let { current -> ({
+                    scope.launch {
+                        if (agentStore.delete(current.name)) navController.popBackStack()
+                        else android.widget.Toast.makeText(context, "Couldn't remove this agent. Your saved agent is unchanged.", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }) },
             )
         }
         composable(
@@ -320,7 +357,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 onBack = { navController.popBackStack() },
                 existing = existing,
                 takenNames = savedAgents.map { it.name }.toSet(),
-                onCreated = { name, blurb, instructions, tools ->
+                onCreated = { name, blurb, instructions, tools, avatarFileName ->
                     val previous = existing
                     val result = agentStore.replace(
                         previousName = previous?.name,
@@ -330,6 +367,7 @@ fun OrhanNavHost(isDark: Boolean) {
                             instructions = instructions,
                             tools = tools,
                             createdAt = previous?.createdAt ?: System.currentTimeMillis(),
+                            avatarFileName = avatarFileName,
                         ),
                     )
                     when (val nav = navigationAfterAgentSave(previous == null, result)) {
@@ -371,10 +409,10 @@ fun OrhanNavHost(isDark: Boolean) {
             val title = canon(entry.arguments?.getString("title").orEmpty())
             LaunchedEffect(title) { chatViewModel.loadThread(title) }
             val agent = savedAgents.firstOrNull { it.name.equals(title, ignoreCase = true) }
-            chatViewModel.setAgent(agent?.name ?: title, agent?.instructions.orEmpty(), agent?.tools.orEmpty())
+            chatViewModel.setAgent(agent?.name ?: title, agent?.instructions.orEmpty())
             chatViewModel.setRoster(
                 if (agent != null) emptyList()
-                else savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions, it.tools) },
+                else savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions) },
             )
             chatViewModel.setPersonalMemory(personalMemory, memoryPaused)
             chatViewModel.setTopicContext(

@@ -85,6 +85,9 @@ fun WorkflowEditorScreen(
                 )
             }
         }
+        if (agent.isNotBlank() && agentNames.none { it.equals(agent, ignoreCase = true) }) {
+            FootNote("Saved agent \"$agent\" is unavailable. Choose Default or an available agent before opening this workflow.")
+        }
         FootNote("Opening a workflow starts a chat with the prompt ready to send.")
         Spacer(Modifier.height(24.dp))
         Button(

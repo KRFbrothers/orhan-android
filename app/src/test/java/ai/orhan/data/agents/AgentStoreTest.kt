@@ -42,6 +42,19 @@ class AgentStoreTest {
         assertEquals(listOf("web"), back.single().tools)
     }
 
+    @Test fun avatarFilenameRoundTripsInV3WhileLegacyFormatsDefaultToNone() = runBlocking {
+        val saved = SavedAgent("Writer", "b", "instructions", listOf("legacy"), 5, "123e4567-e89b-12d3-a456-426614174000.img")
+        val out = ByteArrayOutputStream()
+        SavedAgentsSerializer.writeTo(listOf(saved), out)
+        assertEquals(saved, SavedAgentsSerializer.readFrom(out.toByteArray().inputStream()).single())
+        val v2 = ByteArrayOutputStream()
+        DataOutputStream(v2).apply {
+            writeInt(2); writeInt(1); writeUTF("Writer"); writeUTF("b"); writeInt(12); write("instructions".toByteArray());
+            writeInt(1); writeUTF("legacy"); writeLong(5); flush()
+        }
+        assertEquals(null, SavedAgentsSerializer.readFrom(v2.toByteArray().inputStream()).single().avatarFileName)
+    }
+
     @Test fun readsV1Format() = runBlocking {
         val out = ByteArrayOutputStream()
         DataOutputStream(out).apply {
@@ -120,6 +133,13 @@ class AgentStoreTest {
         assertEquals(1, memory.updates)
         assertEquals(AgentSaveNav.Stay(result.message), navigationAfterAgentSave(creating = false, result))
         assertEquals(AgentSaveNav.Stay(result.message), navigationAfterAgentSave(creating = true, result))
+    }
+
+    @Test fun failedDeleteReportsFailureAndPreservesSavedAgent() = runBlocking {
+        val writer = agent("Writer")
+        val memory = MemoryAgents(listOf(writer)).apply { failWrites = true }
+        assertEquals(false, AgentStore(memory).delete("Writer"))
+        assertEquals(listOf(writer), memory.state.value)
     }
 
     @Test fun blankNameDoesNotWrite() = runBlocking {

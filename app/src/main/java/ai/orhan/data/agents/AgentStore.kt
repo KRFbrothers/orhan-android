@@ -1,6 +1,9 @@
 package ai.orhan.data.agents
 
 import android.content.Context
+import android.content.ContentResolver
+import android.net.Uri
+import android.graphics.BitmapFactory
 import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.Serializer
@@ -10,15 +13,19 @@ import ai.orhan.feature.agents.InstalledAgent
 import ai.orhan.feature.agents.SampleInstalledAgents
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.catch
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.io.File
+import java.util.UUID
 
 /* Local store for user-created agents (no backend). Name (case-insensitive) is the key. */
-private const val FORMAT_VERSION = 2
+private const val FORMAT_VERSION = 3
+private const val FORMAT_VERSION_V2 = 2
 private const val FORMAT_VERSION_V1 = 1
 
 const val MAX_AGENT_NAME = 80
@@ -42,6 +49,7 @@ data class SavedAgent(
     val instructions: String = "",
     val tools: List<String> = emptyList(),
     val createdAt: Long,
+    val avatarFileName: String? = null,
 )
 
 object SavedAgentsSerializer : Serializer<List<SavedAgent>> {
@@ -53,14 +61,15 @@ object SavedAgentsSerializer : Serializer<List<SavedAgent>> {
         return try {
             DataInputStream(bytes.inputStream()).use { d ->
                 val version = d.readInt()
-                if (version != FORMAT_VERSION && version != FORMAT_VERSION_V1) return defaultValue
+                if (version !in FORMAT_VERSION_V1..FORMAT_VERSION) return defaultValue
                 List(d.readInt()) {
                     SavedAgent(
                         name = d.readUTF(),
                         blurb = d.readUTF(),
-                        instructions = if (version >= 2) readLongString(d) else d.readUTF(),
+                        instructions = if (version >= FORMAT_VERSION_V2) readLongString(d) else d.readUTF(),
                         tools = List(d.readInt()) { d.readUTF() },
                         createdAt = d.readLong(),
+                        avatarFileName = if (version >= 3 && d.readBoolean()) d.readUTF() else null,
                     )
                 }
             }
@@ -75,6 +84,8 @@ object SavedAgentsSerializer : Serializer<List<SavedAgent>> {
             d.writeUTF(a.name); d.writeUTF(a.blurb); writeLongString(d, a.instructions)
             d.writeInt(a.tools.size); a.tools.forEach(d::writeUTF)
             d.writeLong(a.createdAt)
+            d.writeBoolean(a.avatarFileName != null)
+            a.avatarFileName?.let { d.writeUTF(it.take(100)) }
         }
         d.flush()
     }
@@ -148,12 +159,13 @@ fun navigationAfterAgentSave(creating: Boolean, result: AgentSaveResult): AgentS
     is AgentSaveResult.Failed -> AgentSaveNav.Stay(result.message)
 }
 
-fun SavedAgent.toInstalledAgent(): InstalledAgent = InstalledAgent(
+fun SavedAgent.toInstalledAgent(avatarFiles: AgentAvatarFiles? = null): InstalledAgent = InstalledAgent(
     name = name,
     blurb = blurb,
-    category = tools.firstOrNull() ?: "Custom",
+    category = "Custom",
     working = false,
     avatar = R.drawable.agent_webpage,
+    avatarPath = avatarFiles?.path(avatarFileName),
 )
 
 /** User agents first (newest first), then samples not shadowed by name. */
@@ -163,14 +175,18 @@ fun mergeWithSamples(
 ): List<InstalledAgent> =
     user + samples.filter { s -> user.none { it.name.equals(s.name, ignoreCase = true) } }
 
-class AgentStore(private val dataStore: DataStore<List<SavedAgent>>) {
+class AgentStore(
+    private val dataStore: DataStore<List<SavedAgent>>,
+    private val avatarFiles: AgentAvatarFiles = AgentAvatarFiles(null),
+) {
     val agents: Flow<List<SavedAgent>> = dataStore.data
         .catch { if (it is IOException) emit(emptyList()) else throw it }
 
     suspend fun upsert(agent: SavedAgent) {
         val a = agent.capped()
         if (a.name.isBlank()) return
-        dataStore.updateData { it.upserted(a) }
+        val saved = dataStore.updateData { it.upserted(a) }
+        avatarFiles.prune(saved.mapNotNull { it.avatarFileName }.toSet())
     }
 
     /**
@@ -199,6 +215,7 @@ class AgentStore(private val dataStore: DataStore<List<SavedAgent>>) {
                 if (stored == null) {
                     AgentSaveResult.Failed("Couldn't save this agent. Your previous agent is unchanged.")
                 } else {
+                    avatarFiles.prune(written.mapNotNull { it.avatarFileName }.toSet())
                     AgentSaveResult.Saved(stored)
                 }
             }
@@ -206,9 +223,66 @@ class AgentStore(private val dataStore: DataStore<List<SavedAgent>>) {
         }
     }
 
-    suspend fun delete(name: String) {
-        dataStore.updateData { list -> list.filterNot { it.name.equals(name, ignoreCase = true) } }
+    suspend fun delete(name: String): Boolean {
+        val before = try { dataStore.data.first() } catch (e: CancellationException) { throw e } catch (_: Exception) { return false }
+        val remaining = try {
+            dataStore.updateData { list -> list.filterNot { it.name.equals(name, ignoreCase = true) } }
+        } catch (e: CancellationException) { throw e } catch (_: Exception) { return false }
+        if (before.none { it.name.equals(name, ignoreCase = true) }) return false
+        avatarFiles.prune(remaining.mapNotNull { it.avatarFileName }.toSet())
+        return remaining.none { it.name.equals(name, ignoreCase = true) }
     }
 }
 
-fun Context.agentStore(): AgentStore = AgentStore(agentsDataStore)
+/** Private, bounded avatar copies. Legacy configurations without an image remain valid. */
+class AgentAvatarFiles(private val directory: File?) {
+    fun copyFrom(resolver: ContentResolver, uri: Uri): String? {
+        val dir = directory ?: return null
+        val name = UUID.randomUUID().toString() + ".img"
+        val target = File(dir, name)
+        val temporary = File(dir, "$name.tmp")
+        return try {
+            dir.mkdirs()
+            val input = resolver.openInputStream(uri) ?: return null
+            input.use { source ->
+                temporary.outputStream().use { sink ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    var total = 0
+                    while (true) {
+                        val read = source.read(buffer)
+                        if (read < 0) break
+                        total += read
+                        if (total > MAX_AVATAR_BYTES) { temporary.delete(); return null }
+                        sink.write(buffer, 0, read)
+                    }
+                }
+            }
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(temporary.absolutePath, bounds)
+            if (bounds.outWidth !in 1..8192 || bounds.outHeight !in 1..8192 || !temporary.renameTo(target)) {
+                temporary.delete()
+                return null
+            }
+            name
+        } catch (_: Exception) {
+            temporary.delete()
+            target.delete()
+            null
+        }
+    }
+
+    fun path(fileName: String?): String? {
+        if (fileName == null || !fileName.matches(Regex("[a-f0-9-]{36}\\.img"))) return null
+        return File(directory ?: return null, fileName).takeIf { it.isFile }?.absolutePath
+    }
+
+    fun prune(keep: Set<String>) {
+        val dir = directory ?: return
+        dir.listFiles()?.filter { it.isFile && it.name !in keep }?.forEach { it.delete() }
+    }
+
+    companion object { const val MAX_AVATAR_BYTES = 5 * 1024 * 1024 }
+}
+
+fun Context.agentAvatarFiles(): AgentAvatarFiles = AgentAvatarFiles(File(filesDir, "agent_avatars"))
+fun Context.agentStore(): AgentStore = AgentStore(agentsDataStore, agentAvatarFiles())

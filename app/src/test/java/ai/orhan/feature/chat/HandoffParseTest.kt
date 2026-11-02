@@ -2,6 +2,7 @@ package ai.orhan.feature.chat
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HandoffParseTest {
@@ -36,5 +37,21 @@ class HandoffParseTest {
         assertEquals(2, p.size)
         assertEquals("a\n\n---\n\nb", p[0].text)
         assertEquals("model", p[1].role)
+    }
+
+    @Test fun handoffRetryPreservesAssignmentAndDropsPartialSpecialistReply() {
+        val source = ChatMessage(4, ChatRole.Agent, "Assigned to Slides", "now")
+        val partial = ChatMessage(5, ChatRole.Agent, "Slides\n\npartial", "now")
+        val messages = listOf(
+            ChatMessage(1, ChatRole.User, "Make slides", "now"),
+            source,
+            partial,
+        )
+        assertEquals(listOf(messages[0], source), messagesForHandoffRetry(messages, source.id))
+    }
+
+    @Test fun handoffRetryWithMissingSourceDoesNotReplayAnotherTurn() {
+        val messages = listOf(ChatMessage(5, ChatRole.Agent, "partial", "now"))
+        assertTrue(messagesForHandoffRetry(messages, sourceReplyId = 4L).isEmpty())
     }
 }
