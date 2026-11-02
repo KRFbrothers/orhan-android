@@ -12,7 +12,7 @@ The active work has been Agents, following the earlier Artifacts work. Continue 
 |---|---|---|---|
 | F1.1 text, mentions | Chat composer sends to `/api/chat`; model handoff uses roster/instructions. No dedicated mention picker or selected-agent insertion flow found in the source pass. | Partial | Inspect composer token behavior and add a real agent mention picker bound to saved roster; avoid claiming mention semantics parity until reference/runtime evidence exists. |
 | F1.2 message actions | Long-press supports copy/share and save agent reply as artifact; user message supports action/to-do path. No complete reply/forward/translate/transcribe/react/unsend/report implementation identified. | Partial | Add only actions with local/service owners; translate/transcribe/report/reactions need explicit API/provider semantics. Social reactions remain excluded by AGENTS.md. |
-| F1.3 attachments | File picker allows supported MIME types and inline request payloads; bytes and metadata persist in local chat history. Restored payloads now render bounded image thumbnails. PDF/document open/export and video playback are not implemented by this preview. Camera capture is absent. | Partial | Add safe supported document open/share using app-owned content URIs, then establish upload failure/retry semantics. Camera/video viewer require implementation and device validation. |
+| F1.3 attachments | File picker allows supported MIME types and inline request payloads; bytes and metadata persist in local chat history. Restored payloads render bounded image thumbnails. Camera capture uses a temporary FileProvider output URI and shared type/size validation. PDF/document open/export and video playback are absent. | Partial | Add safe supported document open/share using app-owned content URIs, then establish upload failure/retry semantics. Camera and preview paths still need runtime verification. |
 | F1.4 voice | Android speech recognizer remains available for voice typing. Press-and-hold on the empty composer mic records AAC/M4A with runtime microphone permission; release stages it as a regular 4 MiB-limited audio attachment for review/send. Persisted audio attachment payloads play locally. No waveform, duration display or transcription-in-place exists. | Partial | Confirm voice-specific server handling and any transcript association contract; add duration/recording affordance refinements only with observed reference evidence. This source implementation is not device-verified. |
 | F1.5 history/search | Local persisted title-keyed threads and search are present. Attachment bytes persist locally within bounded store policy. | Partial | Verify ordering, cross-chat search results, source jumps and deletion edge cases later; reference-only result semantics remain unknown. |
 | F1.6 conversation controls | Pin/unpin, remove recent and clear/remove thread paths exist in local stores/UI. Mute and remote delete semantics not established. | Partial | Inventory confirm dialogs/failure behavior and any local-only controls; mute/remote deletion require product/service semantics. |
@@ -27,16 +27,17 @@ The active work has been Agents, following the earlier Artifacts work. Continue 
 ## Source-only changes in progress
 
 - Deleted/renamed custom-agent chat keeps the old thread title/history, but resolves future requests to Orhan instead of impersonating an unavailable saved persona. A visible notice explains this behavior.
-- Persisted image attachments are decoded off the main thread and rendered with dimension bounds in the message; non-image payloads remain labeled by MIME type/name. This is not a PDF/video/audio viewer.
+- Persisted image attachments are decoded off the main thread and rendered with dimension bounds in the message. Audio payloads have a player; other non-image payloads remain MIME/name labels. This is not a PDF/video viewer.
 - Press-and-hold recording in the empty composer requests microphone permission, captures AAC/M4A to cache, enforces the engine's existing 4 MiB attachment limit, and stages the real payload for review/send. Tap still launches speech-to-text; release does not auto-send. Navigation while recording releases the recorder and removes the temporary source file. This is not runtime-verified.
 - Persisted audio attachment payloads are materialized to a temporary cache file and played with Android `MediaPlayer`; errors are surfaced in the bubble and the player/file are released when the bubble leaves composition.
+- The attachment sheet launches a camera app with a temporary FileProvider URI; captured photos pass through shared MIME and 4 MiB validation before becoming a draft attachment. Cancel/failure removes the temporary file. This is not runtime-verified.
 
 ## Concrete blockers
 
 - `/api/chat` selected-tool enforcement and capability catalog contract.
 - Agent Flows execution/trigger/scheduling contract; current workflow persistence stores reusable prompt text only.
 - Stable agent identifier/migration policy for existing name-keyed chats and name-linked workflows.
-- Voice message audio recording, upload, playback and transcription service contract.
+- Audio-specific server processing/transcription contract; local AAC recording and payload playback are source-implemented but unverified.
 - Meeting recording/minutes/playback data and provider contract.
 - Reference evidence for media artifacts and collaborative Studio features. Existing reference prose remains unverified behavior.
 

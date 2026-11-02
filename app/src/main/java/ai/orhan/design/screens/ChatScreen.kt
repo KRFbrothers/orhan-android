@@ -65,6 +65,7 @@ import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.runtime.rememberCoroutineScope
 import ai.orhan.data.chat.ChatAttachment
@@ -255,6 +256,7 @@ fun ChatScreen(
     var voiceRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var voiceFile by remember { mutableStateOf<java.io.File?>(null) }
     var recordingVoice by remember { mutableStateOf(false) }
+    var cameraOutput by remember { mutableStateOf<java.io.File?>(null) }
     var attachSheet by rememberSaveable { mutableStateOf(false) }
     var actionMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
 
@@ -265,6 +267,22 @@ fun ChatScreen(
                 is AttachResult.Ok -> attachment = r.file
                 is AttachResult.Fail -> Toast.makeText(context, r.message, Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+    val cameraPicker = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val file = cameraOutput
+        cameraOutput = null
+        if (!captured || file == null) {
+            file?.delete()
+            return@rememberLauncherForActivityResult
+        }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.artifact-exports", file)
+        scope.launch {
+            when (val result = withContext(Dispatchers.IO) { readAttachment(context, uri) }) {
+                is AttachResult.Ok -> attachment = result.file
+                is AttachResult.Fail -> Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+            }
+            file.delete()
         }
     }
     val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
@@ -358,6 +376,23 @@ fun ChatScreen(
         attachSheet = false
         runCatching { filePicker.launch(types) }
             .onFailure { Toast.makeText(context, "No file picker found on this device", Toast.LENGTH_SHORT).show() }
+    }
+
+    fun capturePhoto() {
+        attachSheet = false
+        val directory = java.io.File(context.cacheDir, "artifact_exports")
+        val file = runCatching { directory.mkdirs(); java.io.File.createTempFile("chat-photo-", ".jpg", directory) }.getOrNull()
+        if (file == null) {
+            Toast.makeText(context, "Couldn't prepare a camera photo", Toast.LENGTH_SHORT).show()
+            return
+        }
+        cameraOutput = file
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.artifact-exports", file)
+        runCatching { cameraPicker.launch(uri) }.onFailure {
+            cameraOutput = null
+            file.delete()
+            Toast.makeText(context, "No camera app found on this device", Toast.LENGTH_SHORT).show()
+        }
     }
 
     fun onMic() {
@@ -541,6 +576,7 @@ fun ChatScreen(
             onDismiss = { attachSheet = false },
             onPhotos = { pickFiles(arrayOf("image/*")) },
             onFiles = { pickFiles(ChatAttachment.PICKER_TYPES) },
+            onCamera = ::capturePhoto,
         )
     }
     val actionMessage = actionMessageId?.let { id -> messages.firstOrNull { it.id == id } }
@@ -1251,6 +1287,7 @@ private fun AttachSheet(
     onDismiss: () -> Unit,
     onPhotos: () -> Unit,
     onFiles: () -> Unit,
+    onCamera: () -> Unit,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1265,6 +1302,7 @@ private fun AttachSheet(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
             SheetAction(Icons.Rounded.Image, "Photos", "Images on this device", onPhotos)
+            SheetAction(Icons.Rounded.Image, "Camera", "Take a photo", onCamera)
             SheetAction(
                 Icons.Rounded.Description,
                 "Files",
