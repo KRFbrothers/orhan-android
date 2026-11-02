@@ -539,3 +539,33 @@ source has not changed since that build. No fresh install was sent during this
 boot because responsiveness had not been established. Next: diagnose the
 effective guest RAM/rendering settings after the repaired AVD read, then
 confirm a warm launch and touch response before installing/running UI checks.
+
+### Cold-boot resource check after config repair
+
+After stopping Gradle, the valid no-BOM AVD config was backed up and set to
+`hw.ramSize=1536`; the launch used only Pixel_8 with `-no-snapshot-load`,
+2 cores, and the explicit serial `emulator-5554`. Cold boot reached
+`sys.boot_completed=1` and `ro.kernel.qemu=1`. Guest `/proc/meminfo` reported
+`MemTotal: 2532304 kB`, while generated `hardware-qemu.ini` continued to show
+`hw.ramSize=2560` despite the 1536 MiB AVD/CLI request. This confirms the
+effective-RAM mismatch is not a quick-boot snapshot artifact.
+
+To reduce rendering work, runtime `wm size 720x1600` and `wm density 320` were
+applied and read back as display overrides. The renderer remained SwiftShader.
+After boot, qemu reached about 3.36 GiB host working set and the host reported
+100% CPU. No app launch, install, instrumentation, or screenshot was attempted
+on this cold boot because app/touch responsiveness had not been established.
+The emulator was stopped afterward and no qemu process remains.
+
+The earlier v299 app launch on the snapshot boot remains a recorded
+`am start -W` timeout (28,878 ms) with MainActivity top-resumed; no new start was
+repeated on this cold boot. The same latest built v299 package was already
+present on Pixel_8 by package metadata, but no fresh install was sent during
+the cold boot. Focused Artifacts JVM tests passed separately (19/19); they do
+not close the emulator responsiveness or instrumentation transport gaps.
+
+Next actionable step: explain why this Pixel_8 profile generates 2560 MiB
+guest RAM despite its valid 1536 MiB config and CLI override, then choose a
+supported bounded-memory profile/path. Preserve the no-BOM config and runtime
+720×1600/320 dpi override; do not infer Device Manager UI verification from the
+CLI boot/listing results.
