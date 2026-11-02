@@ -36,6 +36,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
@@ -51,7 +53,10 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import android.app.Activity
+import android.Manifest
+import android.content.pm.PackageManager
 import android.media.MediaPlayer
+import android.media.MediaRecorder
 import android.content.ActivityNotFoundException
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -59,6 +64,7 @@ import android.speech.RecognizerIntent
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.runtime.rememberCoroutineScope
 import ai.orhan.data.chat.ChatAttachment
@@ -86,6 +92,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -120,6 +127,10 @@ import ai.orhan.design.theme.OrhanTheme
 
 /** Author of a message. */
 enum class ChatRole { Agent, User }
+
+internal fun voiceAttachmentFromBytes(bytes: ByteArray): ChatAttachment? =
+    if (bytes.isEmpty() || bytes.size > ChatAttachment.MAX_BYTES) null
+    else ChatAttachment("voice-message.m4a", "audio/mp4", java.util.Base64.getEncoder().encodeToString(bytes), bytes.size.toLong())
 
 /** The inline preview card that sits under an agent bubble. */
 data class ChatArtifact(
@@ -241,6 +252,9 @@ fun ChatScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var attachment by remember { mutableStateOf<ChatAttachment?>(null) }
+    var voiceRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
+    var voiceFile by remember { mutableStateOf<java.io.File?>(null) }
+    var recordingVoice by remember { mutableStateOf(false) }
     var attachSheet by rememberSaveable { mutableStateOf(false) }
     var actionMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
 
@@ -257,6 +271,78 @@ fun ChatScreen(
         val spoken = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
         if (res.resultCode == Activity.RESULT_OK && !spoken.isNullOrBlank()) {
             input = if (input.isBlank()) spoken else input.trimEnd() + " " + spoken
+        }
+    }
+
+    fun startVoiceRecording() {
+        if (voiceRecorder != null) return
+        val file = runCatching { java.io.File.createTempFile("orhan-voice-", ".m4a", context.cacheDir) }.getOrNull()
+        if (file == null) {
+            Toast.makeText(context, "Couldn't start voice recording", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val recorder = runCatching {
+            val created = if (android.os.Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else MediaRecorder()
+            created.setAudioSource(MediaRecorder.AudioSource.MIC)
+            created.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            created.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            created.setAudioEncodingBitRate(64_000)
+            created.setAudioSamplingRate(44_100)
+            created.setOutputFile(file.absolutePath)
+            created.prepare()
+            created.start()
+            created
+        }.getOrElse {
+            file.delete()
+            Toast.makeText(context, "Couldn't start voice recording", Toast.LENGTH_SHORT).show()
+            return
+        }
+        voiceFile = file
+        voiceRecorder = recorder
+        recordingVoice = true
+    }
+
+    fun stopVoiceRecording() {
+        val recorder = voiceRecorder ?: return
+        val file = voiceFile
+        recordingVoice = false
+        voiceRecorder = null
+        voiceFile = null
+        val valid = runCatching { recorder.stop(); true }.getOrDefault(false)
+        runCatching { recorder.release() }
+        if (!valid || file == null) {
+            file?.delete()
+            Toast.makeText(context, "Voice recording was too short or couldn't be saved", Toast.LENGTH_SHORT).show()
+            return
+        }
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    require(file.length() in 1..ChatAttachment.MAX_BYTES)
+                    val bytes = file.readBytes()
+                    voiceAttachmentFromBytes(bytes)
+                }.getOrNull()?.takeIf { it.sizeBytes > 0 }
+            }
+            file.delete()
+            if (result == null) Toast.makeText(context, "Recording is empty or exceeds the 4 MB attachment limit", Toast.LENGTH_LONG).show()
+            else attachment = result
+        }
+    }
+
+    val voicePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startVoiceRecording()
+        else Toast.makeText(context, "Microphone permission is needed to record audio", Toast.LENGTH_SHORT).show()
+    }
+    val latestVoiceRecorder by rememberUpdatedState(voiceRecorder)
+    DisposableEffect(voiceRecorder, voiceFile) {
+        val activeRecorder = voiceRecorder
+        val activeFile = voiceFile
+        onDispose {
+            if (activeRecorder != null && latestVoiceRecorder === activeRecorder) {
+                runCatching { activeRecorder.stop() }
+                runCatching { activeRecorder.release() }
+                activeFile?.delete()
+            }
         }
     }
 
@@ -436,6 +522,12 @@ fun ChatScreen(
             onSend = { send() },
             onAttach = { onAttach() },
             onMic = { onMic() },
+            recordingVoice = recordingVoice,
+            onRecordStart = {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startVoiceRecording()
+                else voicePermission.launch(Manifest.permission.RECORD_AUDIO)
+            },
+            onRecordStop = ::stopVoiceRecording,
             attachment = attachment,
             onRemoveAttachment = { attachment = null },
             busy = busy || loading,
@@ -696,8 +788,8 @@ private fun AttachmentMessagePreview(attachment: ChatAttachment) {
 @Composable
 private fun AudioAttachmentPlayer(attachment: ChatAttachment) {
     val context = LocalContext.current
-    val audioFile by produceState<java.io.File?>(null, attachment.base64, attachment.name) {
-        value = withContext(Dispatchers.IO) {
+    val loaded by produceState<Pair<java.io.File?, Boolean>>(null to false, attachment.base64, attachment.name) {
+        val file = withContext(Dispatchers.IO) {
             runCatching {
                 val suffix = attachment.name.substringAfterLast('.', "audio").filter { it.isLetterOrDigit() }.take(8).ifBlank { "audio" }
                 java.io.File.createTempFile("orhan-audio-", ".$suffix", context.cacheDir).also { file ->
@@ -705,7 +797,10 @@ private fun AudioAttachmentPlayer(attachment: ChatAttachment) {
                 }
             }.getOrNull()
         }
+        value = file to true
     }
+    val audioFile = loaded.first
+    val fileReady = loaded.second
     val player = remember(audioFile) { mutableStateOf<MediaPlayer?>(null) }
     val playing = remember(audioFile) { mutableStateOf(false) }
     val loading = remember(audioFile) { mutableStateOf(false) }
@@ -719,7 +814,7 @@ private fun AudioAttachmentPlayer(attachment: ChatAttachment) {
     }
     androidx.compose.material3.Row(verticalAlignment = Alignment.CenterVertically) {
         androidx.compose.material3.TextButton(
-            enabled = audioFile != null && !loading.value,
+            enabled = fileReady && audioFile != null && !loading.value,
             onClick = {
                 if (playing.value) {
                     player.value?.pause()
@@ -755,10 +850,10 @@ private fun AudioAttachmentPlayer(attachment: ChatAttachment) {
                     }
                 }
             },
-        ) { Text(when { loading.value -> "Loading audio…"; playing.value -> "Pause audio"; else -> "Play audio" }) }
+        ) { Text(when { !fileReady -> "Preparing audio…"; loading.value -> "Loading audio…"; playing.value -> "Pause audio"; else -> "Play audio" }) }
         Text(attachment.name, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    if (error.value || (audioFile == null && attachment.base64.isNotBlank())) {
+    if (error.value || (fileReady && audioFile == null)) {
         Text("Audio unavailable", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.error)
     }
 }
@@ -895,9 +990,9 @@ private fun Dot(alpha: Float) {
 /* -------------------------------- composer ------------------------------- */
 
 /**
- * One rounded composer. Plus opens Photos or Files. The round control is
- * voice typing until there is text or a file, then Send. Stop replaces it
- * while a reply is in progress.
+ * One rounded composer. Plus opens Photos or Files. Tap the empty round
+ * control for voice typing; press and hold to record a reviewable audio
+ * attachment. Stop replaces it while a reply is in progress.
  */
 @Composable
 private fun Composer(
@@ -906,6 +1001,9 @@ private fun Composer(
     onSend: () -> Unit,
     onAttach: () -> Unit = {},
     onMic: () -> Unit = {},
+    recordingVoice: Boolean = false,
+    onRecordStart: () -> Unit = {},
+    onRecordStop: () -> Unit = {},
     attachment: ChatAttachment? = null,
     onRemoveAttachment: () -> Unit = {},
     busy: Boolean = false,
@@ -915,6 +1013,12 @@ private fun Composer(
     val colors = OrhanTheme.colors
     val cardShape = RoundedCornerShape(24.dp)
     val canSend = value.isNotBlank() || attachment != null
+    val currentRecording by rememberUpdatedState(recordingVoice)
+    val latestOnMic by rememberUpdatedState(onMic)
+    val latestOnRecordStart by rememberUpdatedState(onRecordStart)
+    val latestOnRecordStop by rememberUpdatedState(onRecordStop)
+    val latestOnSend by rememberUpdatedState(onSend)
+    val latestOnStop by rememberUpdatedState(onStop)
 
     // IME when the keyboard is open, otherwise the navigation bar. Applied once.
     Column(
@@ -926,6 +1030,9 @@ private fun Composer(
             )
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
+        if (recordingVoice) {
+            Text("Recording voice message · release to attach", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.error, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp))
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1031,17 +1138,32 @@ private fun Composer(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(colors.primaryGradient)
-                        .clickable(onClick = actionClick),
+                        .background(if (recordingVoice) MaterialTheme.colorScheme.error else colors.primaryGradient)
+                        .then(if (!busy && !canSend) Modifier.pointerInput(Unit) {
+                            var longPressed = false
+                            detectTapGestures(
+                                onPress = {
+                                    longPressed = false
+                                    tryAwaitRelease()
+                                    if (longPressed) latestOnRecordStop()
+                                },
+                                onLongPress = {
+                                    longPressed = true
+                                    if (!currentRecording) latestOnRecordStart()
+                                },
+                                onTap = { if (currentRecording) latestOnRecordStop() else latestOnMic() },
+                            )
+                        } else Modifier.clickable(onClick = { if (busy) latestOnStop() else latestOnSend() }),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         imageVector = when {
                             busy -> Icons.Rounded.Stop
                             canSend -> Icons.AutoMirrored.Rounded.Send
+                            recordingVoice -> Icons.Rounded.Stop
                             else -> Icons.Rounded.Mic
                         },
-                        contentDescription = actionDescription,
+                        contentDescription = if (recordingVoice) "Release to attach voice recording" else if (canSend || busy) actionDescription else "Voice typing; hold to record audio",
                         tint = colors.onGradient,
                         modifier = Modifier.size(20.dp),
                     )
