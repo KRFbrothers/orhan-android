@@ -14,7 +14,7 @@ PRs #93–#107 are closed and merged into their respective feature-base branches
 - Existing workflow records remain format v2, unchanged. A new independent DataStore records up to 100 run entries, including saved workflow/agent IDs, status, timestamps and failure reason.
 - The Agents tab now has a Run action. It starts a request through the existing Orhan chat path; an Orhan workflow can use the existing `HANDOFF: Agent | task` path to route to a saved specialist, and a workflow attached to a saved agent opens that agent's own thread. The ordinary `/api/chat` service contract and per-agent tool selection are reused. Chat messages remain the run transcript, with existing stop/cancel behavior.
 - Queued/running records become interrupted after process restart; failures, cancellations, success and missing/deleted agents are recorded. The Workflow editor shows recent run history and opens the chat transcript. Legacy workflow records and local chat threads are retained.
-- Dua's engine has owner-scoped durable ADK sessions (`resumeRun`) for individual agent requests but no workflow definition/run/history API or scheduler/trigger endpoint. Orhan PR #106 is merged into `feat/workflow-run-execution` and persists advertised remote run IDs for resumable session requests. PR #109 carries those already-merged source changes onto the #104/#105/#107 meeting chain; PR #108 will use that integration. The manual run ledger remains device-local; server-side workflow history, background execution, cross-device workflow state and scheduling are not implemented. Scheduled triggers remain blocked on a workflow service contract and scheduler integration.
+- Dua's engine has owner-scoped durable ADK sessions (`resumeRun`) for individual agent requests. A new owner-authenticated Node API and RLS table provide durable workflow run metadata snapshots; Orhan keeps its compatible local ledger and mirrors it when a normal Supabase session is available, then merges remote history on authenticated startup. Chat content remains in the existing chat store. This does not execute workflows server-side: there is still no workflow definition/execution endpoint, background worker, or scheduler/trigger endpoint. Scheduled triggers remain blocked on a workflow execution contract and scheduler integration. The API migration is not applied or runtime-verified.
 - Added workflow run serialization coverage; not run.
 
 ## Translation and transcription
@@ -49,6 +49,8 @@ Local Search now consumes the live persisted thread list, indexes chat message b
 - Orhan #106 (durable workflow-session resume) merged into `feat/workflow-run-execution`; PR #109 ports that implementation onto the #104/#105/#107 chain.
 - [Orhan #108](https://github.com/KRFbrothers/orhan-android/pull/108): extends the merged #99 local message search with persisted transcript matches and source indicators; stacked on #109, validation deferred.
 - [Orhan #109](https://github.com/KRFbrothers/orhan-android/pull/109): integrates the already-merged #106 durable `resumeRun` support into the #104/#105/#107 chain; open, validation deferred.
+- [Dua workflow run history API](https://github.com/KRFbrothers/Dua-ai/pull/506): owner-authenticated, RLS-backed workflow metadata list/upsert route; runtime/deployment/migration application not verified.
+- [Orhan workflow run history client](https://github.com/KRFbrothers/orhan-android/pull/110): keeps local history and adds authenticated cloud mirroring/reconciliation; source-only, validation deferred.
 
 ## Validation status
 
