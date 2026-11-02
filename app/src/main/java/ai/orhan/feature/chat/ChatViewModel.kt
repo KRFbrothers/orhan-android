@@ -291,11 +291,7 @@ class ChatViewModel(
         replyStyleBlock(replyStyle)?.let { add(it) }
         toneBlock(tone)?.let { add(it) }
         rosterPreface()?.let { add(it) }
-        if (instructions.isNotBlank()) {
-            add("You are the agent named \"$agentName\". Follow these system instructions for the whole conversation:\n$instructions\n\n" + AgentToolGuidance.text(tools))
-        } else if (tools.isNotEmpty()) {
-            add(AgentToolGuidance.text(tools))
-        }
+        agentConfigurationBlock(agentName, instructions, tools)?.let(::add)
     }
 
     /** Top-level `systemInstruction` for /api/chat (Dua-ai #494): all hidden context in one string. */
@@ -416,7 +412,7 @@ class ChatViewModel(
             askBeforeActingBlock(askBeforeActing)?.let { add(it) }
             replyStyleBlock(replyStyle)?.let { add(it) }
             toneBlock(tone)?.let { add(it) }
-            if (agent.instructions.isNotBlank()) add("You are the agent named \"${agent.name}\". Follow these system instructions:\n${agent.instructions}\n\n" + AgentToolGuidance.text(agent.tools))
+            agentConfigurationBlock(agent.name, agent.instructions, agent.tools)?.let(::add)
         }
         val system = if (USE_SYSTEM_INSTRUCTION) systemInstructionOf(blocks) else null
         val turns = buildList {

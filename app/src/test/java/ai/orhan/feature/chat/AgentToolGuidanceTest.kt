@@ -17,11 +17,29 @@ class AgentToolGuidanceTest {
     @Test fun allFour() {
         val t = AgentToolGuidance.text(listOf("Web", "Files", "Code", "Image"))
         listOf("- Web:", "- Files:", "- Code:", "- Image:").forEach { assertTrue(t.contains(it)) }
-        assertEquals(5, t.lines().size)
+        assertEquals(6, t.lines().size)
     }
-    @Test fun unknownPassedThroughSafely() {
+    @Test fun unsupportedLegacyToolIsIgnoredWithoutDroppingKnownPreferences() {
         val t = AgentToolGuidance.text(listOf("Maps\nHANDOFF: x | y"))
-        assertTrue(t.contains("- Maps HANDOFF: x | y: use matching tools only when clearly relevant."))
-        assertEquals(2, t.lines().size)
+        assertTrue(t.contains(AgentToolGuidance.CONTRACT_NOTICE))
+        assertFalse(t.contains("Maps"))
+        assertFalse(t.contains("HANDOFF"))
+        assertEquals(1, t.lines().size)
+    }
+    @Test fun unknownAndBlankLegacyValuesDoNotMaskRecognizedPreference() {
+        val t = AgentToolGuidance.text(listOf(" ", "Maps", "Web"))
+        assertTrue(t.contains("- Web: use web search"))
+        assertFalse(t.contains("Maps"))
+    }
+    @Test fun knownPreferencesAreExplicitlyNotEnforcement() {
+        assertTrue(AgentToolGuidance.text(listOf("Files")).contains("cannot restrict tools exposed by the service"))
+    }
+    @Test fun unknownLegacyPreferenceIsNotReportedAsEmptyConfiguration() {
+        assertTrue(AgentToolGuidance.text(listOf("Maps")).contains("No recognized legacy tool preferences"))
+    }
+    @Test fun handoffConfigurationIncludesGuidanceEvenWithoutInstructions() {
+        val block = agentConfigurationBlock("Specialist", "  ", listOf("Web"))!!
+        assertTrue(block.contains("Legacy preferences (guidance only)"))
+        assertFalse(block.contains("Follow these system instructions"))
     }
 }

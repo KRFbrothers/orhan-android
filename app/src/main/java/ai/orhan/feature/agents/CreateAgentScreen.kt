@@ -1,13 +1,10 @@
 package ai.orhan.feature.agents
 
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -30,10 +27,7 @@ import ai.orhan.feature.settings.detail.FootNote
 import ai.orhan.feature.settings.detail.SectionLabel
 import ai.orhan.feature.settings.detail.SettingsDetailScaffold
 
-private val AgentTools = listOf("Web", "Files", "Code", "Image")
-
 /** Create or edit an agent. [existing] null means create. Saved locally via AgentStore. */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CreateAgentScreen(
     onBack: () -> Unit,
@@ -46,7 +40,6 @@ fun CreateAgentScreen(
     var name by rememberSaveable(existing?.name) { mutableStateOf(existing?.name.orEmpty()) }
     var blurb by rememberSaveable(existing?.name) { mutableStateOf(existing?.blurb.orEmpty()) }
     var instructions by rememberSaveable(existing?.name) { mutableStateOf(existing?.instructions.orEmpty()) }
-    var tools by rememberSaveable(existing?.name) { mutableStateOf(existing?.tools?.toSet() ?: emptySet()) }
     var showError by rememberSaveable { mutableStateOf(false) }
     var showTaken by rememberSaveable { mutableStateOf(false) }
     var saveError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -100,16 +93,17 @@ fun CreateAgentScreen(
             modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
         )
         SectionLabel("Tools")
-        FlowRow(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
-            AgentTools.forEach { tool ->
-                FilterChip(
-                    selected = tool in tools,
-                    onClick = { tools = if (tool in tools) tools - tool else tools + tool },
-                    label = { Text(tool) },
-                )
-            }
+        Text(
+            "Per-agent tool restrictions are unavailable in the current request contract. No tool allowlist is sent, so these preferences cannot restrict the tools exposed by the service.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        val savedTools = existing?.tools.orEmpty()
+        if (savedTools.isNotEmpty()) {
+            FootNote("Saved legacy tool preferences are preserved but are not enforced: ${savedTools.joinToString()}")
+        } else {
+            FootNote("No per-agent tool selection is stored.")
         }
-        FootNote("Selected tools guide what this agent should use. The shared engine still has its full tool set.")
         if (existing != null) {
             FootNote("Renaming does not move chats saved under the previous name.")
         }
@@ -125,7 +119,7 @@ fun CreateAgentScreen(
                     taken -> showTaken = true
                     else -> scope.launch {
                         saving = true
-                        val result = onCreated(trimmed, blurbCapped, instructionsCapped, AgentTools.filter { it in tools })
+                        val result = onCreated(trimmed, blurbCapped, instructionsCapped, existing?.tools.orEmpty())
                         saving = false
                         when (result) {
                             is AgentSaveResult.Saved -> Unit

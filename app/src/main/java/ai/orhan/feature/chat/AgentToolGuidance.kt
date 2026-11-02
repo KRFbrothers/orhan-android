@@ -1,8 +1,8 @@
 package ai.orhan.feature.chat
 
 /**
- * Turns Create Agent tool chips (Web / Files / Code / Image) into concrete guidance for the model.
- * This is guidance only: the shared engine still exposes its full tool set in agent mode.
+ * Converts recognized legacy agent preferences into prompt guidance.
+ * ChatRepository does not send a per-agent tool allowlist; this is not enforcement.
  */
 object AgentToolGuidance {
     private val GUIDE = mapOf(
@@ -12,17 +12,33 @@ object AgentToolGuidance {
         "image" to "use image tools when the user asks to create or edit images."
     )
 
-    const val NO_TOOLS =
-        "Tools: none selected for this agent. Answer from your knowledge and the conversation; do not claim you ran tools you did not run."
+    const val CONTRACT_NOTICE =
+        "The request does not include a per-agent tool allowlist. These preferences cannot restrict tools exposed by the service. Never claim a tool ran unless the service actually reports that it ran."
 
-    /** Returns the preface text for [tools]; blank labels dropped, unknown labels passed through safely. */
+    const val NO_TOOLS = "$CONTRACT_NOTICE No legacy tool preferences are saved for this agent."
+
+    const val UNKNOWN_TOOLS = "$CONTRACT_NOTICE No recognized legacy tool preferences are saved for this agent."
+
+    /** Known legacy preferences may guide wording; unknown labels are not sent as tool names. */
     fun text(tools: List<String>): String {
-        val labels = tools.map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
-        if (labels.isEmpty()) return NO_TOOLS
+        val labels = tools.map { it.trim() }
+            .filter { it.isNotEmpty() && it.lowercase() in GUIDE }
+            .distinctBy { it.lowercase() }
+        if (labels.isEmpty()) return if (tools.any { it.isNotBlank() }) UNKNOWN_TOOLS else NO_TOOLS
         val lines = labels.map { label ->
-            val safe = label.replace(Regex("[\\r\\n]+"), " ").take(40)
-            "- $safe: " + (GUIDE[safe.lowercase()] ?: "use matching tools only when clearly relevant.")
+            "- $label: " + GUIDE.getValue(label.lowercase())
         }
-        return "Tools this agent should prefer (guidance, use when helpful):\n" + lines.joinToString("\n")
+        return "$CONTRACT_NOTICE\nLegacy preferences (guidance only):\n" + lines.joinToString("\n")
     }
+}
+
+/** Keeps a specialist's instruction and legacy guidance together for both direct chats and handoffs. */
+internal fun agentConfigurationBlock(name: String, instructions: String, tools: List<String>): String? {
+    val blocks = buildList {
+        instructions.trim().takeIf { it.isNotEmpty() }?.let {
+            add("You are the agent named \"$name\". Follow these system instructions for the whole conversation:\n$it")
+        }
+        tools.takeIf { it.isNotEmpty() }?.let { add(AgentToolGuidance.text(it)) }
+    }
+    return blocks.takeIf { it.isNotEmpty() }?.joinToString("\n\n")
 }
