@@ -638,7 +638,28 @@ fun ChatScreen(
                 actionMessageId = null
             },
             onShare = {
-                shareText(context, actionMessage.text)
+                val payload = actionMessage.attachment
+                if (payload == null) {
+                    shareText(context, actionMessage.text)
+                } else {
+                    scope.launch {
+                        val file = withContext(Dispatchers.IO) { prepareAttachmentShareFile(context, payload) }
+                        if (file == null) {
+                            Toast.makeText(context, "Couldn't prepare this attachment for sharing", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.artifact-exports", file)
+                            val send = Intent(Intent.ACTION_SEND).apply {
+                                type = payload.mimeType
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                if (actionMessage.text.isNotBlank()) putExtra(Intent.EXTRA_TEXT, actionMessage.text)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                clipData = ClipData.newUri(context.contentResolver, payload.name, uri)
+                            }
+                            runCatching { context.startActivity(Intent.createChooser(send, "Share attachment").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                                .onFailure { Toast.makeText(context, "Couldn't open the share sheet", Toast.LENGTH_SHORT).show() }
+                        }
+                    }
+                }
                 actionMessageId = null
             },
             onSave = {
@@ -997,6 +1018,19 @@ private fun shareText(context: Context, text: String) {
     }
     context.startActivity(Intent.createChooser(send, "Share from Orhan").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
+
+internal fun attachmentShareBytes(attachment: ChatAttachment): ByteArray? = runCatching {
+    val bytes = java.util.Base64.getDecoder().decode(attachment.base64)
+    require(bytes.isNotEmpty() && bytes.size.toLong() == attachment.sizeBytes && bytes.size <= ChatAttachment.MAX_BYTES)
+    bytes
+}.getOrNull()
+
+private fun prepareAttachmentShareFile(context: Context, attachment: ChatAttachment): java.io.File? = runCatching {
+    val bytes = attachmentShareBytes(attachment) ?: return null
+    val directory = java.io.File(context.cacheDir, "artifact_exports").apply { mkdirs() }
+    val suffix = attachment.name.substringAfterLast('.', "file").filter { it.isLetterOrDigit() }.take(8).ifBlank { "file" }
+    java.io.File.createTempFile("chat-share-", ".$suffix", directory).also { it.writeBytes(bytes) }
+}.getOrNull()
 
 /** Inline preview of what the agent produced \u2014 14dp radius, 42x54 thumb. */
 @Composable
