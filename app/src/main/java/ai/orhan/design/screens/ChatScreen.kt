@@ -88,6 +88,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -235,6 +236,10 @@ fun ChatScreen(
     onSaveArtifact: ((title: String, content: String, chatId: String, messageId: Long, author: String) -> Unit)? = null,
     /** Saves a user message as a to-do. The caller reports the store result. Nothing is run here. */
     onSaveAction: ((messageId: Long, text: String) -> Unit)? = null,
+    /** Uses the signed-in model service and returns only the requested translation. */
+    onTranslateMessage: (suspend (String) -> Result<String>)? = null,
+    /** Sends the original persisted audio payload to the configured speech-capable model. */
+    onTranscribeAudio: (suspend (ChatAttachment) -> Result<String>)? = null,
     /** Prefills the composer once (e.g. from a workflow). Never auto-sent; a restored draft wins. */
     initialComposerText: String = "",
     /** Scrolls to this message when opening a memory source. Zero means no source. */
@@ -263,6 +268,24 @@ fun ChatScreen(
     var cameraOutput by remember { mutableStateOf<java.io.File?>(null) }
     var attachSheet by rememberSaveable { mutableStateOf(false) }
     var actionMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var textActionTitle by rememberSaveable { mutableStateOf<String?>(null) }
+    var textActionResult by rememberSaveable { mutableStateOf<String?>(null) }
+    var textActionError by rememberSaveable { mutableStateOf<String?>(null) }
+    var textActionLoading by rememberSaveable { mutableStateOf(false) }
+
+    fun runTextAction(title: String, action: suspend () -> Result<String>) {
+        actionMessageId = null
+        textActionTitle = title
+        textActionResult = null
+        textActionError = null
+        textActionLoading = true
+        scope.launch {
+            val result = try { action() } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+            catch (error: Exception) { Result.failure(error) }
+            textActionLoading = false
+            result.onSuccess { textActionResult = it }.onFailure { textActionError = it.message ?: "$title failed." }
+        }
+    }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -604,6 +627,8 @@ fun ChatScreen(
         MessageActionsSheet(
             canSave = actionMessage.role == ChatRole.Agent && actionMessage.id != 0L && onSaveArtifact != null,
             canSaveAction = actionMessage.role == ChatRole.User && onSaveAction != null && actionMessage.id != 0L,
+            canTranslate = onTranslateMessage != null,
+            canTranscribe = onTranscribeAudio != null && actionMessage.attachment?.mimeType?.startsWith("audio/") == true,
             onDismiss = { actionMessageId = null },
             onCopy = {
                 copyText(context, actionMessage.text)
@@ -626,6 +651,31 @@ fun ChatScreen(
             onSaveAction = {
                 onSaveAction?.invoke(actionMessage.id, actionMessage.text)
                 actionMessageId = null
+            },
+            onTranslate = { runTextAction("Translation") { onTranslateMessage?.invoke(actionMessage.text) ?: Result.failure(IllegalStateException("Translation is unavailable.")) } },
+            onTranscribe = {
+                val audio = actionMessage.attachment
+                if (audio != null) runTextAction("Transcript") { onTranscribeAudio?.invoke(audio) ?: Result.failure(IllegalStateException("Transcription is unavailable.")) }
+            },
+        )
+    }
+    textActionTitle?.let { title ->
+        AlertDialog(
+            onDismissRequest = { if (!textActionLoading) { textActionTitle = null; textActionResult = null; textActionError = null } },
+            title = { Text(title) },
+            text = {
+                when {
+                    textActionLoading -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Text("Waiting for the signed-in service…")
+                    }
+                    textActionError != null -> Text(textActionError!!, color = MaterialTheme.colorScheme.error)
+                    else -> SelectionContainer { Text(textActionResult.orEmpty()) }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !textActionLoading, onClick = { textActionTitle = null; textActionResult = null; textActionError = null }) { Text("Done") }
             },
         )
     }
@@ -1372,11 +1422,15 @@ private fun AttachSheet(
 private fun MessageActionsSheet(
     canSave: Boolean,
     canSaveAction: Boolean,
+    canTranslate: Boolean,
+    canTranscribe: Boolean,
     onDismiss: () -> Unit,
     onCopy: () -> Unit,
     onShare: () -> Unit,
     onSave: () -> Unit,
     onSaveAction: () -> Unit,
+    onTranslate: () -> Unit,
+    onTranscribe: () -> Unit,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1392,6 +1446,8 @@ private fun MessageActionsSheet(
             )
             SheetAction(Icons.Rounded.ContentCopy, "Copy", null, onCopy)
             SheetAction(Icons.Rounded.Share, "Share", null, onShare)
+            if (canTranslate) SheetAction(Icons.Rounded.Description, "Translate", "Uses the signed-in language service.", onTranslate)
+            if (canTranscribe) SheetAction(Icons.Rounded.Mic, "Transcribe audio", "Sends this saved audio to the speech-capable model.", onTranscribe)
             if (canSave) {
                 SheetAction(Icons.Rounded.Description, "Save as artifact", null, onSave)
             }

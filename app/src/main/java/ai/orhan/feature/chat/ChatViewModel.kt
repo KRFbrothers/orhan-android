@@ -36,7 +36,7 @@ import java.util.Date
 import java.util.Locale
 
 /** A specialist agent Orhan can delegate to. */
-data class RosterAgent(val name: String, val blurb: String, val instructions: String)
+data class RosterAgent(val name: String, val blurb: String, val instructions: String, val allowedTools: List<String>? = null)
 
 /** Visible label prefix on a specialist reply inside the Orhan thread. */
 const val SPECIALIST_PREFIX = "\uD83E\uDD1D "
@@ -171,7 +171,7 @@ class ChatViewModel(
                 if (saved.agentId == null) runCatching { store.associateAgent(title, id) }
             }
             pendingHandoffRetry = saved.pendingHandoffRetry?.let {
-                PendingHandoffRetry(it.sourceReplyId, RosterAgent(it.agentName, "", it.instructions), it.task)
+                PendingHandoffRetry(it.sourceReplyId, RosterAgent(it.agentName, "", it.instructions, it.allowedTools), it.task)
             }
             val interruptedHandoffError = saved.pendingHandoffRetry?.let {
                 "${it.agentName} assignment was interrupted. Tap Try again to resume it."
@@ -216,6 +216,7 @@ class ChatViewModel(
     private var agentName: String = ""
     private var instructions: String = ""
     private var activeAgentId: String? = null
+    private var activeAllowedTools: List<String>? = null
     private data class PendingHandoffRetry(val sourceReplyId: Long, val agent: RosterAgent, val task: String)
     private var pendingHandoffRetry: PendingHandoffRetry? = null
     private fun PendingHandoffRetry.toStored() = StoredHandoffRetry(
@@ -223,11 +224,13 @@ class ChatViewModel(
         agentName = agent.name,
         instructions = agent.instructions,
         task = task,
+        allowedTools = agent.allowedTools,
     )
 
     /** Sets the agent personality used for API turns. Idempotent; safe to call on every recomposition. */
-    fun setAgent(name: String, instructions: String, id: String? = null) {
+    fun setAgent(name: String, instructions: String, id: String? = null, allowedTools: List<String>? = null) {
         agentName = name; this.instructions = instructions.trim(); activeAgentId = id
+        activeAllowedTools = allowedTools?.distinct()?.sorted()
     }
 
     /** Other agents Orhan may delegate to (only set when chatting as Orhan, not a specialist). */
@@ -428,7 +431,8 @@ class ChatViewModel(
         val replyId = nextId()
         streamJob = viewModelScope.launch {
             var streamed = false
-            val result = repository.stream(turns, system, onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } }) { delta ->
+            val result = repository.stream(turns, system, activeAllowedTools,
+                onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } }) { delta ->
                 streamed = true
                 _state.update { s ->
                     val existing = s.messages.lastOrNull()?.takeIf { it.id == replyId }
@@ -444,7 +448,7 @@ class ChatViewModel(
                 if (e is CancellationException) throw e
                 // Fall back to non-streaming only if nothing was shown yet and the error isn't fatal (auth).
                 if (streamed || e !is ChatRepository.FallbackEligibleStreamException) throw e
-                repository.send(turns, system).getOrThrow().also { reply ->
+                repository.send(turns, system, activeAllowedTools).getOrThrow().also { reply ->
                     _state.update { it.copy(messages = it.messages + ChatMessage(replyId, ChatRole.Agent, reply, currentTimeString())) }
                 }
             }
@@ -500,7 +504,8 @@ class ChatViewModel(
         val bubbleId = nextId()
         val header = specialistHeader(agent.name)
         var streamed = false
-        repository.stream(turns, system, onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } }) { delta ->
+        repository.stream(turns, system, agent.allowedTools,
+            onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } }) { delta ->
             streamed = true
             _state.update { s ->
                 val existing = s.messages.lastOrNull()?.takeIf { it.id == bubbleId }
@@ -511,7 +516,7 @@ class ChatViewModel(
         }.recoverCatching { e ->
             if (e is CancellationException) throw e
             if (streamed || e !is ChatRepository.FallbackEligibleStreamException) throw e
-            repository.send(turns, system).getOrThrow().also { reply ->
+            repository.send(turns, system, agent.allowedTools).getOrThrow().also { reply ->
                 _state.update { it.copy(messages = it.messages + ChatMessage(bubbleId, ChatRole.Agent, header + reply, currentTimeString())) }
             }
         }
@@ -526,6 +531,12 @@ class ChatViewModel(
     }
 
     fun clearError() = _state.update { it.copy(error = null) }
+
+    suspend fun translateMessage(text: String, targetLanguage: String): Result<String> =
+        repository.translateText(text, targetLanguage)
+
+    suspend fun transcribeAudio(attachment: ChatAttachment): Result<String> =
+        repository.transcribeAudio(attachment)
 
     private fun nextId() = (_state.value.messages.lastOrNull()?.id ?: 0L) + 1L
 }

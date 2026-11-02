@@ -25,7 +25,8 @@ import java.io.OutputStream
  * Local per-chat message threads keyed by chat title (same string as AppRoutes.chat(title)).
  * Device-only; no cloud sync.
  */
-private const val THREAD_FORMAT_VERSION = 5
+private const val THREAD_FORMAT_VERSION = 6
+private const val THREAD_FORMAT_V5 = 5
 private const val THREAD_FORMAT_V4 = 4
 private const val THREAD_FORMAT_V3 = 3
 private const val THREAD_FORMAT_V2 = 2
@@ -44,7 +45,13 @@ data class StoredMessage(
     /** Epoch millis when the bubble was created. Zero on threads saved before automatic memory. */
     val createdAt: Long = 0L,
 )
-data class StoredHandoffRetry(val sourceReplyId: Long, val agentName: String, val instructions: String, val task: String)
+data class StoredHandoffRetry(
+    val sourceReplyId: Long,
+    val agentName: String,
+    val instructions: String,
+    val task: String,
+    val allowedTools: List<String>? = null,
+)
 data class ChatThread(
     val title: String,
     val updatedAt: Long,
@@ -92,9 +99,12 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
                         message
                     }
                     val pending = if (version >= THREAD_FORMAT_V4 && d.readBoolean()) {
-                        StoredHandoffRetry(d.readLong(), d.readUTF(), readLongString(d), readLongString(d))
+                        val replyId = d.readLong(); val agentName = d.readUTF()
+                        val instructions = readLongString(d); val task = readLongString(d)
+                        val allowedTools = if (version >= THREAD_FORMAT_VERSION && d.readBoolean()) List(d.readInt()) { d.readUTF() } else null
+                        StoredHandoffRetry(replyId, agentName, instructions, task, allowedTools)
                     } else null
-                    val agentId = if (version >= THREAD_FORMAT_VERSION && d.readBoolean()) d.readUTF() else null
+                    val agentId = if (version >= THREAD_FORMAT_V5 && d.readBoolean()) d.readUTF() else null
                     ChatThread(title, updatedAt, msgs, pending, agentId)
                 }
             }
@@ -119,6 +129,8 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
             if (handoff != null) {
                 d.writeLong(handoff.sourceReplyId); d.writeUTF(handoff.agentName.take(200))
                 writeLongString(d, handoff.instructions); writeLongString(d, handoff.task)
+                d.writeBoolean(handoff.allowedTools != null)
+                handoff.allowedTools?.let { tools -> d.writeInt(tools.size); tools.forEach(d::writeUTF) }
             }
             d.writeBoolean(th.agentId != null)
             th.agentId?.let { d.writeUTF(it.take(100)) }

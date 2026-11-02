@@ -44,7 +44,7 @@ class ChatAttachmentPersistenceTest {
     }
 
     @Test fun serializerRoundTripsPendingHandoffRetryState() = kotlinx.coroutines.runBlocking {
-        val retry = StoredHandoffRetry(17L, "Slides", "Use a concise style", "Make a 5-slide deck")
+        val retry = StoredHandoffRetry(17L, "Slides", "Use a concise style", "Make a 5-slide deck", listOf("calculator"))
         val thread = ChatThread("Orhan", 30L, listOf(StoredMessage(17L, "agent", "Assigned to Slides", "now")), retry, "agent-id-1")
         val out = java.io.ByteArrayOutputStream()
         ChatThreadsSerializer.writeTo(listOf(thread), out)
@@ -64,6 +64,22 @@ class ChatAttachmentPersistenceTest {
         val migrated = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
         assertEquals("Slides", migrated.pendingHandoffRetry?.agentName)
         assertEquals(null, migrated.agentId)
+    }
+
+    @Test fun v5ThreadKeepsHandoffAndAgentIdWithoutInventingToolSelection() = kotlinx.coroutines.runBlocking {
+        val out = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(out).apply {
+            writeInt(5); writeInt(1); writeUTF("Orhan"); writeLong(30); writeInt(0)
+            writeBoolean(true); writeLong(17); writeUTF("Slides")
+            val instructions = "Be concise".toByteArray(Charsets.UTF_8)
+            writeInt(instructions.size); write(instructions)
+            val task = "Make slides".toByteArray(Charsets.UTF_8)
+            writeInt(task.size); write(task)
+            writeBoolean(true); writeUTF("agent-id-5"); flush()
+        }
+        val migrated = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
+        assertEquals("agent-id-5", migrated.agentId)
+        assertEquals(null, migrated.pendingHandoffRetry?.allowedTools)
     }
 
     @Test fun renameAssociatesOnlyLegacyTitleMatchedChatsAndPreservesMessages() {

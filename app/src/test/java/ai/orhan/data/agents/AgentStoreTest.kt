@@ -42,7 +42,7 @@ class AgentStoreTest {
         assertEquals(listOf("web"), back.single().tools)
     }
 
-    @Test fun avatarFilenameAndStableIdRoundTripInV4AndLegacyReadsRemainCompatible() = runBlocking {
+    @Test fun avatarFilenameAndStableIdRoundTripInV5AndLegacyReadsRemainCompatible() = runBlocking {
         val saved = SavedAgent("Writer", "b", "instructions", listOf("legacy"), 5, "123e4567-e89b-12d3-a456-426614174000.img")
         val out = ByteArrayOutputStream()
         SavedAgentsSerializer.writeTo(listOf(saved), out)
@@ -62,6 +62,27 @@ class AgentStoreTest {
         val legacy = SavedAgentsSerializer.readFrom(v3.toByteArray().inputStream()).single()
         assertEquals(saved.avatarFileName, legacy.avatarFileName)
         assertTrue(legacy.id.isNotBlank())
+        assertEquals(false, legacy.toolsRestricted)
+    }
+
+    @Test fun explicitToolRestrictionRoundTripsAndOlderAgentDefaultsToLegacyBehavior() = runBlocking {
+        val selected = SavedAgent("Writer", "b", tools = emptyList(), createdAt = 5, toolsRestricted = true)
+        val out = ByteArrayOutputStream()
+        SavedAgentsSerializer.writeTo(listOf(selected), out)
+        assertEquals(selected, SavedAgentsSerializer.readFrom(out.toByteArray().inputStream()).single())
+        val old = SavedAgent("Legacy", "b", tools = emptyList(), createdAt = 6)
+        val oldOut = ByteArrayOutputStream()
+        SavedAgentsSerializer.writeTo(listOf(old), oldOut)
+        assertEquals(false, SavedAgentsSerializer.readFrom(oldOut.toByteArray().inputStream()).single().toolsRestricted)
+        val v4 = ByteArrayOutputStream()
+        DataOutputStream(v4).apply {
+            writeInt(4); writeInt(1); writeUTF("V4"); writeUTF("b")
+            val instructions = "legacy".toByteArray(); writeInt(instructions.size); write(instructions)
+            writeInt(1); writeUTF("web"); writeLong(7); writeBoolean(false); writeBoolean(true); writeUTF("stable-v4-id"); flush()
+        }
+        val legacyV4 = SavedAgentsSerializer.readFrom(v4.toByteArray().inputStream()).single()
+        assertEquals("stable-v4-id", legacyV4.id)
+        assertEquals(false, legacyV4.toolsRestricted)
     }
 
     @Test fun readsV1Format() = runBlocking {

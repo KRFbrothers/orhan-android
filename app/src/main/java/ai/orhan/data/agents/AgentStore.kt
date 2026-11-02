@@ -24,7 +24,8 @@ import java.io.File
 import java.util.UUID
 
 /* Local store for user-created agents (no backend). Name (case-insensitive) is the key. */
-private const val FORMAT_VERSION = 4
+private const val FORMAT_VERSION = 5
+private const val FORMAT_VERSION_V4 = 4
 private const val FORMAT_VERSION_V2 = 2
 private const val FORMAT_VERSION_V3 = 3
 private const val FORMAT_VERSION_V1 = 1
@@ -60,6 +61,8 @@ data class SavedAgent(
     val createdAt: Long,
     val avatarFileName: String? = null,
     val id: String = UUID.randomUUID().toString(),
+    /** False on pre-v5 agents means legacy unrestricted behavior; true makes even an empty list explicit. */
+    val toolsRestricted: Boolean = false,
 )
 
 object SavedAgentsSerializer : Serializer<List<SavedAgent>> {
@@ -79,7 +82,8 @@ object SavedAgentsSerializer : Serializer<List<SavedAgent>> {
                     val tools = List(d.readInt()) { d.readUTF() }
                     val createdAt = d.readLong()
                     val avatarFileName = if (version >= FORMAT_VERSION_V3 && d.readBoolean()) d.readUTF() else null
-                    val id = if (version >= FORMAT_VERSION && d.readBoolean()) d.readUTF() else legacyAgentId(name, createdAt)
+                    val id = if (version >= FORMAT_VERSION_V4 && d.readBoolean()) d.readUTF() else legacyAgentId(name, createdAt)
+                    val toolsRestricted = version >= FORMAT_VERSION && d.readBoolean()
                     SavedAgent(
                         name = name,
                         blurb = blurb,
@@ -88,6 +92,7 @@ object SavedAgentsSerializer : Serializer<List<SavedAgent>> {
                         createdAt = createdAt,
                         avatarFileName = avatarFileName,
                         id = id,
+                        toolsRestricted = toolsRestricted,
                     )
                 }
             }
@@ -106,6 +111,7 @@ object SavedAgentsSerializer : Serializer<List<SavedAgent>> {
             a.avatarFileName?.let { d.writeUTF(it.take(100)) }
             d.writeBoolean(a.id.isNotBlank())
             if (a.id.isNotBlank()) d.writeUTF(a.id.take(100))
+            d.writeBoolean(a.toolsRestricted)
         }
         d.flush()
     }
