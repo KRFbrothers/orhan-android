@@ -80,8 +80,11 @@ import androidx.compose.ui.unit.dp
 import ai.orhan.app.relativeTime
 import ai.orhan.data.artifacts.Artifact
 import ai.orhan.data.artifacts.artifactStore
+import ai.orhan.data.memory.ActionSaveResult
+import ai.orhan.data.memory.ArtifactLink
 import ai.orhan.data.memory.DEFAULT_TOPIC_GROUP
 import ai.orhan.data.memory.MAX_ENTRY_TITLE
+import ai.orhan.data.memory.artifactLink
 import ai.orhan.data.memory.MAX_GROUP_NAME
 import ai.orhan.data.memory.MAX_NOTE_CONTENT
 import ai.orhan.data.memory.MAX_SUMMARY
@@ -144,10 +147,13 @@ fun MemoryScreen(
     embedded: Boolean = false,
     onEditProfile: () -> Unit = {},
     onOpenSource: (String, Long) -> Unit = { _, _ -> },
+    onOpenArtifact: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val entries = remember(context) { context.memoryEntriesStore() }
+    val artifactStore = remember(context) { context.artifactStore() }
     val topics by entries.topics.collectAsState(initial = emptyList())
+    val artifacts by artifactStore.artifacts.collectAsState(initial = null as List<Artifact>?)
     val snackbar = remember { SnackbarHostState() }
     var page by rememberSaveable { mutableStateOf("home") }
     var openTopicId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -176,16 +182,30 @@ fun MemoryScreen(
                 topic = topics.firstOrNull { it.id == openTopicId },
                 groups = topics.map { it.group }.distinct(),
                 onBack = { creating = false; openTopicId = null },
-                onSave = { title, summary, content, group, tags ->
-                    entries.upsertTopic(if (creating) null else openTopicId, title, summary, content, group, tags)
+                onSave = { title, summary, content, group, tags, artifactId ->
+                    entries.upsertTopic(
+                        if (creating) null else openTopicId,
+                        title,
+                        summary,
+                        content,
+                        group,
+                        tags,
+                        artifactId,
+                    )
                 },
                 onDelete = { id -> entries.deleteTopic(id) },
                 onOpenSource = onOpenSource,
+                onOpenArtifact = onOpenArtifact,
+                artifacts = artifacts,
                 snackbar = snackbar,
             )
             page == "overview" -> OverviewPage(topics, onBack = { page = "home" }, onOpen = { openTopicId = it })
             page == "profile" -> ProfilePage(onBack = { page = "home" }, onEditProfile = onEditProfile, snackbar = snackbar)
-            page == "actions" -> ActionsPage(onBack = { page = "home" })
+            page == "actions" -> ActionsPage(
+                onBack = { page = "home" },
+                onOpenSource = onOpenSource,
+                snackbar = snackbar,
+            )
             page == "artifacts" -> ArtifactsPage(onBack = { page = "home" })
             page == "meetings" -> MeetingsPage(onBack = { page = "home" })
             else -> TopicHome(
@@ -255,7 +275,7 @@ private fun TopicHome(
             }
             TextButton(onClick = onCreate, modifier = Modifier.heightIn(min = 48.dp)) {
                 Icon(Icons.Rounded.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Text("+ New", color = MaterialTheme.colorScheme.primary, style = OrhanTextStyles.button)
+                Text("New", color = MaterialTheme.colorScheme.primary, style = OrhanTextStyles.button)
             }
         }
         if (tagsOpen) {
@@ -293,7 +313,7 @@ private fun TopicHome(
             Spacer(Modifier.height(8.dp))
         }
         when {
-            topics.isEmpty() -> EmptyCopy("No topics yet. Tap + New to add one.")
+            topics.isEmpty() -> EmptyCopy("No topics yet. Tap New to add one.")
             visible.isEmpty() && updatesOnly && query.isBlank() && selected.isEmpty() -> EmptyCopy("No updates")
             visible.isEmpty() -> EmptyCopy("No matches")
             else -> {
@@ -637,7 +657,11 @@ private fun ProfilePage(onBack: () -> Unit, onEditProfile: () -> Unit, snackbar:
 }
 
 @Composable
-private fun ActionsPage(onBack: () -> Unit) {
+private fun ActionsPage(
+    onBack: () -> Unit,
+    onOpenSource: (String, Long) -> Unit,
+    snackbar: SnackbarHostState,
+) {
     val context = LocalContext.current
     val store = remember(context) { context.memoryEntriesStore() }
     val todos by store.todos.collectAsState(initial = emptyList())
@@ -645,6 +669,8 @@ private fun ActionsPage(onBack: () -> Unit) {
     var editing by remember { mutableStateOf<MemoryEntry?>(null) }
     var creating by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<MemoryEntry?>(null) }
+    var deletingNow by remember { mutableStateOf(false) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
     PageColumn("Next Actions", onBack) {
         Text(
             "To-dos you saved on this device. Orhan does not invent upcoming actions from chats.",
@@ -655,10 +681,22 @@ private fun ActionsPage(onBack: () -> Unit) {
         if (todos.isEmpty()) EmptyCopy("No next actions yet.")
         todos.forEach { item ->
             Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Checkbox(checked = item.done, onCheckedChange = { scope.launch { store.toggleDone(item.id) } })
+                Checkbox(
+                    checked = item.done,
+                    onCheckedChange = {
+                        scope.launch {
+                            if (!store.toggleDone(item.id)) {
+                                snackbar.showSnackbar("Couldn't update this action.")
+                            }
+                        }
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = if (item.done) "Reopen action" else "Complete action"
+                    },
+                )
                 Column(Modifier.weight(1f).clickable { editing = item }) {
                     Text(
                         item.title,
@@ -670,11 +708,29 @@ private fun ActionsPage(onBack: () -> Unit) {
                     if (item.content.isNotBlank()) {
                         Text(item.content, style = OrhanTextStyles.snippet, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
+                    if (item.sourceChatTitle.isNotBlank()) {
+                        Text(
+                            "From ${item.sourceChatTitle}",
+                            style = OrhanTextStyles.meta,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        TextButton(
+                            onClick = { onOpenSource(item.sourceChatTitle, item.sourceMessageId) },
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .semantics { contentDescription = "Open source chat" },
+                        ) { Text("Open source chat") }
+                    }
                 }
-                IconButton(onClick = { deleting = item }) { Icon(Icons.Rounded.Delete, "Delete to-do") }
+                IconButton(onClick = {
+                    deleteError = null
+                    deleting = item
+                }) { Icon(Icons.Rounded.Delete, "Delete to-do") }
             }
         }
-        FootNote("To-dos stay on this device and are not sent to your agents.")
+        FootNote("Saving an action keeps it on this device. It does not run the action, and it is not sent to your agents.")
     }
     val draft = if (creating) MemoryEntry("", "", "", false, 0L) else editing
     if (draft != null) {
@@ -683,20 +739,35 @@ private fun ActionsPage(onBack: () -> Unit) {
             isNew = creating,
             onDismiss = { creating = false; editing = null },
             onSave = { title, content ->
-                scope.launch { store.upsertTodo(if (creating) null else draft.id, title, content) }
-                creating = false
-                editing = null
+                store.saveTodo(if (creating) null else draft.id, title, content)
             },
         )
     }
     deleting?.let { item ->
         ConfirmDelete(
             title = "Delete to-do?",
-            body = "\"${item.title}\" will be removed from this device.",
-            onDismiss = { deleting = null },
+            body = deleteError ?: "\"${item.title}\" will be removed from this device.",
+            confirmEnabled = !deletingNow,
+            onDismiss = {
+                if (!deletingNow) {
+                    deleting = null
+                    deleteError = null
+                }
+            },
             onConfirm = {
-                scope.launch { store.deleteTodo(item.id) }
-                deleting = null
+                if (deletingNow) return@ConfirmDelete
+                deletingNow = true
+                scope.launch {
+                    val removed = store.deleteTodo(item.id)
+                    deletingNow = false
+                    if (removed) {
+                        deleting = null
+                        deleteError = null
+                    } else {
+                        deleteError = "Couldn't delete this action. It is still saved on this device."
+                        snackbar.showSnackbar("Couldn't delete this action. It is still saved on this device.")
+                    }
+                }
             },
         )
     }
@@ -789,10 +860,12 @@ private fun MeetingsPage(onBack: () -> Unit) {
 private fun TopicEditor(
     topic: MemoryTopic?,
     groups: List<String>,
+    artifacts: List<Artifact>?,
     onBack: () -> Unit,
-    onSave: suspend (String, String, String, String, List<String>) -> Boolean,
+    onSave: suspend (String, String, String, String, List<String>, String) -> Boolean,
     onDelete: suspend (String) -> Boolean,
     onOpenSource: (String, Long) -> Unit,
+    onOpenArtifact: (String) -> Unit,
     snackbar: SnackbarHostState,
 ) {
     val scope = rememberCoroutineScope()
@@ -802,6 +875,8 @@ private fun TopicEditor(
     var group by rememberSaveable(topic?.id) { mutableStateOf(topic?.group ?: DEFAULT_TOPIC_GROUP) }
     var tagDraft by rememberSaveable(topic?.id) { mutableStateOf("") }
     var tags by rememberSaveable(topic?.id, stateSaver = StringListSaver) { mutableStateOf(topic?.tags.orEmpty()) }
+    var artifactId by rememberSaveable(topic?.id) { mutableStateOf(topic?.artifactId.orEmpty()) }
+    var pickingArtifact by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
     var deleteError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -819,7 +894,7 @@ private fun TopicEditor(
                 onClick = {
                     scope.launch {
                         val pending = if (tagDraft.isNotBlank()) tags + tagDraft else tags
-                        if (onSave(title, summary, content, group, pending)) {
+                        if (onSave(title, summary, content, group, pending, artifactId)) {
                             saveError = null
                             onBack()
                         } else {
@@ -911,7 +986,43 @@ private fun TopicEditor(
                     .semantics { contentDescription = "Open source chat" },
             ) { Text("Open source chat") }
         }
-        FootNote("Topics stay on this device unless Use topics in chats is on. Pause memory stops that. A source chat opens the message this topic came from.")
+        ArtifactLinkRow(
+            artifactId = artifactId,
+            artifacts = artifacts,
+            onPick = { pickingArtifact = true },
+            onOpen = onOpenArtifact,
+            onUnlink = { artifactId = "" },
+        )
+        FootNote("Topics stay on this device unless Use topics in chats is on. Pause memory stops that. A source chat opens the message this topic came from. A linked artifact opens the saved document. This topic does not keep a second copy.")
+    }
+    if (pickingArtifact) {
+        AlertDialog(
+            onDismissRequest = { pickingArtifact = false },
+            title = { Text("Link an artifact") },
+            text = {
+                if (artifacts.isNullOrEmpty()) {
+                    Text("No artifacts yet. Save one from a chat reply first.")
+                } else {
+                    Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                        artifacts.forEach { artifact ->
+                            TextButton(
+                                onClick = {
+                                    artifactId = artifact.id
+                                    pickingArtifact = false
+                                },
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            ) {
+                                Text(artifact.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { pickingArtifact = false }) { Text("Cancel") }
+            },
+        )
     }
     if (confirmDelete && topic != null) {
         ConfirmDelete(
@@ -946,21 +1057,97 @@ private fun TopicEditor(
 }
 
 @Composable
-private fun TodoDialog(initial: MemoryEntry, isNew: Boolean, onDismiss: () -> Unit, onSave: (String, String) -> Unit) {
+private fun ArtifactLinkRow(
+    artifactId: String,
+    artifacts: List<Artifact>?,
+    onPick: () -> Unit,
+    onOpen: (String) -> Unit,
+    onUnlink: () -> Unit,
+) {
+    if (artifactId.isBlank()) {
+        TextButton(onClick = onPick, modifier = Modifier.heightIn(min = 48.dp)) { Text("Link an artifact") }
+        return
+    }
+    if (artifacts == null) {
+        Text(
+            "Checking the saved document…",
+            style = OrhanTextStyles.snippet,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        return
+    }
+    when (val link = artifactLink(artifactId, artifacts)) {
+        ArtifactLink.None -> TextButton(onClick = onPick, modifier = Modifier.heightIn(min = 48.dp)) { Text("Link an artifact") }
+        is ArtifactLink.Ready -> {
+            Text(link.title, style = OrhanTextStyles.rowTitle, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Row {
+                TextButton(
+                    onClick = { onOpen(link.id) },
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Open artifact" },
+                ) { Text("Open artifact") }
+                TextButton(onClick = onUnlink, modifier = Modifier.heightIn(min = 48.dp)) { Text("Unlink") }
+            }
+        }
+        ArtifactLink.Missing -> {
+            Text(
+                "This artifact is no longer on this device.",
+                style = OrhanTextStyles.snippet,
+                color = MaterialTheme.colorScheme.error,
+            )
+            TextButton(onClick = onUnlink, modifier = Modifier.heightIn(min = 48.dp)) { Text("Unlink") }
+        }
+    }
+}
+
+@Composable
+private fun TodoDialog(
+    initial: MemoryEntry,
+    isNew: Boolean,
+    onDismiss: () -> Unit,
+    onSave: suspend (String, String) -> ActionSaveResult,
+) {
+    val scope = rememberCoroutineScope()
     var title by remember(initial.id, isNew) { mutableStateOf(initial.title) }
     var content by remember(initial.id, isNew) { mutableStateOf(initial.content) }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!saving) onDismiss() },
         title = { Text(if (isNew) "New to-do" else "Edit to-do") },
         text = {
             Column {
                 OutlinedTextField(value = title, onValueChange = { title = it.take(MAX_ENTRY_TITLE) }, label = { Text("Title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(value = content, onValueChange = { content = it.take(MAX_TODO_CONTENT) }, label = { Text("Details (optional)") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                error?.let { message ->
+                    Text(message, style = OrhanTextStyles.snippet, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+                }
             }
         },
-        confirmButton = { TextButton(enabled = title.isNotBlank(), onClick = { onSave(title, content) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = {
+            TextButton(
+                enabled = title.isNotBlank() && !saving,
+                onClick = {
+                    scope.launch {
+                        saving = true
+                        error = null
+                        when (onSave(title, content)) {
+                            ActionSaveResult.Saved -> onDismiss()
+                            ActionSaveResult.Duplicate -> {
+                                error = "That action is already saved."
+                                saving = false
+                            }
+                            else -> {
+                                error = "Couldn't save this action. Your edits are still here."
+                                saving = false
+                            }
+                        }
+                    }
+                },
+            ) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !saving) { Text("Cancel") } },
     )
 }
 

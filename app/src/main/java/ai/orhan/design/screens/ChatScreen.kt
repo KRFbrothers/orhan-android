@@ -209,6 +209,8 @@ fun ChatScreen(
     showActivityCards: Boolean = true,
     previewBeforeSending: Boolean = false,
     onSaveArtifact: ((title: String, content: String) -> Unit)? = null,
+    /** Saves a user message as a to-do. The caller reports the store result. Nothing is run here. */
+    onSaveAction: ((messageId: Long, text: String) -> Unit)? = null,
     /** Prefills the composer once (e.g. from a workflow). Never auto-sent; a restored draft wins. */
     initialComposerText: String = "",
     /** Scrolls to this message when opening a memory source. Zero means no source. */
@@ -437,6 +439,7 @@ fun ChatScreen(
     if (actionMessage != null && actionMessage.text.isNotBlank()) {
         MessageActionsSheet(
             canSave = actionMessage.role == ChatRole.Agent && onSaveArtifact != null,
+            canSaveAction = actionMessage.role == ChatRole.User && onSaveAction != null && actionMessage.id != 0L,
             onDismiss = { actionMessageId = null },
             onCopy = {
                 copyText(context, actionMessage.text)
@@ -452,6 +455,10 @@ fun ChatScreen(
                     actionMessage.text,
                 )
                 Toast.makeText(context, "Saved to Artifacts", Toast.LENGTH_SHORT).show()
+                actionMessageId = null
+            },
+            onSaveAction = {
+                onSaveAction?.invoke(actionMessage.id, actionMessage.text)
                 actionMessageId = null
             },
         )
@@ -1030,10 +1037,12 @@ private fun AttachSheet(
 @Composable
 private fun MessageActionsSheet(
     canSave: Boolean,
+    canSaveAction: Boolean,
     onDismiss: () -> Unit,
     onCopy: () -> Unit,
     onShare: () -> Unit,
     onSave: () -> Unit,
+    onSaveAction: () -> Unit,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1051,6 +1060,9 @@ private fun MessageActionsSheet(
             SheetAction(Icons.Rounded.Share, "Share", null, onShare)
             if (canSave) {
                 SheetAction(Icons.Rounded.Description, "Save as artifact", null, onSave)
+            }
+            if (canSaveAction) {
+                SheetAction(Icons.Rounded.Add, "Save as action", "Saves the to-do. Nothing is run.", onSaveAction)
             }
         }
     }

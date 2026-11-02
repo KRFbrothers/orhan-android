@@ -357,6 +357,10 @@ fun HomeScreen(
                         embedded = true,
                         onEditProfile = onEditProfile,
                         onOpenSource = onOpenMemorySource,
+                        onOpenArtifact = { id ->
+                            artifactToOpen = id
+                            tab = OrhanTab.Artifacts
+                        },
                     )
                     OrhanTab.Artifacts -> ArtifactsScreen(
                         artifacts = artifacts,

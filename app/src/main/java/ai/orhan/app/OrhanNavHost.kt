@@ -8,8 +8,12 @@ import android.app.Application
 import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -37,7 +41,6 @@ import ai.orhan.feature.settings.detail.chatPreferences
 import ai.orhan.feature.auth.SignInScreen
 import ai.orhan.feature.auth.SignInViewModel
 import ai.orhan.feature.chat.ChatViewModel
-import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.orhan.design.screens.HomeScreen
@@ -82,7 +85,9 @@ object AppRoutes {
         if (name.isNullOrBlank()) "create_agent" else "create_agent?name=${Uri.encode(name)}"
     const val EDIT_PROFILE = "edit_profile"
     const val MEMORY = "memory"
-    const val ARTIFACTS = "artifacts"
+    const val ARTIFACTS = "artifacts?open={open}"
+    fun artifacts(openId: String = ""): String =
+        if (openId.isBlank()) "artifacts" else "artifacts?open=${Uri.encode(openId)}"
     const val CHAT = "chat/{title}?draft={draft}&message={message}"
     fun chat(title: String, draft: String = "", messageId: Long = 0L) =
         "chat/${Uri.encode(title)}?draft=${Uri.encode(draft)}&message=$messageId"
@@ -182,7 +187,7 @@ fun OrhanNavHost(isDark: Boolean) {
                     navController.navigate(AppRoutes.chat(t, messageId = messageId))
                 },
                 onOpenArtifacts = {
-                    navController.navigate(AppRoutes.ARTIFACTS) { launchSingleTop = true }
+                    navController.navigate(AppRoutes.artifacts()) { launchSingleTop = true }
                 },
                 artifacts = artifacts,
                 onUpsertArtifact = { item -> scope.launch { artifactStore.upsert(item) } },
@@ -234,14 +239,26 @@ fun OrhanNavHost(isDark: Boolean) {
                     scope.launch { recentRepo.recordOpened(t) }
                     navController.navigate(AppRoutes.chat(t, messageId = messageId))
                 },
+                onOpenArtifact = { id ->
+                    navController.navigate(AppRoutes.artifacts(id))
+                },
             )
         }
-        composable(AppRoutes.ARTIFACTS) {
+        composable(
+            AppRoutes.ARTIFACTS,
+            arguments = listOf(
+                navArgument("open") { type = NavType.StringType; defaultValue = "" },
+            ),
+        ) { entry ->
+            val requested = entry.arguments?.getString("open").orEmpty()
+            var pendingOpen by rememberSaveable(requested) { mutableStateOf(requested.ifBlank { null }) }
             ArtifactsScreen(
                 artifacts = artifacts,
                 onUpsert = { a -> scope.launch { artifactStore.upsert(a) } },
                 onDelete = { id -> scope.launch { artifactStore.delete(id) } },
                 onBack = { navController.popBackStack() },
+                pendingOpenId = pendingOpen,
+                onPendingOpenConsumed = { pendingOpen = null },
             )
         }
         composable(
@@ -384,6 +401,20 @@ fun OrhanNavHost(isDark: Boolean) {
                 previewBeforeSending = chatPrefs.previewBeforeSending,
                 onSaveArtifact = { artTitle, content ->
                     scope.launch { artifactStore.upsert(artTitle, content) }
+                },
+                onSaveAction = { messageId, text ->
+                    scope.launch {
+                        val result = memoryEntries.addActionFromChat(text, title, messageId)
+                        val notice = when (result) {
+                            ai.orhan.data.memory.ActionSaveResult.Saved -> "Saved as an action. Nothing was run."
+                            ai.orhan.data.memory.ActionSaveResult.Duplicate -> "That action is already saved."
+                            ai.orhan.data.memory.ActionSaveResult.Dismissed -> "This action was deleted. It was not added again."
+                            ai.orhan.data.memory.ActionSaveResult.Blank,
+                            ai.orhan.data.memory.ActionSaveResult.WriteFailed,
+                            -> "Couldn't save this action."
+                        }
+                        android.widget.Toast.makeText(context, notice, android.widget.Toast.LENGTH_LONG).show()
+                    }
                 },
                 initialComposerText = entry.arguments?.getString("draft").orEmpty(),
                 focusMessageId = entry.arguments?.getString("message")?.toLongOrNull() ?: 0L,
