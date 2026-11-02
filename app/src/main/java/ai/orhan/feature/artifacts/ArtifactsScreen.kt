@@ -28,14 +28,20 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -47,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ai.orhan.data.artifacts.Artifact
 import ai.orhan.data.artifacts.MAX_ARTIFACT_CONTENT
+import ai.orhan.data.artifacts.artifactListPreferences
 import ai.orhan.data.artifacts.matching
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
@@ -122,6 +129,12 @@ fun ArtifactsScreen(
         )
         return
     }
+    val context = LocalContext.current
+    val listPrefs = remember(context) { context.artifactListPreferences() }
+    val largePreview by listPrefs.largePreview.collectAsStateWithLifecycle(initialValue = false)
+    val scope = rememberCoroutineScope()
+    var switchingLayout by remember { mutableStateOf(false) }
+    var layoutError by rememberSaveable { mutableStateOf<String?>(null) }
     SettingsDetailScaffold(
         title = "Artifacts",
         onBack = onBack,
@@ -168,11 +181,46 @@ fun ArtifactsScreen(
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surface)
                     .border(1.dp, colors.fieldEdge, CircleShape)
+                    .semantics { stateDescription = if (largePreview) "Large preview" else "Compact" }
+                    .clickable(role = Role.Button, enabled = !switchingLayout) {
+                        if (switchingLayout) return@clickable
+                        switchingLayout = true
+                        layoutError = null
+                        val next = !largePreview
+                        scope.launch {
+                            try {
+                                val saved = listPrefs.setLargePreview(next)
+                                if (!saved) layoutError = "Couldn't change the layout."
+                            } finally {
+                                switchingLayout = false
+                            }
+                        }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.GridView, contentDescription = "Switch layout", tint = MaterialTheme.colorScheme.onSurface)
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, colors.fieldEdge, CircleShape)
                     .clickable { editId = UUID.randomUUID().toString() },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(Icons.Rounded.Add, contentDescription = "New document", tint = MaterialTheme.colorScheme.onSurface)
             }
+        }
+        val layoutMessage = layoutError
+        if (layoutMessage != null) {
+            Text(
+                layoutMessage,
+                style = OrhanTextStyles.snippet,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(bottom = 8.dp, start = 4.dp),
+            )
         }
         if (artifacts.isEmpty()) {
             Text(
@@ -190,44 +238,92 @@ fun ArtifactsScreen(
             )
         }
         shown.forEach { a ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 6.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, colors.hairline, RoundedCornerShape(16.dp))
-                    .clickable { openId = a.id }
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.brandSoft),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Rounded.Description, contentDescription = null, tint = colors.onBrandSoft)
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        a.title.ifBlank { "Untitled" },
-                        style = OrhanTextStyles.rowTitle,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        formatDate(a.createdAt),
-                        style = OrhanTextStyles.meta,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
+            if (largePreview) {
+                LargeArtifactPreview(a, onOpen = { openId = a.id })
+            } else {
+                CompactArtifactRow(a, onOpen = { openId = a.id })
             }
         }
+    }
+}
+
+@Composable
+private fun CompactArtifactRow(a: Artifact, onOpen: () -> Unit) {
+    val colors = OrhanTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, colors.hairline, RoundedCornerShape(16.dp))
+            .clickable(onClick = onOpen)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(colors.brandSoft),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Rounded.Description, contentDescription = null, tint = colors.onBrandSoft)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                a.title.ifBlank { "Untitled" },
+                style = OrhanTextStyles.rowTitle,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                formatDate(a.createdAt),
+                style = OrhanTextStyles.meta,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
+}
+
+/** Larger card for a plain-text document. The body is the saved text, not a web or media preview. */
+@Composable
+private fun LargeArtifactPreview(a: Artifact, onOpen: () -> Unit) {
+    val colors = OrhanTheme.colors
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .heightIn(min = 148.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, colors.hairline, RoundedCornerShape(20.dp))
+            .clickable(onClick = onOpen)
+            .padding(16.dp),
+    ) {
+        Text(
+            a.title.ifBlank { "Untitled" },
+            style = OrhanTextStyles.rowTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            formatDate(a.createdAt),
+            style = OrhanTextStyles.meta,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+        )
+        Text(
+            a.content,
+            style = OrhanTextStyles.snippet,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 6,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
