@@ -14,6 +14,8 @@ import java.net.URL
 /** One turn sent to the Dua engine. [role] is "user" or "model". */
 data class ChatTurn(val role: String, val text: String, val attachments: List<ChatAttachment> = emptyList())
 
+data class AgentToolCapability(val id: String, val available: Boolean, val reason: String? = null)
+
 /**
  * An inline file on a user turn. The engine accepts `attachments: [{mimeType, data}]` per message
  * (base64, max 10 per message, 4 MB each; image/, application/pdf, text/, audio/, video/).
@@ -62,7 +64,8 @@ class ChatRepository(
          * Builds the /api/chat JSON. [systemInstruction] is sent as top-level `systemInstruction`
          * (Dua-ai #494) only when non-blank, so older engines just see the plain messages array.
          */
-        internal fun body(turns: List<ChatTurn>, stream: Boolean, systemInstruction: String? = null) = JSONObject()
+        internal fun body(turns: List<ChatTurn>, stream: Boolean, systemInstruction: String? = null,
+                          allowedTools: List<String>? = null) = JSONObject()
             .put("stream", stream)
             .put("mode", "agent") // always agent pipeline (server uses AGENT_ENGINE=adk when configured)
             .put("messages", JSONArray().apply {
@@ -76,7 +79,10 @@ class ChatRepository(
                     put(obj)
                 }
             })
-            .apply { systemInstruction?.trim()?.takeIf { it.isNotEmpty() }?.let { put("systemInstruction", it) } }
+            .apply {
+                systemInstruction?.trim()?.takeIf { it.isNotEmpty() }?.let { put("systemInstruction", it) }
+                allowedTools?.let { put("allowedTools", JSONArray(it.distinct())) }
+            }
     }
 
     private suspend fun open(accept: String): HttpURLConnection {
@@ -94,6 +100,47 @@ class ChatRepository(
         }
     }
 
+    /** Loads the authenticated service catalog; unavailable built-ins remain visible but disabled. */
+    suspend fun agentToolCapabilities(): Result<List<AgentToolCapability>> = withContext(Dispatchers.IO) {
+        runCatching {
+            require(baseUrl.isNotBlank()) { "DUA_ENGINE_URL is not set in local.properties" }
+            val jwt = tokenProvider() ?: throw FatalChatException("Sign in required to load agent tools")
+            val conn = (URL(baseUrl.trimEnd('/') + "/api/agent/capabilities").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("Authorization", "Bearer $jwt")
+                if (appToken.isNotBlank()) setRequestProperty("X-Dua-App-Token", appToken)
+            }
+            try {
+                val code = conn.responseCode
+                val raw = (if (code in 200..299) conn.inputStream else conn.errorStream)
+                    ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                if (code == 401) {
+                    onUnauthorized()
+                    throw FatalChatException("Session expired — please sign in again")
+                }
+                val json = runCatching { JSONObject(raw) }.getOrNull()
+                if (code !in 200..299) throw IOException(json?.optString("error")?.ifBlank { null } ?: "HTTP $code")
+                val catalog = json?.optJSONArray("toolCatalog")
+                    ?: throw IOException("The configured service does not support enforced agent tool selection yet.")
+                List(catalog.length()) { index ->
+                    val row = catalog.getJSONObject(index)
+                    AgentToolCapability(row.getString("id"), row.optBoolean("available"), row.optString("reason").takeIf { it.isNotBlank() && it != "null" })
+                }
+            } finally { conn.disconnect() }
+        }
+    }
+
+    private suspend fun requireEnforcedToolPolicy(selected: List<String>?) {
+        if (selected == null) return
+        val catalog = agentToolCapabilities().getOrThrow()
+        val available = catalog.filter { it.available }.map { it.id }.toSet()
+        val missing = selected.distinct().filterNot { it in available }
+        if (missing.isNotEmpty()) throw IOException("Selected tools are unavailable: ${missing.joinToString()}")
+    }
+
     /**
      * Streams a reply. [onDelta] is called (on IO) with each text chunk. Returns the full text.
      * [onActivity] receives a short label for `thinking` / `progress` events (no-op if never sent).
@@ -103,23 +150,35 @@ class ChatRepository(
     suspend fun stream(
         turns: List<ChatTurn>,
         systemInstruction: String? = null,
+        allowedTools: List<String>? = null,
         onActivity: suspend (String) -> Unit = {},
         onDelta: suspend (String) -> Unit,
     ): Result<String> =
         withContext(Dispatchers.IO) {
             runCatching {
+                requireEnforcedToolPolicy(allowedTools)
                 val conn = open("text/event-stream")
                 // Blocking SSE reads ignore coroutine cancel; disconnect on cancel so Stop is immediate.
                 val watcher = launch { try { awaitCancellation() } finally { conn.disconnect() } }
                 try {
-                    conn.outputStream.use { it.write(body(turns, true, systemInstruction).toString().toByteArray()) }
+                    conn.outputStream.use { it.write(body(turns, true, systemInstruction, allowedTools).toString().toByteArray()) }
                     val code = conn.responseCode
                     if (code == 401) {
                         onUnauthorized()
                         throw FatalChatException("Session expired — please sign in again")
                     }
                     if (isFallbackStatus(code)) throw FallbackEligibleStreamException("HTTP $code")
-                    if (code !in 200..299) error("HTTP $code")
+                    if (code !in 200..299) {
+                        val raw = conn.errorStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                        val error = runCatching { JSONObject(raw) }.getOrNull()
+                        val unavailable = error?.optJSONArray("tools")?.let { ids ->
+                            List(ids.length()) { ids.optString(it) }.filter(String::isNotBlank)
+                        }.orEmpty()
+                        val message = if (error?.optString("code") == "tool_unavailable" && unavailable.isNotEmpty())
+                            "These selected tools are no longer available: ${unavailable.joinToString()}"
+                        else error?.optString("error")?.ifBlank { null } ?: "HTTP $code"
+                        throw IOException(message)
+                    }
                     if (conn.contentType?.contains("text/event-stream") != true) {
                         throw FallbackEligibleStreamException("Not an SSE response")
                     }
@@ -163,10 +222,12 @@ class ChatRepository(
             }
         }
 
-    suspend fun send(turns: List<ChatTurn>, systemInstruction: String? = null): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun send(turns: List<ChatTurn>, systemInstruction: String? = null,
+                     allowedTools: List<String>? = null): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
+            requireEnforcedToolPolicy(allowedTools)
             val conn = open("application/json")
-            val body = body(turns, false, systemInstruction)
+            val body = body(turns, false, systemInstruction, allowedTools)
             try {
                 conn.outputStream.use { it.write(body.toString().toByteArray()) }
                 val code = conn.responseCode

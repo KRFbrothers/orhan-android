@@ -22,4 +22,12 @@ class ChatRequestBodyTest {
         assertFalse(ChatRepository.body(turns, false, " ").has("systemInstruction"))
         assertFalse(ChatRepository.body(turns, false, null).has("systemInstruction"))
     }
+
+    @Test fun explicitToolPolicyIsSentAndEmptyMeansNoTools() {
+        val selected = ChatRepository.body(turns, true, allowedTools = listOf("google_search", "calculator"))
+        assertEquals("google_search", selected.getJSONArray("allowedTools").getString(0))
+        assertEquals(2, selected.getJSONArray("allowedTools").length())
+        assertEquals(0, ChatRepository.body(turns, true, allowedTools = emptyList()).getJSONArray("allowedTools").length())
+        assertFalse(ChatRepository.body(turns, true).has("allowedTools"))
+    }
 }

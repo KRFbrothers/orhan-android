@@ -77,6 +77,7 @@ import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 import ai.orhan.data.artifacts.artifactStore
+import ai.orhan.data.chat.ChatRepository
 import ai.orhan.feature.artifacts.ArtifactsScreen
 import ai.orhan.data.workflows.workflowStore
 import ai.orhan.data.workflows.resolveWorkflowAgentName
@@ -111,6 +112,13 @@ object AppRoutes {
 fun OrhanNavHost(isDark: Boolean) {
     val navController = rememberNavController()
     val context = LocalContext.current.applicationContext
+    val authRepository = remember(context) { AuthRepository.get(context) }
+    val agentToolRepository = remember(context) {
+        ChatRepository(
+            tokenProvider = { authRepository.accessToken() },
+            onUnauthorized = { authRepository.clear() },
+        )
+    }
     val preferences = remember(context) { context.themePreferences() }
     val profilePreferences = remember(context) { context.profilePreferences() }
     val profile by profilePreferences.profile.collectAsStateWithLifecycle(initialValue = UserProfile())
@@ -362,8 +370,9 @@ fun OrhanNavHost(isDark: Boolean) {
             CreateAgentScreen(
                 onBack = { navController.popBackStack() },
                 existing = existing,
+                repository = agentToolRepository,
                 takenNames = savedAgents.map { it.name }.toSet(),
-                onCreated = { name, blurb, instructions, tools, avatarFileName ->
+                onCreated = { name, blurb, instructions, tools, toolsRestricted, avatarFileName ->
                     val previous = existing
                     val result = agentStore.replace(
                         previousName = previous?.name,
@@ -372,6 +381,7 @@ fun OrhanNavHost(isDark: Boolean) {
                             blurb = blurb,
                             instructions = instructions,
                             tools = tools,
+                            toolsRestricted = toolsRestricted,
                             createdAt = previous?.createdAt ?: System.currentTimeMillis(),
                             avatarFileName = avatarFileName,
                             id = previous?.id ?: java.util.UUID.randomUUID().toString(),
@@ -443,9 +453,17 @@ fun OrhanNavHost(isDark: Boolean) {
             val missingSavedAgent = !title.equals("Orhan", ignoreCase = true) && agent == null
             val persona = if (threadAgentId != null && agent == null) "Orhan"
                 else chatPersonaName(title, savedAgents.map { it.name })
-            val mentionRoster = savedAgents.map { ai.orhan.feature.chat.RosterAgent(it.name, it.blurb, it.instructions) }
+            val mentionRoster = savedAgents.map { savedAgent ->
+                ai.orhan.feature.chat.RosterAgent(savedAgent.name, savedAgent.blurb, savedAgent.instructions,
+                    savedAgent.tools.takeIf { savedAgent.toolsRestricted })
+            }
             val effectivePersona = agent?.name ?: persona
-            chatViewModel.setAgent(effectivePersona, agent?.instructions.orEmpty(), agent?.id)
+            val allowedTools = when {
+                missingSavedAgent -> emptyList()
+                agent?.toolsRestricted == true -> agent.tools
+                else -> null
+            }
+            chatViewModel.setAgent(effectivePersona, agent?.instructions.orEmpty(), agent?.id, allowedTools)
             chatViewModel.setRoster(
                 if (agent != null && !missingSavedAgent) emptyList()
                 else mentionRoster,
