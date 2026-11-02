@@ -249,7 +249,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 onEditWorkflow = { wf ->
                     navController.navigate(AppRoutes.workflowEdit(wf.id)) { launchSingleTop = true }
                 },
-                onDeleteWorkflow = { wf -> scope.launch { workflowStore.delete(wf.id) } },
+                onDeleteWorkflow = { wf -> workflowStore.delete(wf.id); true },
                 onToggleTheme = {
                     scope.launch {
                         preferences.setThemeMode(if (isDark) ThemeMode.Light else ThemeMode.Dark)
@@ -309,17 +309,13 @@ fun OrhanNavHost(isDark: Boolean) {
                 agentNames = mergeWithSamples(savedAgents.map { it.toInstalledAgent(agentAvatars) }).map { it.name },
                 onBack = { navController.popBackStack() },
                 onSave = { wf ->
-                    scope.launch {
-                        val selected = savedAgents.firstOrNull { it.name.equals(wf.agentName, ignoreCase = true) }
-                        workflowStore.upsert(wf.copy(agentId = if (wf.agentName.isBlank()) null else selected?.id ?: wf.agentId))
-                        navController.popBackStack()
-                    }
+                    val selected = savedAgents.firstOrNull { it.name.equals(wf.agentName, ignoreCase = true) }
+                    workflowStore.upsert(wf.copy(agentId = if (wf.agentName.isBlank()) null else selected?.id ?: wf.agentId))
+                    true
                 },
                 onDelete = { wf ->
-                    scope.launch {
-                        workflowStore.delete(wf.id)
-                        navController.popBackStack()
-                    }
+                    workflowStore.delete(wf.id)
+                    true
                 },
             )
         }
