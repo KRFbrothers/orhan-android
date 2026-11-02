@@ -474,3 +474,13 @@ Next actionable step: create or select a dedicated AVD profile whose generated
 its actual renderer and host utilization before installing/running anything.
 Keep one emulator only and leave Gradle stopped during boot. The same failing
 instrumentation command remains un-retried.
+
+The temporary `hw.lcd.*` edit was reverted to the prior 1080×2400/420 dpi
+configuration after the runtime override was confirmed; the existing 2-core,
+2048 MiB and `host` GPU settings were preserved. No emulator is running. Android
+Studio Device Manager inspection was rejected by the Computer Use approval
+review (`Computer Use was not approved to use Android Studio`), and the local
+SDK has no `cmdline-tools`/`avdmanager`, so a second AVD could not be created
+through the installed tools in this run. Next step is to use an approved
+Device Manager path or install Android's command-line AVD management tooling,
+then inspect the generated runtime settings before testing.
