@@ -127,6 +127,7 @@ data class ChatUiState(
     val activityLabel: String? = null,
     /** True after the saved thread has been applied, including when there was nothing to restore. */
     val threadRestored: Boolean = false,
+    val agentId: String? = null,
 )
 
 class ChatViewModel(
@@ -166,6 +167,9 @@ class ChatViewModel(
         }
         viewModelScope.launch {
             val saved = store.loadThread(title)
+            activeAgentId?.let { id ->
+                if (saved.agentId == null) runCatching { store.associateAgent(title, id) }
+            }
             pendingHandoffRetry = saved.pendingHandoffRetry?.let {
                 PendingHandoffRetry(it.sourceReplyId, RosterAgent(it.agentName, "", it.instructions), it.task)
             }
@@ -175,9 +179,9 @@ class ChatViewModel(
             if (saved.messages.isNotEmpty() && _state.value.messages.isEmpty()) {
                 saved.attachments.forEach { (id, a) -> attachmentsById.putIfAbsent(id, a) }
                 val restoredMessages = saved.messagesWithAttachments()
-                _state.update { it.copy(messages = restoredMessages, threadRestored = true, error = interruptedHandoffError ?: it.error) }
+                _state.update { it.copy(messages = restoredMessages, threadRestored = true, agentId = saved.agentId ?: activeAgentId, error = interruptedHandoffError ?: it.error) }
             } else {
-                _state.update { it.copy(threadRestored = true, error = interruptedHandoffError ?: it.error) }
+                _state.update { it.copy(threadRestored = true, agentId = saved.agentId ?: activeAgentId, error = interruptedHandoffError ?: it.error) }
             }
             _state.filter { !it.busy }
                 .map { it.messages to pendingHandoffRetry?.toStored() }
@@ -185,7 +189,7 @@ class ChatViewModel(
                 .drop(1)
                 .debounce(300)
                 .collect { (msgs, pending) ->
-                    store.save(title, msgs, attachmentsById.toMap(), pendingHandoffRetry = pending)
+                    store.save(title, msgs, attachmentsById.toMap(), pendingHandoffRetry = pending, agentId = activeAgentId)
                     automaticMemory?.onMessagesSaved(title, msgs.map { it.toStored() })
                 }
         }
@@ -201,7 +205,7 @@ class ChatViewModel(
         val msgs = _state.value.messages
         val atts = attachmentsById.toMap()
         if (msgs.isNotEmpty()) viewModelScope.launch {
-            store.save(title, msgs, atts, pendingHandoffRetry = pendingHandoffRetry?.toStored())
+            store.save(title, msgs, atts, pendingHandoffRetry = pendingHandoffRetry?.toStored(), agentId = activeAgentId)
             automaticMemory?.onMessagesSaved(title, msgs.map { it.toStored() })
         }
     }
@@ -211,6 +215,7 @@ class ChatViewModel(
 
     private var agentName: String = ""
     private var instructions: String = ""
+    private var activeAgentId: String? = null
     private data class PendingHandoffRetry(val sourceReplyId: Long, val agent: RosterAgent, val task: String)
     private var pendingHandoffRetry: PendingHandoffRetry? = null
     private fun PendingHandoffRetry.toStored() = StoredHandoffRetry(
@@ -221,8 +226,8 @@ class ChatViewModel(
     )
 
     /** Sets the agent personality used for API turns. Idempotent; safe to call on every recomposition. */
-    fun setAgent(name: String, instructions: String) {
-        agentName = name; this.instructions = instructions.trim()
+    fun setAgent(name: String, instructions: String, id: String? = null) {
+        agentName = name; this.instructions = instructions.trim(); activeAgentId = id
     }
 
     /** Other agents Orhan may delegate to (only set when chatting as Orhan, not a specialist). */

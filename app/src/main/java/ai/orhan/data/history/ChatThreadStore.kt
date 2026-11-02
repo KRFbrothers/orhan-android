@@ -25,7 +25,8 @@ import java.io.OutputStream
  * Local per-chat message threads keyed by chat title (same string as AppRoutes.chat(title)).
  * Device-only; no cloud sync.
  */
-private const val THREAD_FORMAT_VERSION = 4
+private const val THREAD_FORMAT_VERSION = 5
+private const val THREAD_FORMAT_V4 = 4
 private const val THREAD_FORMAT_V3 = 3
 private const val THREAD_FORMAT_V2 = 2
 private const val THREAD_FORMAT_V1 = 1
@@ -49,6 +50,7 @@ data class ChatThread(
     val updatedAt: Long,
     val messages: List<StoredMessage>,
     val pendingHandoffRetry: StoredHandoffRetry? = null,
+    val agentId: String? = null,
 )
 
 object ChatThreadsSerializer : Serializer<List<ChatThread>> {
@@ -82,10 +84,11 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
                         }
                         message
                     }
-                    val pending = if (version >= THREAD_FORMAT_VERSION && d.readBoolean()) {
+                    val pending = if (version >= THREAD_FORMAT_V4 && d.readBoolean()) {
                         StoredHandoffRetry(d.readLong(), d.readUTF(), readLongString(d), readLongString(d))
                     } else null
-                    ChatThread(title, updatedAt, msgs, pending)
+                    val agentId = if (version >= THREAD_FORMAT_VERSION && d.readBoolean()) d.readUTF() else null
+                    ChatThread(title, updatedAt, msgs, pending, agentId)
                 }
             }
         } catch (e: IOException) { defaultValue }
@@ -110,6 +113,8 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
                 d.writeLong(handoff.sourceReplyId); d.writeUTF(handoff.agentName.take(200))
                 writeLongString(d, handoff.instructions); writeLongString(d, handoff.task)
             }
+            d.writeBoolean(th.agentId != null)
+            th.agentId?.let { d.writeUTF(it.take(100)) }
         }
         d.flush()
     }
@@ -143,10 +148,12 @@ fun List<ChatThread>.withSaved(
     now: Long,
     attachments: Map<Long, StoredAttachment> = emptyMap(),
     pendingHandoffRetry: StoredHandoffRetry? = null,
+    agentId: String? = null,
 ): List<ChatThread> {
+    val previous = firstOrNull { it.title == title }
     val rest = filterNot { it.title == title }
     if (messages.isEmpty()) return rest
-    val th = ChatThread(title, now, messages.takeLast(MAX_THREAD_MESSAGES).map { it.toStored(attachments[it.id]) }, pendingHandoffRetry)
+    val th = ChatThread(title, now, messages.takeLast(MAX_THREAD_MESSAGES).map { it.toStored(attachments[it.id]) }, pendingHandoffRetry, agentId ?: previous?.agentId)
     return (rest + th).sortedByDescending { it.updatedAt }.take(MAX_THREADS)
 }
 
@@ -159,6 +166,7 @@ data class LoadedThread(
     val messages: List<ChatMessage>,
     val attachments: Map<Long, ChatAttachment>,
     val pendingHandoffRetry: StoredHandoffRetry? = null,
+    val agentId: String? = null,
 )
 
 /** Reattaches file payloads to visible message models after loading local metadata and bytes. */
@@ -237,7 +245,7 @@ class ChatThreadStore(
         val thread = threads.first().firstOrNull { it.title == title }
         val msgs = thread?.messages.orEmpty()
         val atts = msgs.mapNotNull { m -> m.attachment?.let { s -> files.read(s, ::b64encode)?.let { m.id to it } } }.toMap()
-        LoadedThread(msgs.map { it.toUi() }, atts, thread?.pendingHandoffRetry)
+        LoadedThread(msgs.map { it.toUi() }, atts, thread?.pendingHandoffRetry, thread?.agentId)
     }
 
     suspend fun save(
@@ -246,14 +254,25 @@ class ChatThreadStore(
         attachments: Map<Long, ChatAttachment> = emptyMap(),
         now: Long = System.currentTimeMillis(),
         pendingHandoffRetry: StoredHandoffRetry? = null,
+        agentId: String? = null,
     ) {
         if (title.isBlank()) return
         withContext(Dispatchers.IO) {
             val kept = messages.takeLast(MAX_THREAD_MESSAGES).map { it.id }.toSet()
             val stored = attachments.filterKeys { it in kept }
                 .mapNotNull { (id, a) -> files.put(title, id, a, ::b64decode)?.let { id to it } }.toMap()
-            val all = dataStore.updateData { it.withSaved(title, messages, now, stored, pendingHandoffRetry) }
+            val all = dataStore.updateData { it.withSaved(title, messages, now, stored, pendingHandoffRetry, agentId) }
             prune(all)
+        }
+    }
+
+    /** Associates a legacy title-matched thread with its current agent identity without rewriting messages. */
+    suspend fun associateAgent(title: String, agentId: String) {
+        if (title.isBlank() || agentId.isBlank()) return
+        dataStore.updateData { threads ->
+            threads.map { thread ->
+                if (thread.title == title && thread.agentId == null) thread.copy(agentId = agentId) else thread
+            }
         }
     }
 
