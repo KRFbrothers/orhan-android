@@ -44,6 +44,7 @@ fun WorkflowEditorScreen(
     onResumeRun: (WorkflowRun) -> Unit = {},
     onSave: suspend (Workflow) -> Boolean,
     onDelete: (suspend (Workflow) -> Boolean)? = null,
+    serverExecution: @Composable (Boolean) -> Unit = {},
 ) {
     var title by rememberSaveable(existing?.id) { mutableStateOf(existing?.title.orEmpty()) }
     var content by rememberSaveable(existing?.id) { mutableStateOf(existing?.content.orEmpty()) }
@@ -110,9 +111,10 @@ fun WorkflowEditorScreen(
         if (agent.isNotBlank() && agentNames.none { it.equals(agent, ignoreCase = true) }) {
             FootNote("Saved agent \"$agent\" is unavailable. Choose Default or an available agent before opening this workflow.")
         }
-        FootNote("Open prepares a chat draft. Run sends the prompt immediately and records its outcome in run history.")
+        FootNote("Open prepares a chat draft. Run opens server execution controls and history.")
+        if (existing != null) serverExecution(title != existing.title || content != existing.content || agent != existing.agentName)
         if (existing != null && runs.isNotEmpty()) {
-            SectionLabel("Run history")
+            SectionLabel("Earlier local chat runs")
             runs.take(10).forEach { run ->
                 TextButton(onClick = { onOpenRunChat(run.chatTitle) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Text("${run.status.name.lowercase().replace('_', ' ')} · ${run.agentName} · ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(run.startedAt))}")
