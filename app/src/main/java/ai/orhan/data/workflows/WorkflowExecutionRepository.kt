@@ -5,6 +5,7 @@ import ai.orhan.data.agents.SavedAgent
 import android.content.Context
 import android.util.Base64
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.Dispatchers
@@ -46,11 +47,10 @@ class WorkflowExecutionRepository(
 
     suspend fun detail(id: String): WorkflowExecution = parse(request("GET", "/$id").getJSONObject("run"))
 
+    suspend fun hasPending(workflowId: String): Boolean = context.workflowSubmissions.data.first()[submissionKey(workflowId)] != null
+
     suspend fun start(workflow: Workflow, agents: List<SavedAgent>, handoffIds: List<String>, at: String): WorkflowExecution = submissionMutex.withLock {
-        val token = tokenProvider() ?: throw IOException("Sign in from Profile to run a workflow.")
-        // Decoding is ONLY a local cache namespace, never an authorization decision.
-        val ownerKey = JSONObject(String(Base64.decode(token.split('.')[1], Base64.URL_SAFE or Base64.NO_WRAP), Charsets.UTF_8)).getString("sub")
-        val key = stringPreferencesKey("$ownerKey:${workflow.id}")
+        val key = submissionKey(workflow.id)
         val pending = context.workflowSubmissions.data.first()[key]
         val payload = if (pending != null) JSONObject(pending) else {
             val primary = workflow.agentId?.let { id -> agents.firstOrNull { it.id == id } }
@@ -85,9 +85,17 @@ class WorkflowExecutionRepository(
 
     /** Explicitly discard an unconfirmed request after checking server history. */
     suspend fun discardPending(workflowId: String) {
+        submissionMutex.withLock {
+            val key = submissionKey(workflowId)
+            context.workflowSubmissions.edit { it.remove(key) }
+        }
+    }
+
+    private suspend fun submissionKey(workflowId: String): Preferences.Key<String> {
         val token = tokenProvider() ?: throw IOException("Sign in first.")
+        // Decoding is ONLY a local cache namespace, never an authorization decision.
         val owner = JSONObject(String(Base64.decode(token.split('.')[1], Base64.URL_SAFE or Base64.NO_WRAP), Charsets.UTF_8)).getString("sub")
-        context.workflowSubmissions.edit { it.remove(stringPreferencesKey("$owner:$workflowId")) }
+        return stringPreferencesKey("$owner:$workflowId")
     }
 
     private suspend fun request(method: String, suffix: String, body: JSONObject? = null): JSONObject = withContext(Dispatchers.IO) {

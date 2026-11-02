@@ -53,6 +53,7 @@ fun WorkflowExecutionPanel(
     var error by remember(workflow.id, signedIn) { mutableStateOf<String?>(null) }
     var historyError by remember(workflow.id, signedIn) { mutableStateOf<String?>(null) }
     var loaded by remember(workflow.id, signedIn) { mutableStateOf(false) }
+    var hasPending by remember(workflow.id, signedIn) { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var handoffs by rememberSaveable(workflow.id) { mutableStateOf(arrayListOf<String>()) }
     var schedule by rememberSaveable(workflow.id) { mutableStateOf("") }
@@ -63,6 +64,7 @@ fun WorkflowExecutionPanel(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     suspend fun refresh() {
         runs = repository.history(workflow.id)
+        hasPending = repository.hasPending(workflow.id)
         expanded?.let { id ->
             if (runs.any { it.id == id }) {
                 val detail = repository.detail(id)
@@ -129,15 +131,16 @@ fun WorkflowExecutionPanel(
         label = { Text("One-shot time (optional, UTC)") }, supportingText = { Text("Example: 2026-12-01T09:00:00Z. Blank runs now.") },
         singleLine = true, modifier = Modifier.fillMaxWidth())
     val active = runs.any { it.active }
+    if (hasPending) FootNote("A previous submission is unconfirmed. Retry sends its original prompt, agents and schedule, including after an app restart. Refresh history before discarding it.")
     Button(enabled = !busy && loaded && !active && !draftChanged && historyError == null,
         onClick = { action { repository.start(workflow, agents, handoffs, schedule.trim()); refresh() } },
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(if (busy) "Waiting for service…" else "Start server run") }
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(if (busy) "Waiting for service…" else if (hasPending) "Retry original submission" else "Start server run") }
     if (draftChanged) FootNote("Save your workflow edits before starting a server run.")
     if (active) FootNote("This workflow has an active run. Leaving this screen does not stop it.")
     error?.let { FootNote(it) }
     historyError?.let { FootNote("History may be out of date. $it") }
     OutlinedButton(enabled = !busy, onClick = { action { refresh() } }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Refresh server history") }
-    if (error != null && loaded) {
+    if (hasPending && loaded) {
         TextButton(enabled = !busy && !active, onClick = { action { refresh(); repository.discardPending(workflow.id) } },
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Discard unconfirmed submission after refresh") }
     }
