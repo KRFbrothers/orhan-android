@@ -137,3 +137,84 @@ Stay in Artifacts. Completed layout implementation was not repeated.
 
 No stage handoff to Agents, merge, release publication or service deployment
 is implied by these results.
+
+## Typed Artifacts continuation — 2026-11-02
+
+The later Artifacts slice added an explicit, backward-compatible local type for
+plain text, Markdown, and static HTML; actual-type previews; original-source
+MIME/file exports; and scoped typed file sharing. It preserves v1 records as
+plain text and fails closed on corrupt/future store formats. Markdown/HTML were
+chosen because the supplied reference and earlier Android observations showed
+those types. This does not claim DOCX, media, saved-message, collaborative
+Studio, or hosted-share parity. The user-supplied source document is reference
+only in [`../reference/TEAMLY_FEATURE_REFERENCE.md`](../reference/TEAMLY_FEATURE_REFERENCE.md).
+The F4.1–F4.7 evidence matrix, S6 provenance, conflicts, statuses and next steps
+are in [`artifacts-coverage-matrix.md`](artifacts-coverage-matrix.md) and
+[`../reference/README.md`](../reference/README.md).
+
+### Checks
+
+- Full unit suite: **35 suites, 155 tests, 0 failures/errors**. This was run
+  after the typed source implementation; the existing main-source files did not
+  change afterward. Relevant migration, rendering, export, editor-state and
+  failure-preservation tests passed.
+- Debug assemble: **passed** for the working tree APK, `ai.orhan` versionCode
+  294. SHA-256 `7094086158684DCD8EEA76518B74C78753BF6C8E2B87D793F3293EF8D7DDEFE7`.
+- `lintDebug`: **0 errors, 50 warnings, 1 information item**, matching the
+  existing baseline count.
+- The updated Android UI/share instrumentation source was run on RMX5051 /
+  Android 16: **4 tests, 0 failures/errors** (save failure retains editor
+  fields and allows retry; delete failure retains detail/confirmation; plain
+  share payload unchanged; typed share carries correct MIME/source bytes/read
+  grant). XML: `app/build/outputs/androidTest-results/connected/debug/TEST-RMX5051 - 16-_app-.xml`.
+  These tests use synthetic callbacks and do not deliberately fail writes in
+  the user's actual artifact store.
+
+### Updated-device observations before the test-runner cleanup
+
+Before instrumentation, the connected phone showed Orhan 0.2.0/versionCode
+294 on serial `9cefa3cb` (RMX5051, Android 16/API 36). The v1 store had migrated
+to v2 while preserving the legacy record bytes and defaulting its type to
+plain text. Synthetic typed Markdown and HTML documents were saved through the
+UI; Markdown was edited through the editor and checked after restart. The HTML
+script fixture did not run. Both typed exports were pulled and matched the
+saved source bytes exactly. Screenshots before the test task are retained in
+the local ignored `captures/artifacts-typed/` directory: `markdown-light.png`,
+`markdown-dark.png`, `html-light.png`, `html-dark.png`, and
+`typed-previews-light.png`. They are device captures, not generated previews;
+they are not committed because the evidence directory is excluded from Git.
+
+### Device-test cleanup incident and current limit
+
+The command `:app:connectedDebugAndroidTest` used Android Gradle's Universal
+Test Platform configuration with `uninstall_after_test: true`. The task log
+explicitly reports uninstalling both `ai.orhan` and `ai.orhan.test`. The
+application was versionCode 294 immediately before the task and absent from
+the package list afterward. This was unintended; the runner cleanup setting
+should have been checked before running it. Uninstall removed the app-private
+artifact and Memory data. No reinstall, data restore, manual history rewrite,
+or app-data clear was performed afterward. As a result, the screenshots/source
+byte checks above are preserved evidence of the pre-test installed build, but
+there is no valid current post-test installed-device state. The owner must
+choose a safe data-recovery/restoration path before further device operations.
+Do not describe this as a clean updated-phone verification after instrumentation.
+
+The previous `legacy-before.pb` and Memory baseline hashes are retained in the
+ignored captures directory for forensic comparison only; they were not written
+back to the phone. Failure behavior is verified by unit/UI automation, while
+actual disk-write failure on the owner data store was not reproduced.
+
+### Remaining Artifacts work
+
+- **Partial:** local Markdown and static HTML create/edit/list/detail/search,
+  persistence, source-preserving export/share and save/delete failure UI.
+- **Blocked:** safe post-test phone verification until the owner selects a
+  data-preserving recovery path. Live agent-reply save additionally needs the
+  owner's normal signed-in session; no auth bypass or dev JWT was used.
+- **Unverified/blocked on evidence:** DOCX, image/video/slides, saved message
+  object semantics, collaboration, revisions, server share links and revoke/
+  authorization behavior. Exact evidence requirements and next steps are in
+  the coverage matrix.
+- **Next actionable slice:** after a safe device baseline is restored, inspect
+  a synthetic saved-message payload and its source ID, then implement one
+  provenance-preserving saved-message flow. Do not start Agents.
