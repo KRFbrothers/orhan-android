@@ -84,6 +84,8 @@ import ai.orhan.data.workflows.resolveWorkflowAgentName
 import ai.orhan.data.workflows.WorkflowRunStatus
 import ai.orhan.data.workflows.workflowRunStore
 import ai.orhan.feature.workflows.WorkflowEditorScreen
+import ai.orhan.feature.workflows.WorkflowExecutionPanel
+import ai.orhan.data.workflows.WorkflowExecutionRepository
 
 /** Top-level routes. Settings routes live in [SettingsRoutes]. */
 object AppRoutes {
@@ -144,6 +146,9 @@ fun OrhanNavHost(isDark: Boolean) {
     val workflowStore = remember(context) { context.workflowStore() }
     val workflows by workflowStore.workflows.collectAsStateWithLifecycle(initialValue = emptyList())
     val workflowRunStore = remember(context) { context.workflowRunStore() }
+    val executionRepository = remember(context) {
+        WorkflowExecutionRepository(context, tokenProvider = { authRepository.accessToken() })
+    }
     val workflowRuns by workflowRunStore.runs.collectAsStateWithLifecycle(initialValue = emptyList())
     LaunchedEffect(workflowRunStore) { workflowRunStore.interruptOrphanedRuns() }
     val personalMemory by memoryStore.memory.collectAsStateWithLifecycle(initialValue = "")
@@ -235,28 +240,7 @@ fun OrhanNavHost(isDark: Boolean) {
                 } else null,
                 workflows = workflows,
                 onRunWorkflow = { wf ->
-                    val requested = wf.agentName.trim()
-                    val linked = wf.agentId?.let { id -> savedAgents.firstOrNull { it.id == id } }
-                    val legacyMatch = if (wf.agentId == null) savedAgents.firstOrNull { it.name.equals(requested, ignoreCase = true) } else null
-                    val selected = linked ?: legacyMatch
-                    val isDefault = wf.agentId == null && (requested.isBlank() || requested.equals("Orhan", ignoreCase = true))
-                    val chatTitle = selected?.name ?: if (isDefault) "Orhan" else requested
-                    scope.launch {
-                        val run = try { workflowRunStore.start(if (selected != null) wf.copy(agentId = selected.id) else wf, chatTitle, chatTitle) }
-                        catch (cancel: CancellationException) { throw cancel }
-                        catch (_: Exception) {
-                            android.widget.Toast.makeText(context, "Workflow run could not be saved.", android.widget.Toast.LENGTH_LONG).show()
-                            return@launch
-                        }
-                        if (!isDefault && selected == null) {
-                            workflowRunStore.update(run.id, WorkflowRunStatus.FAILED, "The selected agent is missing or was deleted. Edit this workflow to choose an available saved agent.")
-                            android.widget.Toast.makeText(context, "Workflow could not run: selected agent is unavailable.", android.widget.Toast.LENGTH_LONG).show()
-                        } else {
-                            if (wf.agentId == null && selected != null) runCatching { workflowStore.upsert(wf.copy(agentId = selected.id)) }
-                            scope.launch { recentRepo.recordOpened(chatTitle) }
-                            navController.navigate(AppRoutes.chat(chatTitle, wf.content, runId = run.id))
-                        }
-                    }
+                    navController.navigate(AppRoutes.workflowEdit(wf.id)) { launchSingleTop = true }
                 },
                 onOpenWorkflow = { wf ->
                     val available = mergeWithSamples(savedAgents.map { it.toInstalledAgent(agentAvatars) }).map { it.name }
@@ -347,6 +331,7 @@ fun OrhanNavHost(isDark: Boolean) {
         ) { entry ->
             val id = entry.arguments?.getString("id")
             val existing = id?.let { wid -> workflows.firstOrNull { it.id == wid } }
+            val executionSession by authRepository.session.collectAsStateWithLifecycle(initialValue = null)
             WorkflowEditorScreen(
                 existing = existing,
                 runs = workflowRuns.filter { it.workflowId == existing?.id },
@@ -367,6 +352,16 @@ fun OrhanNavHost(isDark: Boolean) {
                 onDelete = { wf ->
                     workflowStore.delete(wf.id)
                     true
+                },
+                serverExecution = { draftChanged ->
+                    if (existing != null) WorkflowExecutionPanel(
+                        workflow = existing,
+                        agents = savedAgents,
+                        repository = executionRepository,
+                        signedIn = executionSession != null,
+                        onSignIn = { navController.navigate(AppRoutes.chat("Orhan")) },
+                        draftChanged = draftChanged,
+                    )
                 },
             )
         }
