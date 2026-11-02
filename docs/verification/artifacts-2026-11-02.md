@@ -569,3 +569,24 @@ guest RAM despite its valid 1536 MiB config and CLI override, then choose a
 supported bounded-memory profile/path. Preserve the no-BOM config and runtime
 720Ã—1600/320 dpi override; do not infer Device Manager UI verification from the
 CLI boot/listing results.
+
+### Saved-message provenance implementation (source review only)
+
+Orhan now stores a saved agent reply as an artifact with its actual nonzero
+`ChatMessage.id`, the existing canonical `ChatThreadStore` title/route key, the
+agent author, and a distinct `SAVED_MESSAGE` artifact kind. Content format stays
+independent, so plain-text/Markdown/HTML detail, preview, export and share retain
+their existing routing. The detail source action opens that chat focused on the
+saved message. Artifact schema v3 reads v1/v2 documents as ordinary documents;
+editing retains message provenance. Search includes author and source chat key.
+No stable chat UUID exists today: the current persisted chat identity is the
+canonical route/title key, so sourceChatId records that exact current key.
+
+Added a focused serializer round-trip assertion for kind, source IDs, author and
+content type. Source and diff review plus `git diff --check` only: tests, build,
+lint, emulator and device verification are **NOT RUN—deferred by user**. Prior
+test/device results elsewhere in this report predate these changes and do not
+prove them. Teamly's saved-message grouping, star preservation and forwarding
+remain unverified because reference runtime provided no saved-message payload.
+The next implementation stage is Agents; DOCX, collaborative Studio, real media
+viewers and Teamly saved-message semantics remain explicitly open/evidence-bound.

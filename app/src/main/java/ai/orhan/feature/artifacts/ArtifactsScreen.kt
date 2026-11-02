@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material3.FilterChip
 import androidx.compose.runtime.saveable.listSaver
 import ai.orhan.data.artifacts.ArtifactType
+import ai.orhan.data.artifacts.ArtifactKind
 import ai.orhan.data.artifacts.exportDocument
 import ai.orhan.data.artifacts.previewText
 import kotlinx.coroutines.Dispatchers
@@ -89,6 +90,7 @@ fun ArtifactsScreen(
     /** Opens this artifact once, for example from search. Cleared via [onPendingOpenConsumed]. */
     pendingOpenId: String? = null,
     onPendingOpenConsumed: () -> Unit = {},
+    onOpenSourceMessage: (String, Long) -> Unit = { _, _ -> },
 ) {
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
     // Id being edited; may be a fresh id not yet in the store (new document).
@@ -115,7 +117,10 @@ fun ArtifactsScreen(
             applyStatusBarPadding = !embedded,
             onSave = { title, content, type ->
                 val saved = onUpsert(
-                    Artifact(editing, title, content, existing?.createdAt ?: System.currentTimeMillis(), type),
+                    (existing ?: Artifact(editing, title, content, System.currentTimeMillis())).copy(
+                        title = title, content = content, type = type,
+                        createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+                    ),
                 )
                 if (saved) {
                     openId = editing
@@ -138,6 +143,7 @@ fun ArtifactsScreen(
                 if (removed) openId = null
                 removed
             },
+            onOpenSourceMessage = onOpenSourceMessage,
             applyStatusBarPadding = !embedded,
         )
         return
@@ -298,7 +304,10 @@ private fun CompactArtifactRow(a: Artifact, onOpen: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp),
             )
-            Text(a.type.label, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                if (a.kind == ArtifactKind.SAVED_MESSAGE) "${a.kind.label} · ${a.author.orEmpty()}" else a.type.label,
+                style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -339,7 +348,7 @@ private fun LargeArtifactPreview(a: Artifact, onOpen: () -> Unit) {
             maxLines = 6,
             overflow = TextOverflow.Ellipsis,
         )
-        Text("${a.type.label} · Text preview", style = OrhanTextStyles.meta,
+        Text("${if (a.kind == ArtifactKind.SAVED_MESSAGE) a.kind.label else a.type.label} · Text preview", style = OrhanTextStyles.meta,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
     }
 }
@@ -351,6 +360,7 @@ private fun ArtifactDetail(
     onBack: () -> Unit,
     onEdit: () -> Unit,
     onDelete: suspend () -> Boolean,
+    onOpenSourceMessage: (String, Long) -> Unit,
     applyStatusBarPadding: Boolean = true,
 ) {
     val context = LocalContext.current
@@ -403,6 +413,15 @@ private fun ArtifactDetail(
         Text(formatDate(a.createdAt), style = OrhanTextStyles.meta,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
         Text(a.type.label, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (a.kind == ArtifactKind.SAVED_MESSAGE) {
+            Text("${a.kind.label} · ${a.author.orEmpty()}", style = OrhanTextStyles.meta,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (a.sourceChatId != null && a.sourceMessageId != null) {
+                TextButton(onClick = { onOpenSourceMessage(a.sourceChatId, a.sourceMessageId) }) {
+                    Text("Open source chat")
+                }
+            }
+        }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
             OutlinedButton(onClick = onEdit) { Text("Edit") }
             OutlinedButton(enabled = !transferring, onClick = {

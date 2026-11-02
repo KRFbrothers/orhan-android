@@ -208,7 +208,7 @@ fun ChatScreen(
     showTypingIndicator: Boolean = true,
     showActivityCards: Boolean = true,
     previewBeforeSending: Boolean = false,
-    onSaveArtifact: ((title: String, content: String) -> Unit)? = null,
+    onSaveArtifact: ((title: String, content: String, chatId: String, messageId: Long, author: String) -> Unit)? = null,
     /** Saves a user message as a to-do. The caller reports the store result. Nothing is run here. */
     onSaveAction: ((messageId: Long, text: String) -> Unit)? = null,
     /** Prefills the composer once (e.g. from a workflow). Never auto-sent; a restored draft wins. */
@@ -438,7 +438,7 @@ fun ChatScreen(
     val actionMessage = actionMessageId?.let { id -> messages.firstOrNull { it.id == id } }
     if (actionMessage != null && actionMessage.text.isNotBlank()) {
         MessageActionsSheet(
-            canSave = actionMessage.role == ChatRole.Agent && onSaveArtifact != null,
+            canSave = actionMessage.role == ChatRole.Agent && actionMessage.id != 0L && onSaveArtifact != null,
             canSaveAction = actionMessage.role == ChatRole.User && onSaveAction != null && actionMessage.id != 0L,
             onDismiss = { actionMessageId = null },
             onCopy = {
@@ -450,9 +450,12 @@ fun ChatScreen(
                 actionMessageId = null
             },
             onSave = {
-                onSaveArtifact?.invoke(
+                if (actionMessage.id != 0L) onSaveArtifact?.invoke(
                     agentName.ifBlank { actionMessage.text.take(42) },
                     actionMessage.text,
+                    agentName,
+                    actionMessage.id,
+                    agentName.ifBlank { "Orhan" },
                 )
                 actionMessageId = null
             },

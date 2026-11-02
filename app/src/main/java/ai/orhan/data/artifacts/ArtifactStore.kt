@@ -17,7 +17,7 @@ import java.io.OutputStream
 import java.util.UUID
 
 /* Local store for agent replies saved as artifacts (no backend). */
-private const val FORMAT_VERSION = 2
+private const val FORMAT_VERSION = 3
 const val MAX_ARTIFACT_CONTENT = 64_000
 const val MAX_ARTIFACTS = 500
 
@@ -27,12 +27,22 @@ enum class ArtifactType(val wireName: String, val label: String, val mimeType: S
     HTML("html", "Web page (HTML)", "text/html", "html"),
 }
 
+enum class ArtifactKind(val wireName: String, val label: String) {
+    DOCUMENT("document", "Document"),
+    SAVED_MESSAGE("saved_message", "Saved message"),
+}
+
 data class Artifact(
     val id: String,
     val title: String,
     val content: String,
     val createdAt: Long,
     val type: ArtifactType = ArtifactType.PLAIN_TEXT,
+    val kind: ArtifactKind = ArtifactKind.DOCUMENT,
+    /** Existing chat-thread key (canonical chat title) used by ChatThreadStore. */
+    val sourceChatId: String? = null,
+    val sourceMessageId: Long? = null,
+    val author: String? = null,
 )
 
 object ArtifactsSerializer : Serializer<List<Artifact>> {
@@ -58,6 +68,11 @@ object ArtifactsSerializer : Serializer<List<Artifact>> {
                             ArtifactType.entries.firstOrNull { it.wireName == name }
                                 ?: throw IOException("Unsupported artifact type")
                         },
+                        kind = if (version >= 3) ArtifactKind.entries.firstOrNull { it.wireName == d.readUTF() }
+                            ?: throw IOException("Unsupported artifact kind") else ArtifactKind.DOCUMENT,
+                        sourceChatId = if (version >= 3) d.readNullableUTF() else null,
+                        sourceMessageId = if (version >= 3 && d.readBoolean()) d.readLong() else null,
+                        author = if (version >= 3) d.readNullableUTF() else null,
                     )
                 }
             }
@@ -73,10 +88,22 @@ object ArtifactsSerializer : Serializer<List<Artifact>> {
             d.writeLongString(a.content)
             d.writeLong(a.createdAt)
             d.writeUTF(a.type.wireName)
+            d.writeUTF(a.kind.wireName)
+            d.writeNullableUTF(a.sourceChatId)
+            d.writeBoolean(a.sourceMessageId != null)
+            a.sourceMessageId?.let(d::writeLong)
+            d.writeNullableUTF(a.author)
         }
         d.flush()
     }
 }
+
+private fun DataOutputStream.writeNullableUTF(value: String?) {
+    writeBoolean(value != null)
+    if (value != null) writeUTF(value.take(200))
+}
+
+private fun DataInputStream.readNullableUTF(): String? = if (readBoolean()) readUTF() else null
 
 // writeUTF caps at 64KB of encoded bytes; content may exceed that with non-ASCII text.
 private fun DataOutputStream.writeLongString(s: String) {
@@ -104,7 +131,10 @@ fun List<Artifact>.upserted(a: Artifact): List<Artifact> =
 fun List<Artifact>.matching(query: String): List<Artifact> {
     val needle = query.trim()
     if (needle.isEmpty()) return this
-    return filter { it.title.contains(needle, ignoreCase = true) || it.content.contains(needle, ignoreCase = true) }
+    return filter {
+        it.title.contains(needle, ignoreCase = true) || it.content.contains(needle, ignoreCase = true) ||
+            it.author?.contains(needle, ignoreCase = true) == true || it.sourceChatId?.contains(needle, ignoreCase = true) == true
+    }
 }
 
 class ArtifactStore(private val dataStore: DataStore<List<Artifact>>) {

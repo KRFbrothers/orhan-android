@@ -186,6 +186,11 @@ fun OrhanNavHost(isDark: Boolean) {
                     scope.launch { recentRepo.recordOpened(t) }
                     navController.navigate(AppRoutes.chat(t, messageId = messageId))
                 },
+                onOpenArtifactSource = { chatId, messageId ->
+                    val t = canon(chatId)
+                    scope.launch { recentRepo.recordOpened(t) }
+                    navController.navigate(AppRoutes.chat(t, messageId = messageId))
+                },
                 onOpenArtifacts = {
                     navController.navigate(AppRoutes.artifacts()) { launchSingleTop = true }
                 },
@@ -257,6 +262,11 @@ fun OrhanNavHost(isDark: Boolean) {
                 onUpsert = { a -> artifactStore.upsert(a) },
                 onDelete = { id -> artifactStore.delete(id) },
                 onBack = { navController.popBackStack() },
+                onOpenSourceMessage = { chatId, messageId ->
+                    val t = canon(chatId)
+                    scope.launch { recentRepo.recordOpened(t) }
+                    navController.navigate(AppRoutes.chat(t, messageId = messageId))
+                },
                 pendingOpenId = pendingOpen,
                 onPendingOpenConsumed = { pendingOpen = null },
             )
@@ -399,9 +409,20 @@ fun OrhanNavHost(isDark: Boolean) {
                 showTypingIndicator = chatPrefs.typingIndicators,
                 showActivityCards = chatPrefs.agentActivityCards,
                 previewBeforeSending = chatPrefs.previewBeforeSending,
-                onSaveArtifact = { artTitle, content ->
+                onSaveArtifact = { artTitle, content, chatId, messageId, author ->
                     scope.launch {
-                        val saved = artifactStore.upsert(artTitle, content)
+                        val saved = artifactStore.upsert(
+                            ai.orhan.data.artifacts.Artifact(
+                                id = java.util.UUID.randomUUID().toString(),
+                                title = artTitle,
+                                content = content,
+                                createdAt = System.currentTimeMillis(),
+                                kind = ai.orhan.data.artifacts.ArtifactKind.SAVED_MESSAGE,
+                                sourceChatId = chatId,
+                                sourceMessageId = messageId,
+                                author = author,
+                            ),
+                        )
                         val notice = if (saved) "Saved to Artifacts" else "Couldn't save this artifact."
                         android.widget.Toast.makeText(context, notice, android.widget.Toast.LENGTH_LONG).show()
                     }

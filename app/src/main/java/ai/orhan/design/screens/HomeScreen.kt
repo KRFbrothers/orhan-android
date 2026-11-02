@@ -194,6 +194,8 @@ fun HomeScreen(
     onOpenMemory: () -> Unit = {},
     /** Opens the chat message a memory topic was taken from. */
     onOpenMemorySource: (String, Long) -> Unit = { _, _ -> },
+    /** Opens the source chat/message for a saved-message artifact. */
+    onOpenArtifactSource: (String, Long) -> Unit = { _, _ -> },
     onOpenArtifacts: () -> Unit = {},
     artifacts: List<Artifact> = emptyList(),
     onUpsertArtifact: suspend (Artifact) -> Boolean = { false },
@@ -368,6 +370,7 @@ fun HomeScreen(
                         onDelete = onDeleteArtifact,
                         onBack = { tab = OrhanTab.Chats },
                         embedded = true,
+                        onOpenSourceMessage = onOpenArtifactSource,
                         pendingOpenId = artifactToOpen,
                         onPendingOpenConsumed = { artifactToOpen = null },
                     )

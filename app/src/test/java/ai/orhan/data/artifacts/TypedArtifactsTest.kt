@@ -24,11 +24,37 @@ class TypedArtifactsTest {
         assertEquals(migrated.copy(title = "Edited"), restored)
     }
 
+    @Test fun v2TypedDocumentsMigrateWithTheirTypeAndNoMessageProvenance() = runBlocking {
+        val bytes = ByteArrayOutputStream()
+        DataOutputStream(bytes).apply {
+            writeInt(2); writeInt(1); writeUTF("old-md"); writeUTF("Notes")
+            val body = "# Keep markdown".toByteArray(Charsets.UTF_8)
+            writeInt(body.size); write(body); writeLong(11); writeUTF(ArtifactType.MARKDOWN.wireName)
+        }
+        val migrated = ArtifactsSerializer.readFrom(bytes.toByteArray().inputStream()).single()
+        assertEquals(ArtifactType.MARKDOWN, migrated.type)
+        assertEquals(ArtifactKind.DOCUMENT, migrated.kind)
+        assertNull(migrated.sourceChatId)
+        assertNull(migrated.sourceMessageId)
+        assertNull(migrated.author)
+    }
+
     @Test fun allTypesRoundTripWithoutInferringFromContent() = runBlocking {
         val docs = ArtifactType.entries.map { Artifact(it.name, "Typed", "<h1>नमस्ते</h1>", 7, it) }
         val bytes = ByteArrayOutputStream()
         ArtifactsSerializer.writeTo(docs, bytes)
         assertEquals(docs, ArtifactsSerializer.readFrom(bytes.toByteArray().inputStream()))
+    }
+
+    @Test fun savedMessageKeepsSourceIdentityAuthorKindAndContentType() = runBlocking {
+        val saved = Artifact(
+            "saved-1", "Agent reply", "# Original", 8, ArtifactType.MARKDOWN,
+            ArtifactKind.SAVED_MESSAGE, sourceChatId = "Research Agent", sourceMessageId = 42L, author = "Research Agent",
+        )
+        val bytes = ByteArrayOutputStream()
+        ArtifactsSerializer.writeTo(listOf(saved), bytes)
+        assertEquals(saved, ArtifactsSerializer.readFrom(bytes.toByteArray().inputStream()).single())
+        assertEquals(listOf(saved), listOf(saved).matching("research"))
     }
 
     @Test fun damagedAndFutureFilesCannotBecomeAnEmptyWritableStore() = runBlocking {
