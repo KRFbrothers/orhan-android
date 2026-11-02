@@ -74,6 +74,7 @@ import java.util.Locale
 import ai.orhan.data.artifacts.artifactStore
 import ai.orhan.feature.artifacts.ArtifactsScreen
 import ai.orhan.data.workflows.workflowStore
+import ai.orhan.data.workflows.resolveWorkflowAgentName
 import ai.orhan.feature.workflows.WorkflowEditorScreen
 
 /** Top-level routes. Settings routes live in [SettingsRoutes]. */
@@ -206,9 +207,20 @@ fun OrhanNavHost(isDark: Boolean) {
                 } else null,
                 workflows = workflows,
                 onOpenWorkflow = { wf ->
-                    val chatTitle = canon(wf.agentName.ifBlank { wf.title })
-                    scope.launch { recentRepo.recordOpened(chatTitle) }
-                    navController.navigate(AppRoutes.chat(chatTitle, wf.content))
+                    val available = mergeWithSamples(savedAgents.map { it.toInstalledAgent() }).map { it.name }
+                    val resolved = resolveWorkflowAgentName(wf.agentName, available)
+                    if (resolved == null) {
+                        val missing = wf.agentName.trim()
+                        android.widget.Toast.makeText(
+                            context,
+                            "Agent \"$missing\" is unavailable. Edit this workflow to choose another agent.",
+                            android.widget.Toast.LENGTH_LONG,
+                        ).show()
+                    } else {
+                        val chatTitle = canon(resolved)
+                        scope.launch { recentRepo.recordOpened(chatTitle) }
+                        navController.navigate(AppRoutes.chat(chatTitle, wf.content))
+                    }
                 },
                 onOpenPlaybook = { pb ->
                     // Chat route resolves saved/sample agent instructions by title, same as workflows.

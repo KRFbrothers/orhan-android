@@ -291,7 +291,7 @@ class ChatViewModel(
         replyStyleBlock(replyStyle)?.let { add(it) }
         toneBlock(tone)?.let { add(it) }
         rosterPreface()?.let { add(it) }
-        agentConfigurationBlock(agentName, instructions, tools)?.let(::add)
+        agentConfigurationBlock(agentName, instructions, tools)?.let { add(it) }
     }
 
     /** Top-level `systemInstruction` for /api/chat (Dua-ai #494): all hidden context in one string. */
@@ -412,7 +412,7 @@ class ChatViewModel(
             askBeforeActingBlock(askBeforeActing)?.let { add(it) }
             replyStyleBlock(replyStyle)?.let { add(it) }
             toneBlock(tone)?.let { add(it) }
-            agentConfigurationBlock(agent.name, agent.instructions, agent.tools)?.let(::add)
+            agentConfigurationBlock(agent.name, agent.instructions, agent.tools)?.let { add(it) }
         }
         val system = if (USE_SYSTEM_INSTRUCTION) systemInstructionOf(blocks) else null
         val turns = buildList {
