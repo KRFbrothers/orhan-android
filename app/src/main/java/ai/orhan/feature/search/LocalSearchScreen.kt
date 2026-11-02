@@ -1,6 +1,7 @@
 package ai.orhan.feature.search
 
 import ai.orhan.data.artifacts.Artifact
+import ai.orhan.data.history.ChatThread
 import ai.orhan.design.screens.OrhanChat
 import ai.orhan.design.theme.OrhanTextStyles
 import ai.orhan.design.theme.OrhanTheme
@@ -57,17 +58,56 @@ import java.util.Date
 
 private enum class SearchTab(val label: String) { All("All"), Chats("Chats"), Agents("Agents"), Artifacts("Artifacts") }
 
+internal enum class MessageMatchKind { Message, Transcript, Both }
+
+internal data class MessageSearchHit(
+    val chatTitle: String,
+    val messageId: Long,
+    val snippet: String,
+    val kind: MessageMatchKind,
+)
+
+/** Searches persisted message IDs and transcript text without collapsing identical message bodies. */
+internal fun findMessageHits(threads: List<ChatThread>, query: String): List<MessageSearchHit> {
+    val needle = query.trim()
+    if (needle.isEmpty()) return emptyList()
+    return threads.sortedByDescending { it.updatedAt }.flatMap { thread ->
+        thread.messages.asReversed().mapNotNull { message ->
+            val bodyMatch = message.text.contains(needle, ignoreCase = true)
+            val transcriptMatch = message.transcript?.contains(needle, ignoreCase = true) == true
+            if (!bodyMatch && !transcriptMatch) return@mapNotNull null
+            val kind = when {
+                bodyMatch && transcriptMatch -> MessageMatchKind.Both
+                transcriptMatch -> MessageMatchKind.Transcript
+                else -> MessageMatchKind.Message
+            }
+            val source = if (transcriptMatch) message.transcript.orEmpty() else message.text
+            MessageSearchHit(thread.title, message.id, matchingSnippet(source, needle), kind)
+        }
+    }
+}
+
+private fun matchingSnippet(text: String, query: String): String {
+    val index = text.indexOf(query, ignoreCase = true)
+    if (index < 0) return text.take(120)
+    val start = (index - 48).coerceAtLeast(0)
+    val end = (index + query.length + 72).coerceAtMost(text.length)
+    return (if (start > 0) "…" else "") + text.substring(start, end).trim() + if (end < text.length) "…" else ""
+}
+
 /**
- * Local search over saved chats, agents, and artifacts.
- * Message bodies are not stored on the chat row, so only the title and snippet are matched.
+ * Local search over persisted chat messages, saved agents, and typed artifacts.
  */
 @Composable
 fun LocalSearchScreen(
     chats: List<OrhanChat>,
+    threads: List<ChatThread> = emptyList(),
+    pinnedTitles: Set<String> = emptySet(),
     agents: List<InstalledAgent>,
     artifacts: List<Artifact>,
     onCancel: () -> Unit,
     onOpenChat: (OrhanChat) -> Unit,
+    onOpenChatMessage: ((OrhanChat, Long) -> Unit)? = null,
     onOpenAgent: (InstalledAgent) -> Unit,
     onOpenArtifact: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -80,6 +120,7 @@ fun LocalSearchScreen(
     LaunchedEffect(Unit) { focus.requestFocus() }
     val q = query.trim()
     val matchedChats = chats.filter { q.isEmpty() || it.title.contains(q, true) || it.snippet.contains(q, true) }
+    val messageHits = findMessageHits(threads, q)
     val matchedAgents = agents.filter { q.isEmpty() || it.name.contains(q, true) || it.blurb.contains(q, true) }
     val matchedArtifacts = artifacts.filter { q.isEmpty() || it.title.contains(q, true) || it.content.contains(q, true) }
 
@@ -168,6 +209,7 @@ fun LocalSearchScreen(
         val showAgents = tab == SearchTab.All || tab == SearchTab.Agents
         val showArtifacts = tab == SearchTab.All || tab == SearchTab.Artifacts
         val nothing = (if (showChats) matchedChats else emptyList()).isEmpty() &&
+            (if (showChats) messageHits else emptyList()).isEmpty() &&
             (if (showAgents) matchedAgents else emptyList()).isEmpty() &&
             (if (showArtifacts) matchedArtifacts else emptyList()).isEmpty()
         if (nothing) {
@@ -185,6 +227,25 @@ fun LocalSearchScreen(
                 item(key = "h-chats") { SectionLabel("Chats", matchedChats.size > 3 && tab == SearchTab.All) { tab = SearchTab.Chats } }
                 items(if (tab == SearchTab.All) matchedChats.take(3) else matchedChats, key = { "c:" + it.title }) { chat ->
                     ResultRow(chat.title, chat.snippet.ifBlank { "Recent chat" }) { onOpenChat(chat) }
+                }
+            }
+            if (showChats && messageHits.isNotEmpty()) {
+                item(key = "h-messages") { SectionLabel("Messages", false) {} }
+                items(messageHits, key = { "m:${it.chatTitle}:${it.messageId}" }) { hit ->
+                    val chat = chats.firstOrNull { it.title.equals(hit.chatTitle, ignoreCase = true) }
+                        ?: OrhanChat(hit.chatTitle, hit.snippet, "", isAgent = true)
+                    val indicator = buildList {
+                        add(when (hit.kind) {
+                            MessageMatchKind.Message -> "Message"
+                            MessageMatchKind.Transcript -> "Transcript"
+                            MessageMatchKind.Both -> "Message + transcript"
+                        })
+                        if (pinnedTitles.any { it.equals(hit.chatTitle, ignoreCase = true) }) add("Pinned")
+                    }.joinToString(" · ")
+                    ResultRow(hit.chatTitle, hit.snippet, indicator) {
+                        val open = onOpenChatMessage
+                        if (open != null) open(chat, hit.messageId) else onOpenChat(chat)
+                    }
                 }
             }
             if (showAgents && matchedAgents.isNotEmpty()) {
@@ -222,14 +283,17 @@ private fun SectionLabel(title: String, viewAll: Boolean, onViewAll: () -> Unit)
 }
 
 @Composable
-private fun ResultRow(title: String, subtitle: String, onClick: () -> Unit) {
+private fun ResultRow(title: String, subtitle: String, indicator: String? = null, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 12.dp),
     ) {
-        Text(title, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (!indicator.isNullOrBlank()) Text(indicator, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
+        }
         if (subtitle.isNotBlank()) {
             Text(
                 subtitle,

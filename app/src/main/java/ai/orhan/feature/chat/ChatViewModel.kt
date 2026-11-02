@@ -369,7 +369,7 @@ class ChatViewModel(
     fun send(raw: String) = send(raw, null)
 
     /** Sends [raw] with an optional inline file. The bubble shows a "📎 name" line for the file. */
-    fun send(raw: String, attachment: ChatAttachment?) {
+    fun send(raw: String, attachment: ChatAttachment?, onAgentRunId: suspend (String) -> Unit = {}) {
         val text = raw.trim()
         if ((text.isEmpty() && attachment == null) || _state.value.busy) return
         pendingHandoffRetry = null
@@ -377,7 +377,7 @@ class ChatViewModel(
         val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis(), attachment = attachment)
         if (attachment != null) attachmentsById[user.id] = attachment
         _state.update { it.copy(messages = it.messages + user, loading = true, activityLabel = null, busy = true, error = null) }
-        streamReply()
+        streamReply(onAgentRunId = onAgentRunId)
     }
 
     /** Explicit @mentions use the same specialist engine path and retry persistence as model handoffs. */
@@ -430,15 +430,16 @@ class ChatViewModel(
         _state.update { it.copy(loading = false, activityLabel = null, busy = false) }
     }
 
-    private fun streamReply() {
+    private fun streamReply(onAgentRunId: suspend (String) -> Unit = {}, resumeRunId: String? = null) {
         streamJob?.cancel()
         val turns = withPreface(turnsForApi(_state.value.messages, attachmentsById))
         val system = systemInstructionOrNull()
         val replyId = nextId()
         streamJob = viewModelScope.launch {
             var streamed = false
-            val result = repository.stream(turns, system, activeAllowedTools,
-                onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } }) { delta ->
+            val result = repository.stream(turns, system, activeAllowedTools, resumeRunId = resumeRunId,
+                onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } },
+                onAgentRunId = onAgentRunId) { delta ->
                 streamed = true
                 _state.update { s ->
                     val existing = s.messages.lastOrNull()?.takeIf { it.id == replyId }
@@ -453,7 +454,7 @@ class ChatViewModel(
             }.recoverCatching { e ->
                 if (e is CancellationException) throw e
                 // Fall back to non-streaming only if nothing was shown yet and the error isn't fatal (auth).
-                if (streamed || e !is ChatRepository.FallbackEligibleStreamException) throw e
+                if (streamed || resumeRunId != null || e !is ChatRepository.FallbackEligibleStreamException) throw e
                 repository.send(turns, system, activeAllowedTools).getOrThrow().also { reply ->
                     _state.update { it.copy(messages = it.messages + ChatMessage(replyId, ChatRole.Agent, reply, currentTimeString())) }
                 }
@@ -461,7 +462,7 @@ class ChatViewModel(
             result.onSuccess { full ->
                 val handoff = parseHandoff(full, roster)
                 if (handoff == null) { _state.update { it.copy(loading = false, activityLabel = null, busy = false) }; return@onSuccess }
-                runHandoff(replyId, handoff.first, handoff.second)
+                runHandoff(replyId, handoff.first, handoff.second, onAgentRunId)
             }
                 .onFailure { e ->
                     // User cancel (stop()) or scope teardown: state already reset; never surface as error.
@@ -471,11 +472,18 @@ class ChatViewModel(
         }
     }
 
+    /** Resumes an interrupted, owner-scoped ADK session through Dua's existing resumeRun contract. */
+    fun resumeWorkflowRun(engineRunId: String, onAgentRunId: suspend (String) -> Unit = {}) {
+        if (engineRunId.isBlank() || _state.value.busy) return
+        _state.update { it.copy(loading = true, activityLabel = null, busy = true, error = null) }
+        streamReply(onAgentRunId = onAgentRunId, resumeRunId = engineRunId)
+    }
+
     /**
      * Rewrites Orhan's HANDOFF line into a visible note, then runs a second /api/chat call with the
      * specialist's own identity + instructions and streams its reply into a bubble labeled with the agent name.
      */
-    private suspend fun runHandoff(orhanReplyId: Long, agent: RosterAgent, task: String) {
+    private suspend fun runHandoff(orhanReplyId: Long, agent: RosterAgent, task: String, onAgentRunId: suspend (String) -> Unit = {}) {
         pendingHandoffRetry = PendingHandoffRetry(orhanReplyId, agent, task)
         _state.update { s ->
             s.copy(messages = s.messages.map { m ->
@@ -511,7 +519,8 @@ class ChatViewModel(
         val header = specialistHeader(agent.name)
         var streamed = false
         repository.stream(turns, system, agent.allowedTools,
-            onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } }) { delta ->
+            onActivity = { label -> _state.update { if (it.busy) it.copy(activityLabel = label) else it } },
+            onAgentRunId = onAgentRunId) { delta ->
             streamed = true
             _state.update { s ->
                 val existing = s.messages.lastOrNull()?.takeIf { it.id == bubbleId }

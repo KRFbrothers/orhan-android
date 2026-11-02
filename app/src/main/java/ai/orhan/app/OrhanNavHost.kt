@@ -173,6 +173,7 @@ fun OrhanNavHost(isDark: Boolean) {
                     val lastText = threads.firstOrNull { t -> t.title == it.title }?.messages?.lastOrNull()?.text
                     OrhanChat(it.title, previewSnippet(lastText), relativeTime(it.openedAt), isAgent = true)
                 },
+                chatThreads = threads,
                 pinnedTitles = pinnedTitles,
                 onTogglePin = { chat -> scope.launch { pinRepo.toggle(chat.title) } },
                 onRemoveRecent = { chat ->
@@ -186,6 +187,11 @@ fun OrhanNavHost(isDark: Boolean) {
                     val t = canon(it.title)
                     scope.launch { recentRepo.recordOpened(t) }
                     navController.navigate(AppRoutes.chat(t))
+                },
+                onOpenChatMessage = { chat, messageId ->
+                    val t = canon(chat.title)
+                    scope.launch { recentRepo.recordOpened(t) }
+                    navController.navigate(AppRoutes.chat(t, messageId = messageId))
                 },
                 onOpenSettings = {
                     navController.navigate(SettingsRoutes.SETTINGS) { launchSingleTop = true }
@@ -347,6 +353,12 @@ fun OrhanNavHost(isDark: Boolean) {
                 agentNames = savedAgents.map { it.name },
                 onBack = { navController.popBackStack() },
                 onOpenRunChat = { runChat -> navController.navigate(AppRoutes.chat(runChat)) },
+                onResumeRun = { run ->
+                    scope.launch {
+                        workflowRunStore.update(run.id, WorkflowRunStatus.QUEUED)
+                        navController.navigate(AppRoutes.chat(run.chatTitle, runId = run.id))
+                    }
+                },
                 onSave = { wf ->
                     val selected = savedAgents.firstOrNull { it.name.equals(wf.agentName, ignoreCase = true) }
                     workflowStore.upsert(wf.copy(agentId = if (wf.agentName.isBlank()) null else selected?.id ?: wf.agentId))
@@ -496,7 +508,9 @@ fun OrhanNavHost(isDark: Boolean) {
                         chat.busy -> workflowRunStore.update(workflowRunId, WorkflowRunStatus.FAILED, "This chat already has a request in progress. Run the workflow again when it finishes.")
                         else -> {
                             workflowRunStore.update(workflowRunId, WorkflowRunStatus.RUNNING)
-                            chatViewModel.send(entry.arguments?.getString("draft").orEmpty())
+                            val saveEngineRunId: suspend (String) -> Unit = { remoteId -> workflowRunStore.saveEngineRunId(workflowRunId, remoteId) }
+                            if (run.engineRunId != null) chatViewModel.resumeWorkflowRun(run.engineRunId, saveEngineRunId)
+                            else chatViewModel.send(entry.arguments?.getString("draft").orEmpty(), null, saveEngineRunId)
                         }
                     }
                 }
