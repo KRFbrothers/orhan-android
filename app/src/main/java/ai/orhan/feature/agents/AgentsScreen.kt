@@ -48,7 +48,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -347,8 +347,9 @@ private fun AgentCard(
 
 @Composable
 internal fun AgentAvatarImage(path: String?, fallback: Int, size: Dp, description: String?) {
-    val bitmap by produceState<ImageBitmap?>(initialValue = null, path) {
-        value = if (path == null) null else withContext(Dispatchers.IO) {
+    var bitmap by remember(path) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(path) {
+        bitmap = if (path == null) null else withContext(Dispatchers.IO) {
             BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = 4 })?.asImageBitmap()
         }
     }
