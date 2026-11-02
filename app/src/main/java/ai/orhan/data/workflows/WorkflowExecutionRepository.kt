@@ -26,13 +26,22 @@ import java.util.UUID
 private val Context.workflowSubmissions by preferencesDataStore(name = "orhan_workflow_submissions")
 private val submissionMutex = Mutex()
 
-data class ExecutionStep(val id: String, val agentName: String, val status: String, val output: String, val error: String?)
+enum class ExecutionStatus(val wire: String) {
+    QUEUED("queued"), RUNNING("running"), SUCCEEDED("succeeded"), FAILED("failed"), CANCELLED("cancelled");
+    companion object {
+        fun fromWire(value: String): ExecutionStatus = entries.firstOrNull { it.wire == value }
+            ?: throw IOException("Unsupported workflow status. Update the app/service before controlling this run.")
+    }
+}
+data class ExecutionStep(val id: String, val agentName: String, val status: ExecutionStatus, val output: String, val error: String?)
 data class WorkflowExecution(
-    val id: String, val status: String, val attempt: Int, val cancelRequested: Boolean,
+    val id: String, val status: ExecutionStatus, val attempt: Int, val cancelRequested: Boolean,
     val createdAt: String, val dueAt: String, val error: String?, val steps: List<ExecutionStep>,
 ) {
-    val active: Boolean get() = status == "queued" || status == "running"
+    val active: Boolean get() = status == ExecutionStatus.QUEUED || status == ExecutionStatus.RUNNING
 }
+data class WorkflowAutomation(val id: String, val title: String, val kind: String, val revision: Int, val enabled: Boolean,
+    val intervalSeconds: Int?, val nextDue: String?, val lastSkippedAt: String?)
 
 /** Authoritative server executions stay separate from the pre-existing local chat ledger. */
 class WorkflowExecutionRepository(
@@ -52,24 +61,8 @@ class WorkflowExecutionRepository(
     suspend fun start(workflow: Workflow, agents: List<SavedAgent>, handoffIds: List<String>, at: String): WorkflowExecution = submissionMutex.withLock {
         val key = submissionKey(workflow.id)
         val pending = context.workflowSubmissions.data.first()[key]
-        val payload = if (pending != null) JSONObject(pending) else {
-            val primary = workflow.agentId?.let { id -> agents.firstOrNull { it.id == id } }
-                ?: if (workflow.agentId == null) agents.firstOrNull { it.name.equals(workflow.agentName, true) } else null
-            val default = workflow.agentId == null && (workflow.agentName.isBlank() || workflow.agentName.equals("Orhan", true))
-            if (primary == null && !default) throw IOException("The workflow's saved agent is unavailable. Choose an available agent and save first.")
-            val chain = listOf(primary) + handoffIds.map { id -> agents.firstOrNull { it.id == id } ?: throw IOException("A handoff agent was deleted. Update the step list.") }
-            val steps = JSONArray()
-            chain.forEachIndexed { index, agent ->
-                steps.put(JSONObject().put("id", "step-${index + 1}").put("agentId", agent?.id ?: JSONObject.NULL)
-                    .put("agentName", agent?.name ?: "Orhan").put("instructions", agent?.instructions.orEmpty())
-                    .put("prompt", workflow.content)
-                    // Legacy preferences remain inactive; workflow opt-in never enables hidden tools.
-                    .put("allowedTools", JSONArray(if (agent?.toolsRestricted == true) agent.tools else emptyList<String>())))
-            }
-            JSONObject().put("workflowId", workflow.id).put("title", workflow.title.take(120))
-                .put("requestKey", UUID.randomUUID().toString()).put("steps", steps)
-                .put("trigger", if (at.isBlank()) JSONObject().put("type", "manual") else JSONObject().put("type", "once").put("at", at))
-                .also { body -> context.workflowSubmissions.edit { it[key] = body.toString() } }
+        val payload = if (pending != null) JSONObject(pending) else buildSubmission(workflow, agents, handoffIds, at).also { body ->
+            context.workflowSubmissions.edit { it[key] = body.toString() }
         }
         // Persist BEFORE dispatch. A timeout/restart retries the exact same snapshot and key.
         val result = request("POST", "", payload)
@@ -77,6 +70,52 @@ class WorkflowExecutionRepository(
         context.workflowSubmissions.edit { it.remove(key) }
         run
     }
+
+    private fun buildSubmission(workflow: Workflow, agents: List<SavedAgent>, handoffIds: List<String>, at: String): JSONObject {
+        val primary = workflow.agentId?.let { id -> agents.firstOrNull { it.id == id } }
+            ?: if (workflow.agentId == null) agents.firstOrNull { it.name.equals(workflow.agentName, true) } else null
+        val default = workflow.agentId == null && (workflow.agentName.isBlank() || workflow.agentName.equals("Orhan", true))
+        if (primary == null && !default) throw IOException("The workflow's saved agent is unavailable. Choose an available agent and save first.")
+        val chain = listOf(primary) + handoffIds.map { id -> agents.firstOrNull { it.id == id } ?: throw IOException("A handoff agent was deleted. Update the step list.") }
+        val steps = JSONArray()
+        chain.forEachIndexed { index, agent ->
+            steps.put(JSONObject().put("id", "step-${index + 1}").put("agentId", agent?.id ?: JSONObject.NULL)
+                .put("agentName", agent?.name ?: "Orhan").put("instructions", agent?.instructions.orEmpty())
+                .put("prompt", workflow.content)
+                // Legacy preferences remain inactive; workflow opt-in never enables hidden tools.
+                .put("allowedTools", JSONArray(if (agent?.toolsRestricted == true) agent.tools else emptyList<String>())))
+        }
+        return JSONObject().put("workflowId", workflow.id).put("title", workflow.title.take(120))
+            .put("requestKey", UUID.randomUUID().toString()).put("steps", steps)
+            .put("trigger", if (at.isBlank()) JSONObject().put("type", "manual") else JSONObject().put("type", "once").put("at", at))
+    }
+
+    suspend fun automations(workflowId: String): List<WorkflowAutomation> =
+        request("GET", "?workflowId=${java.net.URLEncoder.encode(workflowId, "UTF-8")}", route = "/api/workflow-automation")
+            .getJSONArray("registrations").let { rows -> List(rows.length()) { parseAutomation(rows.getJSONObject(it)) } }
+
+    suspend fun hasPendingRecurring(workflowId: String): Boolean = context.workflowSubmissions.data.first()[submissionKey("recurring:$workflowId")] != null
+
+    suspend fun createRecurring(workflow: Workflow, agents: List<SavedAgent>, handoffIds: List<String>, at: String, intervalSeconds: Int): WorkflowAutomation = submissionMutex.withLock {
+        val key = submissionKey("recurring:${workflow.id}")
+        val pending = context.workflowSubmissions.data.first()[key]
+        val envelope = if (pending != null) JSONObject(pending) else {
+            val body = buildSubmission(workflow, agents, handoffIds, at)
+            body.remove("trigger")
+            body.put("expectedRevision", 0).put("enabled", true).put("intervalSeconds", intervalSeconds).put("startAt", at)
+            JSONObject().put("id", UUID.randomUUID().toString()).put("body", body).also { saved ->
+                context.workflowSubmissions.edit { it[key] = saved.toString() }
+            }
+        }
+        val json = request("PUT", "/schedules/${envelope.getString("id")}", envelope.getJSONObject("body"), "/api/workflow-automation")
+        val result = parseAutomation(json.getJSONObject("registration"))
+        context.workflowSubmissions.edit { it.remove(key) }
+        result
+    }
+
+    suspend fun disableAutomation(item: WorkflowAutomation): WorkflowAutomation = parseAutomation(
+        request("POST", "/${if (item.kind == "interval") "schedules" else "triggers"}/${item.id}/disable",
+            JSONObject().put("expectedRevision", item.revision), "/api/workflow-automation").getJSONObject("registration"))
 
     suspend fun control(run: WorkflowExecution, action: String): WorkflowExecution {
         require(action == "retry" || action == "cancel")
@@ -98,10 +137,11 @@ class WorkflowExecutionRepository(
         return stringPreferencesKey("$owner:$workflowId")
     }
 
-    private suspend fun request(method: String, suffix: String, body: JSONObject? = null): JSONObject = withContext(Dispatchers.IO) {
-        require(baseUrl.startsWith("https://")) { "Workflow API URL must use HTTPS." }
+    private suspend fun request(method: String, suffix: String, body: JSONObject? = null, route: String = "/api/workflow-executions"): JSONObject = withContext(Dispatchers.IO) {
+        val origin = URL(baseUrl)
+        require(origin.protocol == "https" && origin.userInfo == null && origin.query == null && origin.ref == null && origin.path in listOf("", "/")) { "Workflow API URL must be an HTTPS origin." }
         val token = tokenProvider() ?: throw IOException("Sign in from Profile to use server workflows.")
-        val conn = URL(baseUrl.trimEnd('/') + "/api/workflow-executions" + suffix).openConnection() as HttpURLConnection
+        val conn = URL(baseUrl.trimEnd('/') + route + suffix).openConnection() as HttpURLConnection
         coroutineScope {
             val disconnect = launch(Dispatchers.IO) { try { awaitCancellation() } finally { conn.disconnect() } }
             try {
@@ -132,7 +172,7 @@ class WorkflowExecutionRepository(
                 if (bytes.size > 2 * 1024 * 1024) throw IOException("Workflow response is too large.")
                 val json = runCatching { JSONObject(String(bytes, Charsets.UTF_8)) }.getOrNull()
                 if (code !in 200..299) throw IOException(json?.optString("error")?.takeIf { it.isNotBlank() }
-                    ?: if (code == 404) "Workflow execution API is not deployed on this service." else "Workflow request failed (HTTP $code).")
+                    ?: if (code == 404) "The requested workflow API is not deployed on this service." else "Workflow request failed (HTTP $code).")
                 json ?: throw IOException("Workflow service returned an invalid response.")
             } finally { disconnect.cancel(); conn.disconnect() }
         }
@@ -140,11 +180,19 @@ class WorkflowExecutionRepository(
 
     private fun parse(row: JSONObject): WorkflowExecution {
         val steps = row.getJSONArray("steps")
-        return WorkflowExecution(row.getString("id"), row.getString("status"), row.getInt("attempt"), row.optBoolean("cancelRequested"),
+        if (steps.length() !in 1..8 || row.getInt("attempt") < 1) throw IOException("Invalid workflow execution response.")
+        return WorkflowExecution(row.getString("id"), ExecutionStatus.fromWire(row.getString("status")), row.getInt("attempt"), row.optBoolean("cancelRequested"),
             row.getString("createdAt"), row.getString("dueAt"), row.optionalText("error"),
             List(steps.length()) { index -> steps.getJSONObject(index).let { s ->
-                ExecutionStep(s.getString("id"), s.getString("agentName"), s.getString("status"), s.optString("output"), s.optionalText("error"))
+                ExecutionStep(s.getString("id"), s.getString("agentName"), ExecutionStatus.fromWire(s.getString("status")), s.optString("output"), s.optionalText("error"))
             } })
+    }
+
+    private fun parseAutomation(row: JSONObject): WorkflowAutomation {
+        val kind = row.getString("kind")
+        if (kind !in listOf("interval", "webhook") || row.getInt("revision") < 1) throw IOException("Unsupported workflow automation response.")
+        return WorkflowAutomation(row.getString("id"), row.getString("title"), kind, row.getInt("revision"), row.getBoolean("enabled"),
+            if (row.isNull("intervalSeconds")) null else row.getInt("intervalSeconds"), row.optionalText("nextDue"), row.optionalText("lastSkippedAt"))
     }
 }
 
