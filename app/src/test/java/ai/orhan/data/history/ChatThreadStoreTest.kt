@@ -51,6 +51,37 @@ class ChatAttachmentPersistenceTest {
         assertEquals(listOf(thread), ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()))
     }
 
+    @Test fun serializerRoundTripsReplyRelationshipAndKeepsAgentIdentity() = kotlinx.coroutines.runBlocking {
+        val thread = ChatThread(
+            "Orhan", 40L,
+            listOf(
+                StoredMessage(10L, "agent", "First answer", "now"),
+                StoredMessage(11L, "user", "Follow-up", "now", replyToId = 10L),
+            ),
+            agentId = "stable-agent-id",
+        )
+        val out = java.io.ByteArrayOutputStream()
+        ChatThreadsSerializer.writeTo(listOf(thread), out)
+        assertEquals(listOf(thread), ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()))
+    }
+
+    @Test fun v5ThreadsMigrateWithoutReplyRelationship() = kotlinx.coroutines.runBlocking {
+        val out = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(out).apply {
+            writeInt(5); writeInt(1); writeUTF("Orhan"); writeLong(40L); writeInt(1)
+            writeLong(10L); writeUTF("agent")
+            val text = "Existing answer".toByteArray(Charsets.UTF_8)
+            writeInt(text.size); write(text); writeUTF("now"); writeLong(123L); writeBoolean(false)
+            writeBoolean(false) // no pending handoff retry
+            writeBoolean(true); writeUTF("stable-agent-id")
+            flush()
+        }
+        val migrated = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
+        assertEquals("stable-agent-id", migrated.agentId)
+        assertEquals(null, migrated.messages.single().replyToId)
+        assertEquals("Existing answer", migrated.messages.single().text)
+    }
+
     @Test fun v4ThreadKeepsHandoffButDefaultsAgentId() = kotlinx.coroutines.runBlocking {
         val out = java.io.ByteArrayOutputStream()
         java.io.DataOutputStream(out).apply {
