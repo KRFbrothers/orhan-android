@@ -4,6 +4,8 @@ import ai.orhan.data.agents.SavedAgent
 import ai.orhan.data.workflows.Workflow
 import ai.orhan.data.workflows.WorkflowExecution
 import ai.orhan.data.workflows.WorkflowExecutionRepository
+import ai.orhan.data.workflows.ExecutionStatus
+import ai.orhan.data.workflows.WorkflowAutomation
 import ai.orhan.feature.settings.detail.FootNote
 import ai.orhan.feature.settings.detail.SectionLabel
 import androidx.compose.foundation.layout.Arrangement
@@ -54,6 +56,11 @@ fun WorkflowExecutionPanel(
     var historyError by remember(workflow.id, signedIn) { mutableStateOf<String?>(null) }
     var loaded by remember(workflow.id, signedIn) { mutableStateOf(false) }
     var hasPending by remember(workflow.id, signedIn) { mutableStateOf(false) }
+    var registrations by remember(workflow.id, signedIn) { mutableStateOf<List<WorkflowAutomation>>(emptyList()) }
+    var automationError by remember(workflow.id, signedIn) { mutableStateOf<String?>(null) }
+    var automationLoaded by remember(workflow.id, signedIn) { mutableStateOf(false) }
+    var pendingRecurring by remember(workflow.id, signedIn) { mutableStateOf(false) }
+    var repeatMinutes by rememberSaveable(workflow.id) { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var handoffs by rememberSaveable(workflow.id) { mutableStateOf(arrayListOf<String>()) }
     var schedule by rememberSaveable(workflow.id) { mutableStateOf("") }
@@ -73,6 +80,15 @@ fun WorkflowExecutionPanel(
         }
         loaded = true
         historyError = null
+        // An older backend can still serve normal executions while automation
+        // is unavailable. Keep these errors independent during staged rollout.
+        try {
+            registrations = repository.automations(workflow.id)
+            pendingRecurring = repository.hasPendingRecurring(workflow.id)
+            automationLoaded = true
+            automationError = null
+        } catch (cancel: CancellationException) { throw cancel }
+        catch (e: Exception) { automationError = e.message ?: "Workflow automation is unavailable." }
     }
     fun action(block: suspend () -> Unit) {
         if (busy) return
@@ -132,7 +148,7 @@ fun WorkflowExecutionPanel(
         singleLine = true, modifier = Modifier.fillMaxWidth())
     val active = runs.any { it.active }
     if (hasPending) FootNote("A previous submission is unconfirmed. Retry sends its original prompt, agents and schedule, including after an app restart. Refresh history before discarding it.")
-    Button(enabled = !busy && loaded && !active && !draftChanged && historyError == null,
+    Button(enabled = !busy && loaded && !active && !draftChanged && historyError == null && repeatMinutes.isBlank(),
         onClick = { action { repository.start(workflow, agents, handoffs, schedule.trim()); refresh() } },
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(if (busy) "Waiting for service…" else if (hasPending) "Retry original submission" else "Start server run") }
     if (draftChanged) FootNote("Save your workflow edits before starting a server run.")
@@ -144,9 +160,38 @@ fun WorkflowExecutionPanel(
         TextButton(enabled = !busy && !active, onClick = { action { refresh(); repository.discardPending(workflow.id) } },
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Discard unconfirmed submission after refresh") }
     }
+    SectionLabel("Recurring schedules and external triggers")
+    FootNote("Uses fixed UTC intervals. After downtime, only the latest due run is queued; overlapping runs are skipped. Disabling future activity does not cancel an existing run.")
+    FootNote("Recurring runs reuse the submitted agent and prompt snapshot until disabled. Later local workflow or agent edits do not update an existing schedule.")
+    OutlinedTextField(value = repeatMinutes, onValueChange = { repeatMinutes = it.take(5) }, enabled = !busy,
+        label = { Text("Repeat interval in minutes (optional)") }, supportingText = { Text("5–44640 minutes. Use the UTC time above for the first run.") },
+        singleLine = true, modifier = Modifier.fillMaxWidth())
+    val validInterval = repeatMinutes.toIntOrNull()?.takeIf { it in 5..44640 }
+    if (pendingRecurring) FootNote("A recurring registration is unconfirmed. Retry uses its original saved agents, prompt, interval and first time.")
+    OutlinedButton(enabled = !busy && !draftChanged && automationLoaded && automationError == null &&
+        (pendingRecurring || validInterval != null && schedule.isNotBlank()), onClick = { action {
+            repository.createRecurring(workflow, agents, handoffs, schedule.trim(), (validInterval ?: 5) * 60)
+            refresh()
+        } }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Text(if (pendingRecurring) "Retry original recurring registration" else "Save recurring schedule")
+    }
+    automationError?.let { FootNote(it) }
+    if (pendingRecurring && automationLoaded) TextButton(enabled = !busy, onClick = { action {
+        refresh()
+        if (automationError == null) { repository.discardPending("recurring:${workflow.id}"); refresh() }
+    } }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Discard unconfirmed recurring registration after refresh") }
+    registrations.forEach { item ->
+        Text("${if (item.kind == "interval") "Recurring schedule" else "External event trigger"}: ${if (item.enabled) "enabled" else "disabled"}")
+        FootNote("${item.id} · revision ${item.revision}")
+        item.intervalSeconds?.let { FootNote("Every ${if (it % 60 == 0) "${it / 60} minutes" else "$it seconds"} · next due ${item.nextDue.orEmpty()}") }
+        item.lastSkippedAt?.let { FootNote("Last overlap skipped: $it") }
+        if (item.enabled) OutlinedButton(enabled = !busy, onClick = { action { repository.disableAutomation(item); refresh() } },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Disable ${if (item.kind == "interval") "schedule" else "trigger"}") }
+    }
+    FootNote("External senders require owner registration and a server-managed signing key. Cron, local-time schedules and write-approval continuation are unsupported here.")
     if (loaded && runs.isEmpty()) FootNote("No server executions recorded for this workflow.")
     runs.take(20).forEach { run ->
-        SectionLabel("${run.status} · attempt ${run.attempt}")
+        SectionLabel("${run.status.wire} · attempt ${run.attempt}")
         FootNote("Run ${run.id}\nCreated ${run.createdAt}\nDue ${run.dueAt}")
         if (run.cancelRequested && run.active) FootNote("Cancellation requested; waiting for worker acknowledgement.")
         run.error?.let { FootNote(it) }
@@ -157,13 +202,13 @@ fun WorkflowExecutionPanel(
             Text(if (expanded == run.id) "Hide saved outputs" else "View saved outputs")
         }
         run.steps.forEach { step ->
-            Text("${step.agentName}: ${step.status}")
+            Text("${step.agentName}: ${step.status.wire}")
             step.error?.let { FootNote(it) }
             if (step.output.isNotBlank()) Text(step.output)
         }
         if (run.active) OutlinedButton(enabled = !busy && !run.cancelRequested,
             onClick = { action { repository.control(run, "cancel"); refresh() } }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Cancel run") }
-        if (run.status == "failed" || run.status == "cancelled") OutlinedButton(enabled = !busy && !active,
+        if (run.status == ExecutionStatus.FAILED || run.status == ExecutionStatus.CANCELLED) OutlinedButton(enabled = !busy && !active,
             onClick = { retry = run }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Review and retry run") }
     }
 }
