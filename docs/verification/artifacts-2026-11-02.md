@@ -449,3 +449,28 @@ switching to a verified accelerated renderer, boot one AVD, confirm a warm
 app launch and touch responsiveness, then complete the synthetic Markdown/HTML
 flows. If the host still reports SwiftShader, record that limitation and keep
 manual feature checks pending rather than calling the emulator healthy.
+
+### Resolution-tuning attempt and final emulator state
+
+To reduce SwiftShader pixel work without increasing the host CPU/RAM budget,
+`Pixel_8.avd/config.ini` was changed to 720×1600 at 320 dpi while retaining
+2 virtual CPUs and 2048 MiB. The AVD completed boot, but its runtime display
+still reported 1080×2400. Generated `hardware-qemu.ini` showed 1080×2400 and
+2560 MiB, overriding the requested config values; SwiftShader remained active.
+The resolution/memory adjustment therefore did **not** take effect.
+
+After the v299 `am start -W`, the app process was briefly present but the
+command did not return its completion status. Follow-up ADB calls became
+unresponsive while qemu reached about 3.54 GiB host working set. No
+instrumentation was running. The emulator was stopped with
+`adb -s emulator-5554 emu kill`; qemu exited and host available memory read
+about 2.18 GiB afterward. No v299 screenshot or feature interaction was
+captured. The AVD's runtime override and system input/resource stall are now
+the concrete emulator blocker; do not claim the resolution tune or latest UI
+verification succeeded.
+
+Next actionable step: create or select a dedicated AVD profile whose generated
+`hardware-qemu.ini` honors a compact 360 dp screen and bounded RAM, then check
+its actual renderer and host utilization before installing/running anything.
+Keep one emulator only and leave Gradle stopped during boot. The same failing
+instrumentation command remains un-retried.
