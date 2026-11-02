@@ -65,7 +65,7 @@ class ChatRepository(
          * (Dua-ai #494) only when non-blank, so older engines just see the plain messages array.
          */
         internal fun body(turns: List<ChatTurn>, stream: Boolean, systemInstruction: String? = null,
-                          allowedTools: List<String>? = null, mode: String = "agent") = JSONObject()
+                          allowedTools: List<String>? = null, mode: String = "agent", resumeRunId: String? = null) = JSONObject()
             .put("stream", stream)
             .put("mode", mode)
             .put("messages", JSONArray().apply {
@@ -82,6 +82,7 @@ class ChatRepository(
             .apply {
                 systemInstruction?.trim()?.takeIf { it.isNotEmpty() }?.let { put("systemInstruction", it) }
                 allowedTools?.let { put("allowedTools", JSONArray(it.distinct())) }
+                resumeRunId?.trim()?.takeIf { it.isNotEmpty() }?.let { put("resumeRun", it) }
             }
     }
 
@@ -196,7 +197,9 @@ class ChatRepository(
         systemInstruction: String? = null,
         allowedTools: List<String>? = null,
         mode: String = "agent",
+        resumeRunId: String? = null,
         onActivity: suspend (String) -> Unit = {},
+        onAgentRunId: suspend (String) -> Unit = {},
         onDelta: suspend (String) -> Unit,
     ): Result<String> =
         withContext(Dispatchers.IO) {
@@ -206,7 +209,7 @@ class ChatRepository(
                 // Blocking SSE reads ignore coroutine cancel; disconnect on cancel so Stop is immediate.
                 val watcher = launch { try { awaitCancellation() } finally { conn.disconnect() } }
                 try {
-                    conn.outputStream.use { it.write(body(turns, true, systemInstruction, allowedTools, mode).toString().toByteArray()) }
+                    conn.outputStream.use { it.write(body(turns, true, systemInstruction, allowedTools, mode, resumeRunId).toString().toByteArray()) }
                     val code = conn.responseCode
                     if (code == 401) {
                         onUnauthorized()
@@ -253,6 +256,9 @@ class ChatRepository(
                                             field = { k -> ev.optString(k) },
                                             nested = { k -> ev.optJSONObject("data")?.optString(k).orEmpty() },
                                         )?.let { onActivity(it) }
+                                        "agent_session" -> ev.optString("runId")
+                                            .takeIf { it.isNotBlank() && ev.optBoolean("resumable") }
+                                            ?.let { onAgentRunId(it) }
                                     }
                                 }
                             }

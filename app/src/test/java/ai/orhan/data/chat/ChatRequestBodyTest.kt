@@ -31,6 +31,13 @@ class ChatRequestBodyTest {
         assertFalse(ChatRepository.body(turns, true).has("allowedTools"))
     }
 
+    @Test fun durableResumeUsesTheExistingResumeRunContract() {
+        val body = ChatRepository.body(emptyList(), stream = true, mode = "agent", resumeRunId = "engine-task-1")
+        assertEquals("engine-task-1", body.getString("resumeRun"))
+        assertEquals("agent", body.getString("mode"))
+        assertEquals(true, body.getBoolean("stream"))
+    }
+
     @Test fun plainServiceActionsAreToolFreeAndAudioStaysOnItsUserTurn() {
         val audio = ChatAttachment("voice.m4a", "audio/mp4", "AQID", 3)
         val body = ChatRepository.body(
