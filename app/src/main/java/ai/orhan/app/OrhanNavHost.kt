@@ -173,6 +173,7 @@ fun OrhanNavHost(isDark: Boolean) {
                     val lastText = threads.firstOrNull { t -> t.title == it.title }?.messages?.lastOrNull()?.text
                     OrhanChat(it.title, previewSnippet(lastText), relativeTime(it.openedAt), isAgent = true)
                 },
+                chatThreads = threads,
                 pinnedTitles = pinnedTitles,
                 onTogglePin = { chat -> scope.launch { pinRepo.toggle(chat.title) } },
                 onRemoveRecent = { chat ->
@@ -186,6 +187,11 @@ fun OrhanNavHost(isDark: Boolean) {
                     val t = canon(it.title)
                     scope.launch { recentRepo.recordOpened(t) }
                     navController.navigate(AppRoutes.chat(t))
+                },
+                onOpenChatMessage = { chat, messageId ->
+                    val t = canon(chat.title)
+                    scope.launch { recentRepo.recordOpened(t) }
+                    navController.navigate(AppRoutes.chat(t, messageId = messageId))
                 },
                 onOpenSettings = {
                     navController.navigate(SettingsRoutes.SETTINGS) { launchSingleTop = true }

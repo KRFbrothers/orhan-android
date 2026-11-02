@@ -27,6 +27,10 @@ PRs #93–#107 are closed and merged into their respective feature-base branches
 
 An explicit Transcribe action now persists the returned transcript onto the source audio message in local ChatThread format v7. The attachment remains in the separate file-backed store. The reader remains compatible with v1–v6 and v6's allowed-tool handoff field. After a DataStore failure the result remains in the open dialog and reports failure; the transcript is not shown as saved. Transcription is still user-requested, not automatic. Tests were added but not run.
 
+## Persisted message search follow-up
+
+Local Search now consumes the live persisted thread list, indexes chat message bodies and v7 transcript metadata, and includes message hits under the existing Chats tab without replacing All/Chats/Agents/Artifacts filtering. Hits carry `(chat title, message ID)` identity, result snippets and Message/Transcript and Pinned indicators. Selecting a hit opens that chat with the existing `focusMessageId` route, which scrolls to and highlights the exact message; identical body strings remain distinct. Deleted threads disappear from the live list; if a source message becomes stale between result and destination, ChatScreen surfaces its existing missing-message notice. Search tests were added but not run; runtime behavior and large-history performance are unverified.
+
 ## Meetings
 
 - Orhan offers **Create meeting minutes** for a persisted audio chat message. On the #105 source branch, transcription uses the configured Grok/Gemini/OpenAI provider through the owner-authenticated Dua stored-file API; factual minutes are then produced by the existing Gemini engine. The result is separate from the source message; it can be saved as a typed Meeting minutes Artifact linked to the original chat/message, and explicit bullet items under `Action items` can be saved as Memory actions with that same source reference. Writes report failure and do not replace the source recording.
@@ -43,9 +47,9 @@ An explicit Transcribe action now persists the returned transcript onto the sour
 - [Dua #505](https://github.com/KRFbrothers/Dua-ai/pull/505): owner-scoped standalone stored-audio transcription using existing provider adapters. Merged to Dua `main`; deployment/configuration not verified.
 - [Orhan #105](https://github.com/KRFbrothers/orhan-android/pull/105): calls the stored-file transcription API and cleans up the temporary upload; merged into the meeting feature branch.
 - Orhan #106 (durable workflow-session resume) merged into `feat/workflow-run-execution`; PR #109 ports that implementation onto the #104/#105/#107 chain.
-- [Orhan #108](https://github.com/KRFbrothers/orhan-android/pull/108): ports the previously merged #99 message-search behavior onto the #104/#106/#107 chain and adds persisted transcript matching plus source indicators; open, validation deferred.
+- [Orhan #108](https://github.com/KRFbrothers/orhan-android/pull/108): extends the merged #99 local message search with persisted transcript matches and source indicators; stacked on #109, validation deferred.
 - [Orhan #109](https://github.com/KRFbrothers/orhan-android/pull/109): integrates the already-merged #106 durable `resumeRun` support into the #104/#105/#107 chain; open, validation deferred.
 
 ## Validation status
 
-Source review and `git diff --check` only. Focused workflow-run, typed-artifact, memory action-batch and meeting action-parser tests were added but not run. Build, lint, emulator and USB/device checks: **NOT RUN—deferred by user**. No service was deployed and no runtime success is claimed.
+Source review and `git diff --check` only. Focused workflow-run, typed-artifact, memory action-batch, meeting action-parser, transcript migration and persisted-message search tests were added but not run. Build, lint, emulator and USB/device checks: **NOT RUN—deferred by user**. No service was deployed and no runtime success is claimed.

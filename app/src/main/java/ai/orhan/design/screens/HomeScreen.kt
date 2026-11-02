@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import ai.orhan.data.artifacts.Artifact
+import ai.orhan.data.history.ChatThread
 import ai.orhan.data.memory.memoryTabBadge
 import ai.orhan.feature.artifacts.ArtifactsScreen
 import ai.orhan.feature.memory.MemoryScreen
@@ -184,6 +185,7 @@ internal fun OrhanCard(
 fun HomeScreen(
     modifier: Modifier = Modifier,
     onOpenChat: (OrhanChat) -> Unit = {},
+    onOpenChatMessage: (OrhanChat, Long) -> Unit = { chat, _ -> onOpenChat(chat) },
     onOpenSettings: () -> Unit = {},
     onToggleTheme: () -> Unit = {},
     onOpenAppearance: () -> Unit = onOpenSettings,
@@ -213,6 +215,8 @@ fun HomeScreen(
     profile: UserProfile = UserProfile(),
     /** Recently opened chats (local history), newest first; shown above the samples. */
     recentChats: List<OrhanChat> = emptyList(),
+    /** Persisted thread bodies and transcript metadata used by local message search. */
+    chatThreads: List<ChatThread> = emptyList(),
     /** Titles of pinned chats (persisted locally). */
     pinnedTitles: Set<String> = emptySet(),
     onTogglePin: (OrhanChat) -> Unit = {},
@@ -239,12 +243,18 @@ fun HomeScreen(
         BackHandler { searchOpen = false }
         LocalSearchScreen(
             chats = recentChats,
+            threads = chatThreads,
+            pinnedTitles = pinnedTitles,
             agents = agents,
             artifacts = artifacts,
             onCancel = { searchOpen = false },
             onOpenChat = { chat ->
                 searchOpen = false
                 onOpenChat(chat)
+            },
+            onOpenChatMessage = { chat, messageId ->
+                searchOpen = false
+                onOpenChatMessage(chat, messageId)
             },
             onOpenAgent = { agent ->
                 searchOpen = false
