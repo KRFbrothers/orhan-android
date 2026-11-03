@@ -97,3 +97,70 @@ execution; implement supported schedule selection against the canonical executio
 contract, keeping calendar recurrence and Standing unsupported until their
 backend semantics are implemented.
 
+## Release-readiness follow-up — 2026-11-03
+
+This section supersedes the earlier “lint not rerun” statement above for the
+new Android commit only. It does not replace the older version-353 phone report.
+
+### Current source and build
+
+- Confirmed the artifact v3 reader stores the serialized kind string once
+  before enum lookup.
+- Confirmed the API imports `ProviderFileError` from the canonical
+  `gemini-files.mjs` export and keeps `transcribe` imported from
+  `transcribe.mjs`. The agent engine imports
+  `dua_engine.agent.agent_models` by package path.
+- Replaced the two remaining `produceState` attachment loaders with
+  `remember` and `LaunchedEffect`.
+- Android history errors preserve HTTP status and only log a sanitized
+  origin/path, status, safe code/message and request ID in debug builds.
+- Fresh Kotlin compile, `:app:assembleDebug` and `:app:lintDebug` passed on
+  commit `aff357dd`. The APK is `ai.orhan` versionCode 355/versionName 0.2.0,
+  signed with the existing debug certificate.
+- The locked API dependency `cfb@1.2.2` is present under
+  `apps/api/node_modules`. API source `node --check` and `git diff --check`
+  passed; no lockfile changed. No Python runtime was available for a Python
+  import check.
+- Automated tests, instrumentation and the full test suite were not run.
+
+### Emulator and requested UI flows
+
+Four emulator processes were present, but the configured ADB client returned
+an empty device list. The newest emulator's console port 5554 was listening
+while its ADB bridge at 5555 refused connections. APK install was therefore
+not attempted; no app data was changed. The current commit has no new device
+UI evidence.
+
+| Requested flow | Current commit status |
+| --- | --- |
+| Chat save/reopen and saved-message artifact | Not verified on this build |
+| Plain text, Markdown, HTML create/edit/reopen/share/delete | Not verified on this build |
+| Memory-to-artifact and source-chat navigation | Not verified on this build |
+| Agent create/edit/select and workflow save/reopen | Not verified on this build |
+| Restart persistence | Not verified on this build |
+
+Use an ADB-visible, signed-in emulator and install versionCode 355 with
+`adb install -r` after checking the installed package version and signer. Do
+not clear or uninstall its data. The earlier version-353 UI evidence remains
+historical and cannot substitute for this update.
+
+### PR and integration order
+
+- Android #115 remains draft on `feat/meeting-minutes-actions`. That base
+  contains #112 durable history, #113 recurring controls and #114 the builder,
+  but refreshed Git ancestry is 66 commits ahead of `origin/main`. Keep #115 on
+  its current base until the upstream feature chain is reviewed and integrated;
+  do not retarget it directly to main.
+- Backend #507 and #509 are in refreshed `origin/main`. #510's automation
+  source is merged into `feat/workflow-runtime-lifecycle` but is not in main.
+  Draft Dua #511 now proposes that automation delta against main, with the two
+  runtime import fixes. No PR was merged.
+- Migration order remains `20261102180726_workflow_execution.sql`, then
+  `20261102183410_workflow_identity_recovery.sql`, then
+  `20261102183411_workflow_automation.sql`. Do not apply them until the target
+  project ledger is inspected and each missing migration is separately
+  reviewed/authorized.
+- The previously observed workflow-history 404 remains a separate backend
+  route/schema deployment blocker. No same history request was repeated and no
+  server execution success is claimed.
+
