@@ -32,6 +32,7 @@ class ChatThreadStoreTest {
 }
 
 class ChatAttachmentPersistenceTest {
+    private fun msgs(n: Int) = List(n) { ChatMessage(it.toLong(), if (it % 2 == 0) ChatRole.User else ChatRole.Agent, "m$it", "now") }
     private val att = ai.orhan.data.chat.ChatAttachment("note.m4a", "audio/mp4", "AQID", 3)
     private fun dec(s: String) = java.util.Base64.getDecoder().decode(s)
     private fun enc(b: ByteArray) = java.util.Base64.getEncoder().encodeToString(b)
@@ -42,6 +43,44 @@ class ChatAttachmentPersistenceTest {
         val out = java.io.ByteArrayOutputStream()
         ChatThreadsSerializer.writeTo(list, out)
         assertEquals(list, ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()))
+    }
+
+    @Test fun serializerRoundTripsDraftAndPreservesItWhenMessagesAreSaved() = kotlinx.coroutines.runBlocking {
+        val thread = ChatThread("Orhan", 30L, listOf(StoredMessage(17L, "user", "hello", "now")), draft = "unfinished reply")
+        val out = java.io.ByteArrayOutputStream()
+        ChatThreadsSerializer.writeTo(listOf(thread), out)
+        val restored = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
+        assertEquals(thread, restored)
+        val updated = listOf(restored).withSaved("Orhan", msgs(2), 31).single()
+        assertEquals("unfinished reply", updated.draft)
+    }
+
+    @Test fun draftOnlyThreadIsRetainedAndClearedWithoutLosingMessages() {
+        val draftOnly = emptyList<ChatThread>().withDraft("Orhan", "unfinished", 1).single()
+        assertEquals(emptyList<StoredMessage>(), draftOnly.messages)
+        assertEquals("unfinished", draftOnly.draft)
+        assertEquals(emptyList<ChatThread>(), listOf(draftOnly).withDraft("Orhan", null, 2))
+
+        val withMessages = listOf(draftOnly).withSaved("Orhan", msgs(1), 3).single()
+        assertEquals("unfinished", withMessages.draft)
+        assertEquals(1, listOf(withMessages).withDraft("Orhan", null, 4).single().messages.size)
+    }
+
+    @Test fun v7ThreadMigratesTranscriptWithoutInventingDraft() = kotlinx.coroutines.runBlocking {
+        val out = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(out).apply {
+            writeInt(7); writeInt(1); writeUTF("Orhan"); writeLong(30); writeInt(1)
+            writeLong(17); writeUTF("user")
+            val text = "voice.m4a".toByteArray(Charsets.UTF_8)
+            writeInt(text.size); write(text); writeUTF("now"); writeLong(12); writeBoolean(false)
+            writeBoolean(true)
+            val transcript = "saved transcript".toByteArray(Charsets.UTF_8)
+            writeInt(transcript.size); write(transcript)
+            writeBoolean(false); writeBoolean(false); flush()
+        }
+        val migrated = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
+        assertEquals("saved transcript", migrated.messages.single().transcript)
+        assertEquals(null, migrated.draft)
     }
 
     @Test fun v6ThreadMigratesWithoutAStoredTranscript() = kotlinx.coroutines.runBlocking {

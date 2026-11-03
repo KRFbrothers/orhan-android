@@ -129,6 +129,9 @@ data class ChatUiState(
     /** True after the saved thread has been applied, including when there was nothing to restore. */
     val threadRestored: Boolean = false,
     val agentId: String? = null,
+    /** Persisted composer text for this conversation; null means no saved draft. */
+    val composerDraft: String? = null,
+    val composerDraftError: String? = null,
 )
 
 class ChatViewModel(
@@ -185,9 +188,21 @@ class ChatViewModel(
             if (saved.messages.isNotEmpty() && _state.value.messages.isEmpty()) {
                 saved.attachments.forEach { (id, a) -> attachmentsById.putIfAbsent(id, a) }
                 val restoredMessages = saved.messagesWithAttachments()
-                _state.update { it.copy(messages = restoredMessages, threadRestored = true, agentId = saved.agentId ?: activeAgentId, error = interruptedHandoffError ?: it.error) }
+                _state.update { it.copy(messages = restoredMessages, threadRestored = true, agentId = saved.agentId ?: activeAgentId, composerDraft = saved.draft, error = interruptedHandoffError ?: it.error) }
             } else {
-                _state.update { it.copy(threadRestored = true, agentId = saved.agentId ?: activeAgentId, error = interruptedHandoffError ?: it.error) }
+                _state.update { it.copy(threadRestored = true, agentId = saved.agentId ?: activeAgentId, composerDraft = saved.draft, error = interruptedHandoffError ?: it.error) }
+            }
+            viewModelScope.launch {
+                _state.map { it.composerDraft }.distinctUntilChanged().collect { draft ->
+                    try {
+                        store.saveDraft(title, draft)
+                        _state.update { it.copy(composerDraftError = null) }
+                    } catch (cancel: CancellationException) {
+                        throw cancel
+                    } catch (_: Exception) {
+                        _state.update { it.copy(composerDraftError = "Draft couldn't be saved. Keep this chat open and try again.") }
+                    }
+                }
             }
             _state.filter { !it.busy }
                 .map { it.messages to pendingHandoffRetry?.toStored() }
@@ -210,10 +225,16 @@ class ChatViewModel(
         val store = threadStore ?: return
         val msgs = _state.value.messages
         val atts = attachmentsById.toMap()
+        val draft = _state.value.composerDraft
         if (msgs.isNotEmpty()) viewModelScope.launch {
             store.save(title, msgs, atts, pendingHandoffRetry = pendingHandoffRetry?.toStored(), agentId = activeAgentId)
             automaticMemory?.onMessagesSaved(title, msgs.map { it.toStored() })
         }
+        if (draft != null) viewModelScope.launch { store.saveDraft(title, draft) }
+    }
+
+    fun setComposerDraft(draft: String?) {
+        _state.update { it.copy(composerDraft = draft) }
     }
 
     private val _state = MutableStateFlow(ChatUiState())

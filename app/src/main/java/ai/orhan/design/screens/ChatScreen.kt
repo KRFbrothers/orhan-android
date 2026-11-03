@@ -254,6 +254,10 @@ fun ChatScreen(
     onSaveMeetingActions: (suspend (List<String>, String, Long) -> Result<String>)? = null,
     /** Prefills the composer once (e.g. from a workflow). Never auto-sent; a restored draft wins. */
     initialComposerText: String = "",
+    /** Draft restored from the conversation store after [threadRestored] becomes true. */
+    restoredComposerDraft: String? = null,
+    onComposerDraftChange: ((String?) -> Unit)? = null,
+    composerDraftError: String? = null,
     /** Scrolls to this message when opening a memory source. Zero means no source. */
     focusMessageId: Long = 0L,
     /** False until the saved thread has been applied, so a missing source is not reported early. */
@@ -266,6 +270,16 @@ fun ChatScreen(
     }
     val messages = messagesOverride ?: localMessages
     var input by rememberSaveable { mutableStateOf(initialComposerText) }
+    var inputEdited by rememberSaveable { mutableStateOf(false) }
+    var composerDraftApplied by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(threadRestored, restoredComposerDraft) {
+        if (threadRestored && !composerDraftApplied) {
+            if (inputEdited) onComposerDraftChange?.invoke(input)
+            else if (restoredComposerDraft != null) input = restoredComposerDraft
+            else if (initialComposerText.isNotEmpty()) onComposerDraftChange?.invoke(initialComposerText)
+            composerDraftApplied = true
+        }
+    }
     val listState = rememberLazyListState()
     var didFocusSource by rememberSaveable { mutableStateOf(false) }
 
@@ -481,6 +495,7 @@ fun ChatScreen(
             )
         }
         input = ""
+        onComposerDraftChange?.invoke("")
     }
 
     fun send() {
@@ -626,9 +641,21 @@ fun ChatScreen(
                 }
             }
         }
+        if (composerDraftError != null) {
+            Text(
+                text = composerDraftError,
+                color = MaterialTheme.colorScheme.error,
+                style = OrhanTextStyles.meta,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
         Composer(
             value = input,
-            onValueChange = { input = it },
+            onValueChange = {
+                input = it
+                inputEdited = true
+                onComposerDraftChange?.invoke(it)
+            },
             onSend = { send() },
             onAttach = { onAttach() },
             onMic = { onMic() },

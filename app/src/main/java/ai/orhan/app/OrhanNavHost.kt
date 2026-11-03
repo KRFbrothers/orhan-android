@@ -689,6 +689,9 @@ fun OrhanNavHost(isDark: Boolean) {
                 initialComposerText = if (workflowRunId.isBlank()) entry.arguments?.getString("draft").orEmpty() else "",
                 focusMessageId = entry.arguments?.getString("message")?.toLongOrNull() ?: 0L,
                 threadRestored = chat.threadRestored,
+                restoredComposerDraft = chat.composerDraft,
+                onComposerDraftChange = chatViewModel::setComposerDraft,
+                composerDraftError = chat.composerDraftError,
                 onOpenChatPreferences = { navController.openSettingsPage(SettingsRoutes.CHAT_PREFERENCES) },
             )
         }

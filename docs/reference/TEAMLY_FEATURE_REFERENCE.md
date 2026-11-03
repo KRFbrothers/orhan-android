@@ -1,9 +1,10 @@
 # Teamily Non-Social Feature Reference — for the Orhan Android Project
 
 **Document type:** Implementation reference / acceptance baseline
+**Structure:** Phase-wise (Phase 1 → Phase 5)
 **Scope:** Chats · Agents · Memory · Artifacts · Meetings
 **Explicitly out of scope:** Discover / Feeds / Explore, public posts, social profile, followers, likes, comments, leaderboards, invites, billing.
-**Version of this document:** 1.0 — 2026-11-02
+**Version of this document:** 2.0 — 2026-11-03 (phase-wise restructure of v1.0)
 
 ---
 
@@ -44,11 +45,27 @@ This document was produced **without access to the Orhan source tree and without
 
 The Memory area contains a view called **"My Profile"**. This is a *memory view* — a generated markdown summary of the user — and is **not** the social profile page. The social profile is out of scope. Do not conflate them when implementing. (documentation-based, S6)
 
+### 0.4 Phase-wise delivery plan
+
+The document is organised into five phases, in the order the Orhan project should build them. Each phase ends with its own **summary** and **open unknowns** so a phase can be signed off independently.
+
+| Phase | Area | Feature IDs | Why this order |
+|---|---|---|---|
+| **Phase 1** | Chats | F1.1 – F1.6 | The substrate. Every other area is reached from, or feeds, a conversation. |
+| **Phase 2** | Agents | F2.1 – F2.6 | Agents are the actors inside chats; they depend on Phase 1 being stable. |
+| **Phase 3** | Memory | F3.1 – F3.8 | Memory is built *from* chats and agent turns; it needs both to exist first. |
+| **Phase 4** | Artifacts | F4.1 – F4.7 | Artifacts are produced by agents and surfaced in Memory; they sit on top of Phases 2–3. |
+| **Phase 5** | Meetings | F5.1 – F5.3 | The least certain area. Build last, and only after the Android entry point is confirmed. |
+
+**How to read each feature block:** every feature carries the same seven fields the Orhan brief asked for — *User goal · Path · Steps & expected result · What is saved / persists after restart · Empty / error states · Connections · Acceptance checks* — plus a **Label**.
+
 ---
 
-## 1. Chats
+# Phase 1 — Chats
 
-### F1.1 — Send a text message, with @mentions
+> **Phase goal:** a user can hold a real conversation — text, mentions, attachments, voice — find anything again, and manage the thread. This is the foundation the other four phases stand on.
+
+## F1.1 — Send a text message, with @mentions
 
 - **Label:** documentation-based
 - **User goal:** Say something to a person, a group, or an agent, and have it appear in the thread immediately.
@@ -66,7 +83,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
   - Empty composer: send control inactive; the mic control is shown instead of send.
   - No conversation selected: a "not found" fallback with a "Back to conversations" action.
   - Send failure: the message is marked as failed and forward/recall are blocked on it (documented). Retry affordance: **unknown**.
-- **Connections:** Feeds F1.2 (actions become available on the sent message), F1.3 (attachments), F1.4 (voice), F2.x (mentioning an agent starts an agent turn), F3.x (the message becomes a memory source).
+- **Connections:** F1.2 (actions become available on the sent message), F1.3 (attachments), F1.4 (voice), F2.x (mentioning an agent starts an agent turn), F3.x (the message becomes a memory source).
 - **Acceptance checks:**
   - [ ] Sending with an empty field is impossible (control disabled, not a silent no-op).
   - [ ] A sent message appears without a manual refresh.
@@ -77,7 +94,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F1.2 — Message actions (reply, copy, forward, translate, transcribe, react, unsend, delete, report)
+## F1.2 — Message actions (reply, copy, forward, translate, transcribe, react, unsend, delete, report)
 
 - **Label:** documentation-based
 - **User goal:** Do something with a message that already exists, without leaving the thread.
@@ -114,7 +131,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F1.3 — Attachments (file, image, video, camera)
+## F1.3 — Attachments (file, image, video, camera)
 
 - **Label:** documentation-based
 - **User goal:** Send a document, photo, or video into the conversation.
@@ -140,7 +157,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F1.4 — Voice messages
+## F1.4 — Voice messages
 
 - **Label:** documentation-based
 - **User goal:** Send a spoken message instead of typing.
@@ -168,7 +185,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F1.5 — History and search
+## F1.5 — History and search
 
 - **Label:** documentation-based
 - **User goal:** Find an old message, file, or voice note — either in this conversation or anywhere.
@@ -198,7 +215,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F1.6 — Conversation-level controls (pin, mute, clear history, delete)
+## F1.6 — Conversation-level controls (pin, mute, clear history, delete)
 
 - **Label:** documentation-based
 - **User goal:** Keep the important threads on top, silence the noisy ones, and get rid of the ones you do not want.
@@ -224,9 +241,30 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-## 2. Agents
+## Phase 1 — Summary
 
-### F2.1 — Create an agent
+Phase 1 covers the six chat behaviours the Orhan brief asked for: sending text with @mentions (F1.1), the full message action set (F1.2), attachments (F1.3), voice (F1.4), history/search (F1.5), and conversation-level controls (F1.6). All six are **documentation-based** — the composer, action sheet, batch-attachment preview, recorder, four-tab search, and pin/mute/clear/delete controls are all described in the published screen reference, and the changelog independently confirms persistent drafts, the Recall→Unsend rename, resumable uploads, the 60 s auto-transcript, and the indexed search. Nothing in this phase is device-verified.
+
+The phase is buildable as specified **except** for two behaviours that must be settled first: the scope of message *delete* (local vs. for everyone) and the attachment *upload-failure* UI. Both are marked **unknown** and both affect user-visible copy and retry design.
+
+## Phase 1 — Open unknowns
+
+| # | Unknown | Feature | Why it matters |
+|---|---|---|---|
+| P1-U1 | Scope of **message delete** — local vs. for everyone | F1.2 | Affects the confirmation copy and the data model |
+| P1-U2 | **Upload failure** UI for attachments | F1.3 | Affects retry design |
+| P1-U3 | Retry affordance on a **failed send** | F1.1 | Affects the failed-message state |
+| P1-U4 | **Microphone permission denied** UI | F1.4 | Affects the recorder's error path |
+| P1-U5 | Empty **recents** state in global search | F1.5 | Affects polish and acceptance |
+| P1-U6 | Whether `@` opens a picker in a **1:1** chat | F1.1 | Affects the mention component's scope |
+
+---
+
+# Phase 2 — Agents
+
+> **Phase goal:** a user can create, configure, and remove an agent; give it tools; define how work moves between agents; and hand work off. Depends on Phase 1 (agents live inside chats).
+
+## F2.1 — Create an agent
 
 - **Label:** documentation-based
 - **User goal:** Get a new AI agent that appears in your contacts and can be dropped into a conversation.
@@ -250,7 +288,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F2.2 — Edit or delete an agent
+## F2.2 — Edit or delete an agent
 
 - **Label:** documentation-based
 - **User goal:** Change how an agent looks and is described, or remove it.
@@ -275,7 +313,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F2.3 — Agent instructions / persona
+## F2.3 — Agent instructions / persona
 
 - **Label:** inferred (with a large unknown)
 - **User goal:** Tell the agent who it is, how it should behave, and what it should refuse.
@@ -294,7 +332,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F2.4 — Agent tools: skills and connectors
+## F2.4 — Agent tools: skills and connectors
 
 - **Label:** documentation-based
 - **User goal:** Give an agent extra capabilities — packaged skills, and access to third-party apps.
@@ -324,7 +362,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F2.5 — Workflows (Agent Flows, automations)
+## F2.5 — Workflows (Agent Flows, automations)
 
 - **Label:** documentation-based
 - **User goal:** Define, once, how work moves between agents — and optionally run it on a schedule.
@@ -350,7 +388,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F2.6 — Handoffs between agents
+## F2.6 — Handoffs between agents
 
 - **Label:** documentation-based (mechanism) / inferred (semantics)
 - **User goal:** Have one agent pass work to another instead of you re-briefing each one.
@@ -373,11 +411,32 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-## 3. Memory
+## Phase 2 — Summary
 
+Phase 2 covers agent creation (F2.1), editing/deletion (F2.2), instructions (F2.3), tools — skills and connectors (F2.4), workflows — Agent Flows and automations (F2.5), and handoffs (F2.6). Five of the six are **documentation-based**: the create dialog, the avatar-crop editor with dirty-state Save, the three-tab skill editor, the OAuth connector directory, the flow canvas with publish/@mention-trigger, the automation builder's four chips, and the flow-connector handoff mechanism are all described in the published screen reference and/or the changelog.
+
+**F2.3 (agent instructions) is the single largest gap in the whole document.** The documented editor exposes only avatar, nickname, and description — there is no documented free-text instructions or system-prompt field, and Teamily's public copy says agents are "created by chatting". Until a real agent's settings are inspected, the entire "Agents → instructions" requirement cannot be specified. Do not build it from this document.
+
+## Phase 2 — Open unknowns
+
+| # | Unknown | Feature | Why it matters |
+|---|---|---|---|
+| P2-U1 | Whether a dedicated **instructions / system-prompt** field exists | F2.3 | **Blocks the entire "Agents → instructions" requirement** |
+| P2-U2 | Exact **Agent Flows** route on Android | F2.5 | Affects navigation wiring |
+| P2-U3 | In-app message when the **agent quota** is reached | F2.1 | Affects the create flow's error state |
+| P2-U4 | Whether an **in-flight handoff** resumes after restart | F2.6 | Affects the handoff state model |
+| P2-U5 | Runtime behaviour of a flow with a **dangling connector** | F2.6 | Affects flow validation |
+| P2-U6 | Whether a **connector toggle off** truly blocks the agent | F2.4 | Affects the trust model of the toggle |
+
+---
+
+# Phase 3 — Memory
+
+> **Phase goal:** the system captures what mattered from conversations, organises it into editable topics, and lets the user see, correct, and trace it. Depends on Phases 1–2 (memory is built from chats and agent turns).
+>
 > **Framing:** Teamily describes memory as *living memory* — it "continuously builds and reorganizes itself from every conversation", and is explicitly **not** a searchable chat history. (Verified: this wording appears on the public landing page.) The Memory workspace is a two-pane knowledge base: a left index (search, All/Updates/Tags filters, reserved views, grouped page list) and a main area that switches between Overview, a page detail, My Profile, To-dos, and an Artifacts gallery. The `page` parameter selects what the main area shows. (documentation-based, S6)
 
-### F3.1 — Automatic memories
+## F3.1 — Automatic memories
 
 - **Label:** documentation-based
 - **User goal:** Not have to write anything down — the system captures what mattered from conversations.
@@ -403,7 +462,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F3.2 — Topics (memory pages)
+## F3.2 — Topics (memory pages)
 
 - **Label:** documentation-based (page model) / inferred (that "topics" == pages)
 - **User goal:** Have one durable place per subject, which you can read and correct.
@@ -431,7 +490,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F3.3 — Tags
+## F3.3 — Tags
 
 - **Label:** documentation-based
 - **User goal:** Group memories across topics so you can pull up everything about one theme.
@@ -453,7 +512,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F3.4 — Updates
+## F3.4 — Updates
 
 - **Label:** documentation-based
 - **User goal:** See what changed recently — new memories, edits, and conflicts — without hunting.
@@ -476,7 +535,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F3.5 — My Profile (memory view)
+## F3.5 — My Profile (memory view)
 
 - **Label:** documentation-based
 - **User goal:** Read the system's current understanding of you, and correct it by regenerating.
@@ -499,7 +558,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F3.6 — Next Actions (the "To-dos" view)
+## F3.6 — Next Actions (the "To-dos" view)
 
 - **Label:** inferred (that "Next Actions" is the To-dos view) / documentation-based (the view itself)
 - **User goal:** See what you committed to, without re-reading conversations.
@@ -522,7 +581,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F3.7 — Overview (knowledge graph)
+## F3.7 — Overview (knowledge graph)
 
 - **Label:** documentation-based
 - **User goal:** See the shape of what the system knows, and jump into any part of it.
@@ -546,7 +605,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F3.8 — Source-chat connections
+## F3.8 — Source-chat connections
 
 - **Label:** documentation-based
 - **User goal:** Check where a memory came from, and get back to the conversation that produced it.
@@ -567,11 +626,32 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-## 4. Artifacts
+## Phase 3 — Summary
 
+Phase 3 covers automatic memories (F3.1), topics/pages (F3.2), tags (F3.3), Updates (F3.4), My Profile (F3.5), Next Actions/To-dos (F3.6), Overview graph (F3.7), and source-chat connections (F3.8). Seven of the eight are **documentation-based**; the "living memory" framing itself is **Verified** from the public landing page. The page model (title/summary/tags/markdown body, autosave, version history, 30-day trash, 409 Overwrite/Discard), the AND-semantics of tag filters, the Updates feed, the read-only Profile and To-dos views with Dream refresh, the force-directed Overview graph, and the source-chat link are all described in the published screen reference.
+
+Two items need confirmation before they become requirements: the **shipped label** for the To-dos view (the Orhan brief calls it "Next Actions"), and whether **meeting minutes feed into** the To-dos view. Both are marked **inferred**.
+
+## Phase 3 — Open unknowns
+
+| # | Unknown | Feature | Why it matters |
+|---|---|---|---|
+| P3-U1 | Shipped label — **"To-dos" vs "Next Actions"** | F3.6 | Affects the Orhan UI copy |
+| P3-U2 | Empty-state copy for **Updates** | F3.4 | Affects polish and acceptance |
+| P3-U3 | Whether the **Updates feed** is "read" and resets | F3.4 | Affects the badge model |
+| P3-U4 | Empty-state for **source chats** (hidden vs. label) | F3.8 | Affects polish |
+| P3-U5 | Behaviour when a **source conversation is deleted** | F3.8 | Affects referential integrity |
+| P3-U6 | Whether **minutes are written into Memory** as pages | F3.6 / F5.2 | Determines the Memory↔Meetings integration |
+
+---
+
+# Phase 4 — Artifacts
+
+> **Phase goal:** agents ship real deliverables — documents, markdown, web pages, media — that the user can edit, save, export, and share. Depends on Phases 2–3 (artifacts are produced by agents and surfaced in Memory).
+>
 > **Framing:** Teamily's public material describes "chat in, artifacts out" — agents ship web pages, slides, video, images, docs and whiteboards straight from a conversation, and every artifact is built with the context of the thread behind it. (Verified: this wording appears in Teamily's public article.) The changelog records `/docs` being renamed to `/artifacts`, with the sidebar label settling on **Artifacts**. (Verified: changelog entry.)
 
-### F4.1 — Document artifacts
+## F4.1 — Document artifacts
 
 - **Label:** documentation-based
 - **User goal:** Produce a real, editable document from a conversation and keep working on it with others.
@@ -595,7 +675,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F4.2 — Markdown artifacts
+## F4.2 — Markdown artifacts
 
 - **Label:** documentation-based
 - **User goal:** Get a clean, portable text artifact you can take anywhere.
@@ -616,7 +696,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F4.3 — Webpage / web app artifacts
+## F4.3 — Webpage / web app artifacts
 
 - **Label:** documentation-based
 - **User goal:** Ship a working page or small app from a conversation, with a link you can share.
@@ -641,7 +721,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F4.4 — Media artifacts (image, video, slides)
+## F4.4 — Media artifacts (image, video, slides)
 
 - **Label:** documentation-based
 - **User goal:** Get a visual deliverable — a poster, a clip, a deck — without leaving the chat.
@@ -664,7 +744,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F4.5 — Saved messages (Saves)
+## F4.5 — Saved messages (Saves)
 
 - **Label:** documentation-based
 - **User goal:** Keep a message or a finished card for later, without scrolling back to find it.
@@ -689,7 +769,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F4.6 — Editing artifacts (Studio)
+## F4.6 — Editing artifacts (Studio)
 
 - **Label:** documentation-based
 - **User goal:** Change the artifact in place, with the team, instead of asking the agent to regenerate it.
@@ -721,7 +801,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F4.7 — Export and share
+## F4.7 — Export and share
 
 - **Label:** documentation-based
 - **User goal:** Get the artifact out of Teamily, or give someone a link to it.
@@ -750,11 +830,31 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-## 5. Meetings
+## Phase 4 — Summary
 
-> **Support status:** Meetings are **partially supported and unevenly documented**. Teamily's public changelog contains concrete meeting entries, but the published screen reference for the mobile client contains **no meeting screen at all**, and the web route list contains no meeting route. Treat this whole section as the least certain part of the document.
+Phase 4 covers document artifacts (F4.1), markdown artifacts (F4.2), webpage/web-app artifacts (F4.3), media artifacts (F4.4), saved messages (F4.5), in-place editing in Studio (F4.6), and export/share (F4.7). All seven are **documentation-based**; the "chat in, artifacts out" framing and the `/docs` → `/artifacts` rename are **Verified** from Teamily's public article and changelog. The docx editor with live presence, the markdown source-mode toggle, the webpage version picker and element editing, the per-type viewers, save-as-card with shelve-by-kind, the Studio mode toolbar, and the share/download/download-all controls are all described in the published screen reference.
 
-### F5.1 — Recording
+The phase is buildable as specified. The one behaviour worth confirming is whether **markup strokes** are persisted as artifact content (marked **inferred**), since it affects the artifact data model.
+
+## Phase 4 — Open unknowns
+
+| # | Unknown | Feature | Why it matters |
+|---|---|---|---|
+| P4-U1 | Whether **markup strokes** are persisted as content | F4.6 | Affects the artifact data model |
+| P4-U2 | Empty-state copy for **Saves** | F4.5 | Affects polish and acceptance |
+| P4-U3 | Behaviour of a **saved row whose source was deleted** | F4.5 | Affects referential integrity |
+| P4-U4 | **Media load failure** UI | F4.4 | Affects the viewer's error path |
+| P4-U5 | Empty **markdown** artifact state | F4.2 | Affects polish |
+
+---
+
+# Phase 5 — Meetings
+
+> **Phase goal:** capture a meeting, turn it into minutes, and play it back — **if** the platform supports it. Build last, and only after the Android entry point is confirmed.
+>
+> **Support status:** Meetings are **partially supported and unevenly documented**. Teamily's public changelog contains concrete meeting entries, but the published screen reference for the mobile client contains **no meeting screen at all**, and the web route list contains no meeting route. Treat this whole phase as the least certain part of the document.
+
+## F5.1 — Recording
 
 - **Label:** documentation-based (existence and limits) / unknown (Android specifics)
 - **User goal:** Capture a meeting's audio so it can be turned into minutes.
@@ -782,7 +882,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F5.2 — Minutes
+## F5.2 — Minutes
 
 - **Label:** documentation-based (existence) / unknown (structure and quality)
 - **User goal:** Get a structured summary of the meeting — decisions, action items, owners — without writing it.
@@ -804,7 +904,7 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
-### F5.3 — Playback
+## F5.3 — Playback
 
 - **Label:** documentation-based (player behaviour) / unknown (meeting-specific playback)
 - **User goal:** Re-listen to what was said, and jump to the relevant moment.
@@ -827,57 +927,84 @@ The Memory area contains a view called **"My Profile"**. This is a *memory view*
 
 ---
 
+## Phase 5 — Summary
+
+Phase 5 covers meeting recording (F5.1), minutes (F5.2), and playback (F5.3). This is the **weakest phase**: the changelog confirms concrete behaviour (a 4-hour recording cap, background meeting detection, a Meeting Minutes badge, a seekable player, recording into Personal AI), but the published mobile screen reference contains **no meeting screen at all** and the web route list contains no meeting route. The Android entry point for recording is **unknown**, the on-screen structure of the minutes is **unknown**, and whether playback is synced to the transcript is **unknown**.
+
+**Recommendation:** do not build Phase 5 from this document. First establish whether Meetings exist on Android at all. If they do not, cut the area rather than build a guess; if they do, walk a real recording end-to-end and fill in the unknowns before writing any UI.
+
+## Phase 5 — Open unknowns
+
+| # | Unknown | Feature | Why it matters |
+|---|---|---|---|
+| P5-U1 | **Android entry point** for meeting recording | F5.1 | **Blocks the Meetings area on the target platform** |
+| P5-U2 | On-screen **structure of meeting minutes** | F5.2 | Blocks the minutes UI |
+| P5-U3 | Whether **transcript-to-audio sync** exists | F5.3 | Determines whether playback is a player or a transcript reader |
+| P5-U4 | Whether **minutes are written into Memory** as pages | F5.2 | Determines the Memory↔Meetings integration |
+| P5-U5 | Behaviour at the **4-hour cap** | F5.1 | Affects the recording error state |
+| P5-U6 | **Microphone permission denied** UI for meetings | F5.1 | Affects the recorder's error path |
+| P5-U7 | Whether **playback position** persists | F5.3 | Affects the player's state model |
+
+---
+
+# Consolidated reference
+
 ## 6. Summary table
 
-| ID | Feature | Area | Label | Confidence note |
+| ID | Feature | Phase | Label | Confidence note |
 |---|---|---|---|---|
-| F1.1 | Send text message + @mentions | Chats | documentation-based | Composer, mentions, drafts well described |
-| F1.2 | Message actions | Chats | documentation-based | Full action list documented; delete scope unknown |
-| F1.3 | Attachments | Chats | documentation-based | Batch preview documented; failure UI unknown |
-| F1.4 | Voice messages | Chats | documentation-based | Recorder + 60 s auto-transcript documented |
-| F1.5 | History & search | Chats | documentation-based | Four-tab in-chat search documented |
-| F1.6 | Conversation controls | Chats | documentation-based | Pin/mute/clear/delete documented |
-| F2.1 | Create agent | Agents | documentation-based | Dialog + post-create routing documented |
-| F2.2 | Edit / delete agent | Agents | documentation-based | Avatar crop, dirty-state Save documented |
-| F2.3 | Agent instructions | Agents | **inferred** | **No documented instructions field — largest gap** |
-| F2.4 | Tools: skills & connectors | Agents | documentation-based | Three-tab skill editor, OAuth connectors |
-| F2.5 | Workflows (Flows, automations) | Agents | documentation-based | Flow canvas + automation builder documented |
-| F2.6 | Handoffs | Agents | documentation-based | Flow connectors documented; runtime semantics partly inferred |
-| F3.1 | Automatic memories | Memory | documentation-based | Living memory + Dream documented |
-| F3.2 | Topics (pages) | Memory | documentation-based | Full page model + version history documented |
-| F3.3 | Tags | Memory | documentation-based | AND semantics documented |
-| F3.4 | Updates | Memory | documentation-based | Feed documented; empty state unknown |
-| F3.5 | My Profile | Memory | documentation-based | Read-only + Dream refresh documented |
-| F3.6 | Next Actions (To-dos) | Memory | **inferred** | View documented; the "Next Actions" name is a mapping |
-| F3.7 | Overview (graph) | Memory | documentation-based | Force-directed graph documented |
-| F3.8 | Source-chat connections | Memory | documentation-based | Link documented; deleted-source behaviour unknown |
-| F4.1 | Document artifacts | Artifacts | documentation-based | docx editor + collaboration documented |
-| F4.2 | Markdown artifacts | Artifacts | documentation-based | Source-mode toggle documented |
-| F4.3 | Webpage / web app | Artifacts | documentation-based | Versions, element editing documented |
-| F4.4 | Media artifacts | Artifacts | documentation-based | Per-type viewers documented |
-| F4.5 | Saved messages | Artifacts | documentation-based | Save-as-card, shelve-by-kind documented |
-| F4.6 | Editing (Studio) | Artifacts | documentation-based | Modes, presence, route errors documented |
-| F4.7 | Export & share | Artifacts | documentation-based | Share/download/download-all documented |
-| F5.1 | Meeting recording | Meetings | documentation-based | 4 h cap, detection documented; Android path unknown |
-| F5.2 | Meeting minutes | Meetings | documentation-based | Existence + badge documented; structure unknown |
-| F5.3 | Meeting playback | Meetings | documentation-based | Seekable player documented; transcript sync unknown |
+| F1.1 | Send text message + @mentions | 1 — Chats | documentation-based | Composer, mentions, drafts well described |
+| F1.2 | Message actions | 1 — Chats | documentation-based | Full action list documented; delete scope unknown |
+| F1.3 | Attachments | 1 — Chats | documentation-based | Batch preview documented; failure UI unknown |
+| F1.4 | Voice messages | 1 — Chats | documentation-based | Recorder + 60 s auto-transcript documented |
+| F1.5 | History & search | 1 — Chats | documentation-based | Four-tab in-chat search documented |
+| F1.6 | Conversation controls | 1 — Chats | documentation-based | Pin/mute/clear/delete documented |
+| F2.1 | Create agent | 2 — Agents | documentation-based | Dialog + post-create routing documented |
+| F2.2 | Edit / delete agent | 2 — Agents | documentation-based | Avatar crop, dirty-state Save documented |
+| F2.3 | Agent instructions | 2 — Agents | **inferred** | **No documented instructions field — largest gap** |
+| F2.4 | Tools: skills & connectors | 2 — Agents | documentation-based | Three-tab skill editor, OAuth connectors |
+| F2.5 | Workflows (Flows, automations) | 2 — Agents | documentation-based | Flow canvas + automation builder documented |
+| F2.6 | Handoffs | 2 — Agents | documentation-based | Flow connectors documented; runtime semantics partly inferred |
+| F3.1 | Automatic memories | 3 — Memory | documentation-based | Living memory + Dream documented |
+| F3.2 | Topics (pages) | 3 — Memory | documentation-based | Full page model + version history documented |
+| F3.3 | Tags | 3 — Memory | documentation-based | AND semantics documented |
+| F3.4 | Updates | 3 — Memory | documentation-based | Feed documented; empty state unknown |
+| F3.5 | My Profile | 3 — Memory | documentation-based | Read-only + Dream refresh documented |
+| F3.6 | Next Actions (To-dos) | 3 — Memory | **inferred** | View documented; the "Next Actions" name is a mapping |
+| F3.7 | Overview (graph) | 3 — Memory | documentation-based | Force-directed graph documented |
+| F3.8 | Source-chat connections | 3 — Memory | documentation-based | Link documented; deleted-source behaviour unknown |
+| F4.1 | Document artifacts | 4 — Artifacts | documentation-based | docx editor + collaboration documented |
+| F4.2 | Markdown artifacts | 4 — Artifacts | documentation-based | Source-mode toggle documented |
+| F4.3 | Webpage / web app | 4 — Artifacts | documentation-based | Versions, element editing documented |
+| F4.4 | Media artifacts | 4 — Artifacts | documentation-based | Per-type viewers documented |
+| F4.5 | Saved messages | 4 — Artifacts | documentation-based | Save-as-card, shelve-by-kind documented |
+| F4.6 | Editing (Studio) | 4 — Artifacts | documentation-based | Modes, presence, route errors documented |
+| F4.7 | Export & share | 4 — Artifacts | documentation-based | Share/download/download-all documented |
+| F5.1 | Meeting recording | 5 — Meetings | documentation-based | 4 h cap, detection documented; Android path unknown |
+| F5.2 | Meeting minutes | 5 — Meetings | documentation-based | Existence + badge documented; structure unknown |
+| F5.3 | Meeting playback | 5 — Meetings | documentation-based | Seekable player documented; transcript sync unknown |
 
-### 6.1 Items that are **unknown** and must be resolved before implementation
+## 6.1 All open unknowns (consolidated)
 
-| # | Unknown | Why it matters |
-|---|---|---|
-| U1 | Whether a dedicated agent **instructions / system-prompt** field exists (F2.3) | Blocks the entire "Agents → instructions" requirement |
-| U2 | Android entry point for **meeting recording** (F5.1) | Blocks the Meetings area on the target platform |
-| U3 | On-screen **structure of meeting minutes** (F5.2) | Blocks the minutes UI |
-| U4 | Whether **transcript-to-audio sync** exists (F5.3) | Determines whether playback is a player or a transcript reader |
-| U5 | Scope of **message delete** — local vs. for everyone (F1.2) | Affects the confirmation copy and the data model |
-| U6 | **Upload failure** UI for attachments (F1.3) | Affects retry design |
-| U7 | Empty-state copy for **Updates**, **Saves**, **source chats** (F3.4, F4.5, F3.8) | Affects polish and acceptance |
-| U8 | Whether **minutes are written into Memory** as pages (F5.2) | Determines the Memory↔Meetings integration |
-| U9 | Whether **markup strokes** are persisted as content (F4.6) | Affects the artifact data model |
-| U10 | Behaviour when a **source conversation is deleted** (F3.8) | Affects referential integrity |
+| # | Unknown | Phase / Feature | Why it matters |
+|---|---|---|---|
+| U1 | Whether a dedicated agent **instructions / system-prompt** field exists | 2 / F2.3 | **Blocks the entire "Agents → instructions" requirement** |
+| U2 | Android entry point for **meeting recording** | 5 / F5.1 | **Blocks the Meetings area on the target platform** |
+| U3 | On-screen **structure of meeting minutes** | 5 / F5.2 | Blocks the minutes UI |
+| U4 | Whether **transcript-to-audio sync** exists | 5 / F5.3 | Determines whether playback is a player or a transcript reader |
+| U5 | Scope of **message delete** — local vs. for everyone | 1 / F1.2 | Affects the confirmation copy and the data model |
+| U6 | **Upload failure** UI for attachments | 1 / F1.3 | Affects retry design |
+| U7 | Empty-state copy for **Updates**, **Saves**, **source chats** | 3–4 / F3.4, F4.5, F3.8 | Affects polish and acceptance |
+| U8 | Whether **minutes are written into Memory** as pages | 5 / F5.2 | Determines the Memory↔Meetings integration |
+| U9 | Whether **markup strokes** are persisted as content | 4 / F4.6 | Affects the artifact data model |
+| U10 | Behaviour when a **source conversation is deleted** | 3 / F3.8 | Affects referential integrity |
+| U11 | Shipped label — **"To-dos" vs "Next Actions"** | 3 / F3.6 | Affects the Orhan UI copy |
+| U12 | Exact **Agent Flows** route on Android | 2 / F2.5 | Affects navigation wiring |
+| U13 | Whether an **in-flight handoff** resumes after restart | 2 / F2.6 | Affects the handoff state model |
+| U14 | Whether a **connector toggle off** truly blocks the agent | 2 / F2.4 | Affects the trust model of the toggle |
+| U15 | **Microphone permission denied** UI (voice + meetings) | 1, 5 / F1.4, F5.1 | Affects the recorder's error path |
 
-### 6.2 Recommended verification order
+## 6.2 Recommended verification order
 
 1. **F2.3** — open a real agent's settings and settle the instructions question. Everything in Agents depends on it.
 2. **F5.1–F5.3** — establish whether Meetings exist on Android at all. If not, cut the area rather than build a guess.
