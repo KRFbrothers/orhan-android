@@ -15,6 +15,9 @@ internal fun meetingActionItems(minutes: String): List<String> {
             trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("\u2022 ") -> trimmed.drop(2).trim()
             else -> Regex("^\\d+[.)]\\s+(.+?)\\s*$").matchEntire(trimmed)?.groupValues?.get(1).orEmpty()
         }
+        val placeholder = trimmed.equals("None", true) || trimmed.equals("Unspecified", true)
+        // A plain-text line that is neither a list item nor a placeholder starts a new section.
+        if (item.isBlank() && trimmed.isNotEmpty() && !placeholder) break
         if (item.isNotBlank() && !item.equals("None", ignoreCase = true) && !item.equals("Unspecified", ignoreCase = true)) {
             result += item.take(2_000)
             if (result.size == 20) break
