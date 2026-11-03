@@ -95,7 +95,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
@@ -974,8 +973,9 @@ private fun AttachmentMessagePreview(attachment: ChatAttachment) {
     if (attachment.mimeType.startsWith("audio/")) {
         AudioAttachmentPlayer(attachment)
     } else if (attachment.mimeType.startsWith("image/")) {
-        val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, attachment.base64) {
-            value = withContext(Dispatchers.Default) {
+        var bitmap by remember(attachment.base64) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+        LaunchedEffect(attachment.base64) {
+            bitmap = withContext(Dispatchers.Default) {
                 runCatching {
                     val bytes = Base64.decode(attachment.base64, Base64.DEFAULT)
                     val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -1034,7 +1034,8 @@ private fun AttachmentMessagePreview(attachment: ChatAttachment) {
 @Composable
 private fun AudioAttachmentPlayer(attachment: ChatAttachment) {
     val context = LocalContext.current
-    val loaded by produceState<Pair<java.io.File?, Boolean>>(null to false, attachment.base64, attachment.name) {
+    var loaded by remember(attachment.base64, attachment.name) { mutableStateOf<Pair<java.io.File?, Boolean>>(null to false) }
+    LaunchedEffect(attachment.base64, attachment.name) {
         val file = withContext(Dispatchers.IO) {
             runCatching {
                 val suffix = attachment.name.substringAfterLast('.', "audio").filter { it.isLetterOrDigit() }.take(8).ifBlank { "audio" }
@@ -1043,7 +1044,7 @@ private fun AudioAttachmentPlayer(attachment: ChatAttachment) {
                 }
             }.getOrNull()
         }
-        value = file to true
+        loaded = file to true
     }
     val audioFile = loaded.first
     val fileReady = loaded.second

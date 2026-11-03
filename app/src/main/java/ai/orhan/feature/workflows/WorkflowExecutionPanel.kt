@@ -6,6 +6,7 @@ import ai.orhan.data.workflows.WorkflowExecution
 import ai.orhan.data.workflows.WorkflowExecutionRepository
 import ai.orhan.data.workflows.ExecutionStatus
 import ai.orhan.data.workflows.WorkflowAutomation
+import ai.orhan.data.workflows.WorkflowHttpException
 import ai.orhan.feature.settings.detail.FootNote
 import ai.orhan.feature.settings.detail.SectionLabel
 import androidx.compose.foundation.layout.Arrangement
@@ -106,7 +107,9 @@ fun WorkflowExecutionPanel(
             while (isActive) {
                 try { lock.withLock { refresh() } }
                 catch (cancel: CancellationException) { throw cancel }
-                catch (e: Exception) { historyError = e.message ?: "Workflow history could not be refreshed." }
+                catch (e: Exception) { historyError = if (e is WorkflowHttpException) {
+                    "${e.message}. Diagnostic: ${e.apiOrigin}${e.path}, ${e.safeErrorCode}, request ${e.requestId ?: "unavailable"}."
+                } else e.message ?: "Workflow history could not be refreshed." }
                 delay(5000)
             }
         }

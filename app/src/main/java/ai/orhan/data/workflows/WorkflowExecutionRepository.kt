@@ -4,6 +4,7 @@ import ai.orhan.BuildConfig
 import ai.orhan.data.agents.SavedAgent
 import android.content.Context
 import android.util.Base64
+import android.util.Log
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -42,6 +43,15 @@ data class WorkflowExecution(
 }
 data class WorkflowAutomation(val id: String, val title: String, val kind: String, val revision: Int, val enabled: Boolean,
     val intervalSeconds: Int?, val nextDue: String?, val lastSkippedAt: String?)
+
+class WorkflowHttpException(
+    val statusCode: Int,
+    val apiOrigin: String,
+    val path: String,
+    val safeErrorCode: String,
+    val safeMessage: String,
+    val requestId: String?,
+) : IOException("$safeMessage (HTTP $statusCode)")
 
 /** Authoritative server executions stay separate from the pre-existing local chat ledger. */
 class WorkflowExecutionRepository(
@@ -141,7 +151,8 @@ class WorkflowExecutionRepository(
         val origin = URL(baseUrl)
         require(origin.protocol == "https" && origin.userInfo == null && origin.query == null && origin.ref == null && origin.path in listOf("", "/")) { "Workflow API URL must be an HTTPS origin." }
         val token = tokenProvider() ?: throw IOException("Sign in from Profile to use server workflows.")
-        val conn = URL(baseUrl.trimEnd('/') + route + suffix).openConnection() as HttpURLConnection
+        val requestUrl = URL(baseUrl.trimEnd('/') + route + suffix)
+        val conn = requestUrl.openConnection() as HttpURLConnection
         coroutineScope {
             val disconnect = launch(Dispatchers.IO) { try { awaitCancellation() } finally { conn.disconnect() } }
             try {
@@ -157,6 +168,8 @@ class WorkflowExecutionRepository(
                     conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
                 }
                 val code = conn.responseCode
+                val requestId = sequenceOf("X-Request-Id", "X-Correlation-Id", "Trace-Id")
+                    .mapNotNull { conn.getHeaderField(it) }.firstOrNull { it.matches(Regex("[A-Za-z0-9._:-]{1,100}")) }
                 val bytes = (if (code in 200..299) conn.inputStream else conn.errorStream)?.use { input ->
                     val output = java.io.ByteArrayOutputStream()
                     val chunk = ByteArray(8192)
@@ -171,8 +184,27 @@ class WorkflowExecutionRepository(
                     ?: throw IOException("Workflow service returned no response.")
                 if (bytes.size > 2 * 1024 * 1024) throw IOException("Workflow response is too large.")
                 val json = runCatching { JSONObject(String(bytes, Charsets.UTF_8)) }.getOrNull()
-                if (code !in 200..299) throw IOException(json?.optString("error")?.takeIf { it.isNotBlank() }
-                    ?: if (code == 404) "The requested workflow API is not deployed on this service." else "Workflow request failed (HTTP $code).")
+                if (code !in 200..299) {
+                    val rawCode = json?.optString("code")?.takeIf { it.isNotBlank() }
+                        ?: json?.optString("errorCode")?.takeIf { it.isNotBlank() }
+                    val (safeCode, safeMessage) = when (rawCode?.uppercase()) {
+                        "NOT_FOUND", "RUN_NOT_FOUND" -> "NOT_FOUND" to "The requested workflow resource was not found."
+                        "UNAUTHORIZED", "AUTH_REQUIRED", "INVALID_TOKEN" -> "AUTH_REQUIRED" to "Sign in again to use server workflows."
+                        "FORBIDDEN", "OWNER_MISMATCH" -> "FORBIDDEN" to "This account cannot access the requested workflow."
+                        "MIGRATION_REQUIRED", "SCHEMA_MISSING" -> "SCHEMA_UNAVAILABLE" to "Workflow storage is not ready on the service."
+                        "DATABASE_UNAVAILABLE", "STORAGE_UNAVAILABLE" -> "STORAGE_UNAVAILABLE" to "Workflow storage is temporarily unavailable."
+                        else -> when (code) {
+                            401 -> "AUTH_REQUIRED" to "Sign in again to use server workflows."
+                            403 -> "FORBIDDEN" to "This account cannot access the requested workflow."
+                            404 -> "NOT_FOUND" to "The workflow endpoint or requested resource was not found."
+                            in 500..599 -> "SERVICE_ERROR" to "The workflow service could not complete the request."
+                            else -> "HTTP_ERROR" to "Workflow request failed with HTTP $code."
+                        }
+                    }
+                    val path = requestUrl.path.take(180)
+                    if (BuildConfig.DEBUG) Log.w("WorkflowHttp", "origin=${requestUrl.originForDiagnostic()} path=$path status=$code errorCode=$safeCode message=$safeMessage requestId=${requestId ?: "none"}")
+                    throw WorkflowHttpException(code, requestUrl.originForDiagnostic(), path, safeCode, safeMessage, requestId)
+                }
                 json ?: throw IOException("Workflow service returned an invalid response.")
             } finally { disconnect.cancel(); conn.disconnect() }
         }
@@ -195,5 +227,7 @@ class WorkflowExecutionRepository(
             if (row.isNull("intervalSeconds")) null else row.getInt("intervalSeconds"), row.optionalText("nextDue"), row.optionalText("lastSkippedAt"))
     }
 }
+
+private fun URL.originForDiagnostic(): String = "$protocol://${host}${if (port == -1) "" else ":$port"}"
 
 private fun JSONObject.optionalText(key: String): String? = if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() }
