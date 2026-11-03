@@ -11,7 +11,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import ai.orhan.data.agents.SavedAgent
 import ai.orhan.data.agents.agentAvatarFiles
 import ai.orhan.feature.settings.detail.FootNote
 import ai.orhan.feature.settings.detail.SectionLabel
@@ -21,7 +20,8 @@ import androidx.compose.runtime.remember
 
 @Composable
 fun AgentProfileScreen(
-    agent: SavedAgent?,
+    profile: ResolvedAgentProfile?,
+    loading: Boolean,
     onBack: () -> Unit,
     onChat: () -> Unit,
     onEdit: (() -> Unit)?,
@@ -29,19 +29,30 @@ fun AgentProfileScreen(
 ) {
     val context = LocalContext.current
     val avatarFiles = remember(context) { context.agentAvatarFiles() }
-    SettingsDetailScaffold(title = agent?.name ?: "Agent unavailable", onBack = onBack) {
+    val agent = profile?.agent
+    val saved = profile?.savedAgent
+    SettingsDetailScaffold(title = if (loading) "Agent" else agent?.name ?: "Agent unavailable", onBack = onBack) {
+        if (loading) {
+            Text("Loading agent…", modifier = Modifier.padding(20.dp))
+            return@SettingsDetailScaffold
+        }
         if (agent == null) {
             Text("This agent was deleted or is no longer available.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
             return@SettingsDetailScaffold
         }
-        AgentAvatarImage(avatarFiles.path(agent.avatarFileName), ai.orhan.R.drawable.agent_webpage, 88.dp, "${agent.name} avatar")
+        AgentAvatarImage(avatarFiles.path(saved?.avatarFileName) ?: agent.avatarPath, agent.avatar, 88.dp, "${agent.name} avatar")
         Spacer(Modifier.height(16.dp))
         Text(agent.name, style = MaterialTheme.typography.headlineSmall)
         if (agent.blurb.isNotBlank()) Text(agent.blurb, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        SectionLabel("Instructions")
-        Text(agent.instructions.ifBlank { "No custom instructions." }, style = MaterialTheme.typography.bodyMedium)
+        if (saved != null) {
+            SectionLabel("Instructions")
+            Text(saved.instructions.ifBlank { "No custom instructions." }, style = MaterialTheme.typography.bodyMedium)
+        }
         SectionLabel("Capabilities")
-        FootNote("Per-agent tool enforcement is unavailable in the chat service contract. Existing saved tool preferences are retained but inactive.")
+        if (saved?.toolsRestricted == true) {
+            Text(saved.tools.joinToString(", ").ifBlank { "No tools selected." }, style = MaterialTheme.typography.bodyMedium)
+        }
+        FootNote("Tool availability is checked by the connected service when you send a message.")
         Spacer(Modifier.height(20.dp))
         Button(onClick = onChat, modifier = Modifier.fillMaxWidth()) { Text("Open agent chat") }
         if (onEdit != null) TextButton(onClick = onEdit, modifier = Modifier.fillMaxWidth()) { Text("Edit profile and instructions") }

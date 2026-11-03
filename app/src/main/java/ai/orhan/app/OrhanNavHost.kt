@@ -25,6 +25,7 @@ import ai.orhan.data.auth.AuthRepository
 import ai.orhan.design.screens.ChatScreen
 import ai.orhan.feature.agents.CreateAgentScreen
 import ai.orhan.feature.agents.AgentProfileScreen
+import ai.orhan.feature.agents.resolveAgentProfile
 import ai.orhan.feature.profile.EditProfileScreen
 import ai.orhan.feature.memory.MemoryScreen
 import ai.orhan.data.memory.memoryEntriesStore
@@ -393,11 +394,14 @@ fun OrhanNavHost(isDark: Boolean) {
             arguments = listOf(navArgument("name") { type = NavType.StringType }),
         ) { entry ->
             val name = entry.arguments?.getString("name").orEmpty()
-            val saved = savedAgents.firstOrNull { it.name.equals(name, ignoreCase = true) }
+            val profileAgents by agentStore.agents.collectAsStateWithLifecycle<List<SavedAgent>?>(initialValue = null)
+            val agentProfile = profileAgents?.let { resolveAgentProfile(name, it) }
+            val saved = agentProfile?.savedAgent
             AgentProfileScreen(
-                agent = saved,
+                profile = agentProfile,
+                loading = profileAgents == null,
                 onBack = { navController.popBackStack() },
-                onChat = { navController.navigate(AppRoutes.chat(saved?.name ?: name)) },
+                onChat = { navController.navigate(AppRoutes.chat(agentProfile?.agent?.name ?: name)) },
                 onEdit = saved?.let { current -> ({ navController.navigate(AppRoutes.createAgent(current.name)) }) },
                 onDelete = saved?.let { current -> ({
                     scope.launch {
