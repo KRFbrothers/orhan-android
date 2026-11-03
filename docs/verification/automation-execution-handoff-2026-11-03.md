@@ -163,4 +163,3 @@ historical and cannot substitute for this update.
 - The previously observed workflow-history 404 remains a separate backend
   route/schema deployment blocker. No same history request was repeated and no
   server execution success is claimed.
-
