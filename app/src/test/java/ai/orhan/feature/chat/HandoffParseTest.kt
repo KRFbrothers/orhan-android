@@ -1,5 +1,7 @@
 package ai.orhan.feature.chat
 
+import ai.orhan.design.screens.ChatMessage
+import ai.orhan.design.screens.ChatRole
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
