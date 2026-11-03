@@ -20,6 +20,15 @@ class ChatThreadStoreTest {
         assertEquals(MAX_THREADS, l.size)
         assertEquals(false, l.any { it.title == "t0" })
     }
+
+    @Test fun explicitlySavedTranscriptStaysWithItsOriginalMessageAndAudioReference() {
+        val audio = StoredAttachment("voice.m4a", "audio/mp4", 3, "a_1.bin")
+        val original = ChatMessage(8, ChatRole.User, "\uD83D\uDCCE voice.m4a", "now", attachment = ai.orhan.data.chat.ChatAttachment("voice.m4a", "audio/mp4", "AQID", 3), transcript = "Hello from the recording.")
+        val stored = emptyList<ChatThread>().withSaved("Personal AI", listOf(original), 10, mapOf(8L to audio)).single()
+        assertEquals(audio, stored.messages.single().attachment)
+        assertEquals("Hello from the recording.", stored.messages.single().transcript)
+        assertEquals("Hello from the recording.", stored.messages.single().toUi().transcript)
+    }
 }
 
 class ChatAttachmentPersistenceTest {
@@ -28,11 +37,95 @@ class ChatAttachmentPersistenceTest {
     private fun enc(b: ByteArray) = java.util.Base64.getEncoder().encodeToString(b)
 
     @Test fun serializerRoundTripsAttachmentMetadata() = kotlinx.coroutines.runBlocking {
-        val m = StoredMessage(1, "user", "\uD83D\uDCCE note.m4a", "now", StoredAttachment("note.m4a", "audio/mp4", 3, "a_1.bin"))
+        val m = StoredMessage(1, "user", "\uD83D\uDCCE note.m4a", "now", StoredAttachment("note.m4a", "audio/mp4", 3, "a_1.bin"), transcript = "saved transcript")
         val list = listOf(ChatThread("t", 5, listOf(m, StoredMessage(2, "agent", "hi", "now"))))
         val out = java.io.ByteArrayOutputStream()
         ChatThreadsSerializer.writeTo(list, out)
         assertEquals(list, ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()))
+    }
+
+    @Test fun v6ThreadMigratesWithoutAStoredTranscript() = kotlinx.coroutines.runBlocking {
+        val out = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(out).apply {
+            writeInt(6); writeInt(1); writeUTF("Personal AI"); writeLong(30); writeInt(1)
+            writeLong(17); writeUTF("user")
+            val text = "voice.m4a".toByteArray(Charsets.UTF_8)
+            writeInt(text.size); write(text); writeUTF("now"); writeLong(12); writeBoolean(false)
+            writeBoolean(false); writeBoolean(false); flush()
+        }
+        val migrated = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
+        assertEquals("voice.m4a", migrated.messages.single().text)
+        assertEquals(null, migrated.messages.single().transcript)
+    }
+
+    @Test fun restoredMessagesCarryTheirPersistedAttachmentPayloadForPreview() {
+        val message = ChatMessage(7, ChatRole.User, "📎 photo.png", "now")
+        val payload = ai.orhan.data.chat.ChatAttachment("photo.png", "image/png", "AQID", 3)
+        val loaded = LoadedThread(listOf(message), mapOf(message.id to payload))
+        assertEquals(payload, loaded.messagesWithAttachments().single().attachment)
+        assertEquals(message.text, loaded.messagesWithAttachments().single().text)
+    }
+
+    @Test fun serializerRoundTripsPendingHandoffRetryState() = kotlinx.coroutines.runBlocking {
+        val retry = StoredHandoffRetry(17L, "Slides", "Use a concise style", "Make a 5-slide deck", listOf("calculator"))
+        val thread = ChatThread("Orhan", 30L, listOf(StoredMessage(17L, "agent", "Assigned to Slides", "now")), retry, "agent-id-1")
+        val out = java.io.ByteArrayOutputStream()
+        ChatThreadsSerializer.writeTo(listOf(thread), out)
+        assertEquals(listOf(thread), ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()))
+    }
+
+    @Test fun v4ThreadKeepsHandoffButDefaultsAgentId() = kotlinx.coroutines.runBlocking {
+        val out = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(out).apply {
+            writeInt(4); writeInt(1); writeUTF("Orhan"); writeLong(30); writeInt(0)
+            writeBoolean(true); writeLong(17); writeUTF("Slides")
+            val instructions = "Be concise".toByteArray(Charsets.UTF_8)
+            writeInt(instructions.size); write(instructions)
+            val task = "Make slides".toByteArray(Charsets.UTF_8)
+            writeInt(task.size); write(task); flush()
+        }
+        val migrated = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
+        assertEquals("Slides", migrated.pendingHandoffRetry?.agentName)
+        assertEquals(null, migrated.agentId)
+    }
+
+    @Test fun v5ThreadKeepsHandoffAndAgentIdWithoutInventingToolSelection() = kotlinx.coroutines.runBlocking {
+        val out = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(out).apply {
+            writeInt(5); writeInt(1); writeUTF("Orhan"); writeLong(30); writeInt(0)
+            writeBoolean(true); writeLong(17); writeUTF("Slides")
+            val instructions = "Be concise".toByteArray(Charsets.UTF_8)
+            writeInt(instructions.size); write(instructions)
+            val task = "Make slides".toByteArray(Charsets.UTF_8)
+            writeInt(task.size); write(task)
+            writeBoolean(true); writeUTF("agent-id-5"); flush()
+        }
+        val migrated = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
+        assertEquals("agent-id-5", migrated.agentId)
+        assertEquals(null, migrated.pendingHandoffRetry?.allowedTools)
+    }
+
+    @Test fun renameAssociatesOnlyLegacyTitleMatchedChatsAndPreservesMessages() {
+        val legacy = ChatThread("Writer", 3L, listOf(StoredMessage(1L, "user", "keep", "now")))
+        val alreadyLinked = ChatThread("Writer", 2L, emptyList(), agentId = "other-agent")
+        val linked = listOf(legacy, alreadyLinked).associatingLegacyAgent("writer", "agent-id")
+        assertEquals("agent-id", linked[0].agentId)
+        assertEquals(legacy.messages, linked[0].messages)
+        assertEquals("other-agent", linked[1].agentId)
+    }
+
+    @Test fun v3ThreadMigratesWithoutPendingHandoff() = kotlinx.coroutines.runBlocking {
+        val out = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(out).apply {
+            writeInt(3); writeInt(1); writeUTF("Orhan"); writeLong(30); writeInt(1)
+            writeLong(7); writeUTF("agent")
+            val text = "existing reply".toByteArray(Charsets.UTF_8)
+            writeInt(text.size); write(text); writeUTF("now"); writeLong(12); writeBoolean(false)
+        }
+        val migrated = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
+        assertEquals("Orhan", migrated.title)
+        assertEquals(listOf(StoredMessage(7, "agent", "existing reply", "now", createdAt = 12)), migrated.messages)
+        assertEquals(null, migrated.pendingHandoffRetry)
     }
 
     @Test fun filesRoundTripAndPrune() {

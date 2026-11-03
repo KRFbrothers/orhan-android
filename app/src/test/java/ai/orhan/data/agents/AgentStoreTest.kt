@@ -42,6 +42,49 @@ class AgentStoreTest {
         assertEquals(listOf("web"), back.single().tools)
     }
 
+    @Test fun avatarFilenameAndStableIdRoundTripInV5AndLegacyReadsRemainCompatible() = runBlocking {
+        val saved = SavedAgent("Writer", "b", "instructions", listOf("legacy"), 5, "123e4567-e89b-12d3-a456-426614174000.img")
+        val out = ByteArrayOutputStream()
+        SavedAgentsSerializer.writeTo(listOf(saved), out)
+        assertEquals(saved, SavedAgentsSerializer.readFrom(out.toByteArray().inputStream()).single())
+        val v2 = ByteArrayOutputStream()
+        DataOutputStream(v2).apply {
+            writeInt(2); writeInt(1); writeUTF("Writer"); writeUTF("b"); writeInt(12); write("instructions".toByteArray());
+            writeInt(1); writeUTF("legacy"); writeLong(5); flush()
+        }
+        assertEquals(null, SavedAgentsSerializer.readFrom(v2.toByteArray().inputStream()).single().avatarFileName)
+
+        val v3 = ByteArrayOutputStream()
+        DataOutputStream(v3).apply {
+            writeInt(3); writeInt(1); writeUTF("Writer"); writeUTF("b"); writeInt(12); write("instructions".toByteArray())
+            writeInt(1); writeUTF("legacy"); writeLong(5); writeBoolean(true); writeUTF("123e4567-e89b-12d3-a456-426614174000.img"); flush()
+        }
+        val legacy = SavedAgentsSerializer.readFrom(v3.toByteArray().inputStream()).single()
+        assertEquals(saved.avatarFileName, legacy.avatarFileName)
+        assertTrue(legacy.id.isNotBlank())
+        assertEquals(false, legacy.toolsRestricted)
+    }
+
+    @Test fun explicitToolRestrictionRoundTripsAndOlderAgentDefaultsToLegacyBehavior() = runBlocking {
+        val selected = SavedAgent("Writer", "b", tools = emptyList(), createdAt = 5, toolsRestricted = true)
+        val out = ByteArrayOutputStream()
+        SavedAgentsSerializer.writeTo(listOf(selected), out)
+        assertEquals(selected, SavedAgentsSerializer.readFrom(out.toByteArray().inputStream()).single())
+        val old = SavedAgent("Legacy", "b", tools = emptyList(), createdAt = 6)
+        val oldOut = ByteArrayOutputStream()
+        SavedAgentsSerializer.writeTo(listOf(old), oldOut)
+        assertEquals(false, SavedAgentsSerializer.readFrom(oldOut.toByteArray().inputStream()).single().toolsRestricted)
+        val v4 = ByteArrayOutputStream()
+        DataOutputStream(v4).apply {
+            writeInt(4); writeInt(1); writeUTF("V4"); writeUTF("b")
+            val instructions = "legacy".toByteArray(); writeInt(instructions.size); write(instructions)
+            writeInt(1); writeUTF("web"); writeLong(7); writeBoolean(false); writeBoolean(true); writeUTF("stable-v4-id"); flush()
+        }
+        val legacyV4 = SavedAgentsSerializer.readFrom(v4.toByteArray().inputStream()).single()
+        assertEquals("stable-v4-id", legacyV4.id)
+        assertEquals(false, legacyV4.toolsRestricted)
+    }
+
     @Test fun readsV1Format() = runBlocking {
         val out = ByteArrayOutputStream()
         DataOutputStream(out).apply {
@@ -51,11 +94,19 @@ class AgentStoreTest {
         val back = SavedAgentsSerializer.readFrom(out.toByteArray().inputStream()).single()
         assertEquals("instr", back.instructions)
         assertEquals("Writer", back.name)
+        val again = SavedAgentsSerializer.readFrom(out.toByteArray().inputStream()).single()
+        assertEquals(back.id, again.id)
     }
 
     @Test fun canonicalTitleIsCaseInsensitive() {
         assertEquals("Writer", canonicalAgentTitle("writer", listOf("Writer", "Coder")))
         assertEquals("Unknown", canonicalAgentTitle("Unknown", listOf("Writer")))
+    }
+
+    @Test fun missingAgentChatKeepsHistoryTitleButUsesDefaultPersona() {
+        assertEquals("Writer", chatPersonaName("writer", listOf("Writer")))
+        assertEquals("Orhan", chatPersonaName("Deleted Writer", listOf("Writer")))
+        assertEquals("Orhan", chatPersonaName("orhan", emptyList()))
     }
 
     private fun agent(name: String, blurb: String = "blurb", instructions: String = "do it", createdAt: Long = 10) =
@@ -67,6 +118,7 @@ class AgentStoreTest {
 
         val created = store.replace(null, agent(" Writer ", instructions = "i".repeat(20_000), createdAt = 4))
         val saved = (created as AgentSaveResult.Saved).agent
+        assertTrue(saved.id.isNotBlank())
         assertEquals(MAX_AGENT_NAME.coerceAtMost("Writer".length), saved.name.trim().length)
         assertEquals("Writer", saved.name)
         assertEquals(MAX_AGENT_INSTRUCTIONS, saved.instructions.length)
@@ -83,6 +135,7 @@ class AgentStoreTest {
         memory.state.value = listOf(edited.agent, coder)
         val renamed = store.replace("Writer", edited.agent.copy(name = "Editor")) as AgentSaveResult.Saved
         assertEquals("Editor", renamed.agent.name)
+        assertEquals(saved.id, renamed.agent.id)
         assertEquals(4L, renamed.agent.createdAt)
         assertEquals(listOf(renamed.agent, coder), memory.state.value)
         assertEquals(3, memory.updates)
@@ -120,6 +173,13 @@ class AgentStoreTest {
         assertEquals(1, memory.updates)
         assertEquals(AgentSaveNav.Stay(result.message), navigationAfterAgentSave(creating = false, result))
         assertEquals(AgentSaveNav.Stay(result.message), navigationAfterAgentSave(creating = true, result))
+    }
+
+    @Test fun failedDeleteReportsFailureAndPreservesSavedAgent() = runBlocking {
+        val writer = agent("Writer")
+        val memory = MemoryAgents(listOf(writer)).apply { failWrites = true }
+        assertEquals(false, AgentStore(memory).delete("Writer"))
+        assertEquals(listOf(writer), memory.state.value)
     }
 
     @Test fun blankNameDoesNotWrite() = runBlocking {

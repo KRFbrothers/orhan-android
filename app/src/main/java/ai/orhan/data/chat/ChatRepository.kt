@@ -1,6 +1,7 @@
 package ai.orhan.data.chat
 
 import ai.orhan.BuildConfig
+import android.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
@@ -13,6 +14,8 @@ import java.net.URL
 
 /** One turn sent to the Dua engine. [role] is "user" or "model". */
 data class ChatTurn(val role: String, val text: String, val attachments: List<ChatAttachment> = emptyList())
+
+data class AgentToolCapability(val id: String, val available: Boolean, val reason: String? = null)
 
 /**
  * An inline file on a user turn. The engine accepts `attachments: [{mimeType, data}]` per message
@@ -62,9 +65,10 @@ class ChatRepository(
          * Builds the /api/chat JSON. [systemInstruction] is sent as top-level `systemInstruction`
          * (Dua-ai #494) only when non-blank, so older engines just see the plain messages array.
          */
-        internal fun body(turns: List<ChatTurn>, stream: Boolean, systemInstruction: String? = null) = JSONObject()
+        internal fun body(turns: List<ChatTurn>, stream: Boolean, systemInstruction: String? = null,
+                          allowedTools: List<String>? = null, mode: String = "agent", resumeRunId: String? = null) = JSONObject()
             .put("stream", stream)
-            .put("mode", "agent") // always agent pipeline (server uses AGENT_ENGINE=adk when configured)
+            .put("mode", mode)
             .put("messages", JSONArray().apply {
                 turns.takeLast(20).forEach { turn ->
                     val obj = JSONObject().put("role", turn.role).put("text", turn.text)
@@ -76,7 +80,11 @@ class ChatRepository(
                     put(obj)
                 }
             })
-            .apply { systemInstruction?.trim()?.takeIf { it.isNotEmpty() }?.let { put("systemInstruction", it) } }
+            .apply {
+                systemInstruction?.trim()?.takeIf { it.isNotEmpty() }?.let { put("systemInstruction", it) }
+                allowedTools?.let { put("allowedTools", JSONArray(it.distinct())) }
+                resumeRunId?.trim()?.takeIf { it.isNotEmpty() }?.let { put("resumeRun", it) }
+            }
     }
 
     private suspend fun open(accept: String): HttpURLConnection {
@@ -94,6 +102,180 @@ class ChatRepository(
         }
     }
 
+    /** Loads the authenticated service catalog; unavailable built-ins remain visible but disabled. */
+    suspend fun agentToolCapabilities(): Result<List<AgentToolCapability>> = withContext(Dispatchers.IO) {
+        runCatching {
+            require(baseUrl.isNotBlank()) { "DUA_ENGINE_URL is not set in local.properties" }
+            val jwt = tokenProvider() ?: throw FatalChatException("Sign in required to load agent tools")
+            val conn = (URL(baseUrl.trimEnd('/') + "/api/agent/capabilities").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("Authorization", "Bearer $jwt")
+                if (appToken.isNotBlank()) setRequestProperty("X-Dua-App-Token", appToken)
+            }
+            try {
+                val code = conn.responseCode
+                val raw = (if (code in 200..299) conn.inputStream else conn.errorStream)
+                    ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                if (code == 401) {
+                    onUnauthorized()
+                    throw FatalChatException("Session expired — please sign in again")
+                }
+                val json = runCatching { JSONObject(raw) }.getOrNull()
+                if (code !in 200..299) throw IOException(json?.optString("error")?.ifBlank { null } ?: "HTTP $code")
+                val catalog = json?.optJSONArray("toolCatalog")
+                    ?: throw IOException("The configured service does not support enforced agent tool selection yet.")
+                List(catalog.length()) { index ->
+                    val row = catalog.getJSONObject(index)
+                    AgentToolCapability(row.getString("id"), row.optBoolean("available"), row.optString("reason").takeIf { it.isNotBlank() && it != "null" })
+                }
+            } finally { conn.disconnect() }
+        }
+    }
+
+    private suspend fun requireEnforcedToolPolicy(selected: List<String>?) {
+        if (selected == null) return
+        val catalog = agentToolCapabilities().getOrThrow()
+        val available = catalog.filter { it.available }.map { it.id }.toSet()
+        val missing = selected.distinct().filterNot { it in available }
+        if (missing.isNotEmpty()) throw IOException("Selected tools are unavailable: ${missing.joinToString()}")
+    }
+
+    /** Uses the signed-in engine's real model provider without enabling Agent tool dispatch. */
+    suspend fun translateText(text: String, targetLanguage: String): Result<String> {
+        val source = text.trim()
+        val language = targetLanguage.trim().take(80)
+        if (source.isEmpty() || language.isEmpty()) return Result.failure(IllegalArgumentException("Text and target language are required."))
+        return plainTextRequest(
+            prompt = source,
+            instruction = "Translate the supplied text into $language. Preserve its meaning, names, formatting and tone. Return only the translation, with no explanation or quotation marks.",
+        )
+    }
+
+    /** Stores audio with the signed-in owner, then uses Dua's configured transcription providers. */
+    suspend fun transcribeAudio(attachment: ChatAttachment): Result<String> {
+        if (!attachment.mimeType.lowercase().startsWith("audio/")) return Result.failure(IllegalArgumentException("Choose an audio attachment to transcribe."))
+        return withContext(Dispatchers.IO) { runCatching { transcribeStoredAudio(attachment) } }
+    }
+
+    private suspend fun transcribeStoredAudio(attachment: ChatAttachment): String {
+        val apiBase = BuildConfig.DUA_API_URL.trimEnd('/')
+        require(apiBase.startsWith("https://")) { "DUA_API_URL must be configured with HTTPS for stored audio transcription." }
+        val jwt = tokenProvider() ?: throw FatalChatException("Sign in required to transcribe audio")
+        val bytes = Base64.decode(attachment.base64, Base64.DEFAULT)
+        if (bytes.isEmpty() || bytes.size.toLong() != attachment.sizeBytes || bytes.size > ChatAttachment.MAX_BYTES) {
+            throw IOException("The saved audio attachment is incomplete or exceeds the supported size.")
+        }
+
+        var storedPath: String? = null
+        val transcript: String
+        try {
+            val sign = serviceJson(apiBase, "/api/files/sign", jwt,
+                JSONObject().put("name", attachment.name).put("mimeType", attachment.mimeType).put("size", bytes.size))
+            if (sign.code !in 200..299) throw serviceError(sign)
+            val upload = sign.json ?: throw IOException("File storage returned an invalid upload response.")
+            val path = upload.optString("path").takeIf(String::isNotBlank)
+                ?: throw IOException("File storage did not return an audio path.")
+            storedPath = path
+            val uploadUrl = URL(upload.getString("uploadUrl"))
+            if (uploadUrl.protocol != "https" || uploadUrl.userInfo != null) throw IOException("File storage returned an unsafe upload URL.")
+            val headers = upload.optJSONObject("headers") ?: throw IOException("File storage omitted upload headers.")
+            val put = (uploadUrl.openConnection() as HttpURLConnection).apply {
+                requestMethod = "PUT"
+                instanceFollowRedirects = false
+                connectTimeout = 15_000
+                readTimeout = 120_000
+                doOutput = true
+                headers.keys().forEach { key -> setRequestProperty(key, headers.getString(key)) }
+            }
+            try {
+                put.outputStream.use { it.write(bytes) }
+                val code = put.responseCode
+                if (code !in 200..299) throw IOException("Private audio upload failed (HTTP $code).")
+            } finally { put.disconnect() }
+
+            val result = serviceJson(apiBase, "/api/files/transcribe", jwt,
+                JSONObject().put("path", path).put("name", attachment.name).put("mimeType", attachment.mimeType).put("size", bytes.size))
+            if (result.code !in 200..299) throw serviceError(result)
+            transcript = result.json?.optString("transcript")?.trim()?.takeIf(String::isNotEmpty)
+                ?: throw IOException("The configured transcription provider returned no transcript.")
+        } catch (failure: Throwable) {
+            val cleanupFailure = storedPath?.let { path -> runCatching { deleteStoredUpload(apiBase, jwt, path) }.exceptionOrNull() }
+            if (cleanupFailure != null) {
+                failure.addSuppressed(cleanupFailure)
+                if (failure !is kotlinx.coroutines.CancellationException) {
+                    throw IOException("${failure.message ?: "Transcription failed."} The temporary audio file may still be stored; check File storage.", failure)
+                }
+            }
+            throw failure
+        }
+        try {
+            deleteStoredUpload(apiBase, jwt, storedPath!!)
+        } catch (failure: Throwable) {
+            throw IOException("Transcription finished, but removal of its temporary private audio file was not confirmed. Check File storage before retrying.", failure)
+        }
+        return transcript
+    }
+
+    private data class ServiceResponse(val code: Int, val json: JSONObject?)
+
+    private suspend fun serviceJson(apiBase: String, path: String, jwt: String, body: JSONObject): ServiceResponse {
+        val connection = (URL(apiBase + path).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15_000
+            readTimeout = 180_000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Authorization", "Bearer $jwt")
+            setRequestProperty("X-Dua-Native", "1")
+        }
+        return try {
+            connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            val code = connection.responseCode
+            val raw = (if (code in 200..299) connection.inputStream else connection.errorStream)
+                ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            if (code == 401) onUnauthorized()
+            ServiceResponse(code, runCatching { JSONObject(raw) }.getOrNull())
+        } finally { connection.disconnect() }
+    }
+
+    private fun serviceError(response: ServiceResponse): IOException = IOException(
+        response.json?.optString("error")?.takeIf(String::isNotBlank) ?: "File service request failed (HTTP ${response.code}).",
+    )
+
+    private suspend fun deleteStoredUpload(apiBase: String, jwt: String, path: String) {
+        val deleted = serviceJson(apiBase, "/api/files/delete", jwt, JSONObject().put("paths", JSONArray().put(path)))
+        if (deleted.code !in 200..299) throw serviceError(deleted)
+        val json = deleted.json ?: throw IOException("File service returned an invalid cleanup response.")
+        if (json.optInt("deleted") != 1) throw IOException("File service did not confirm removal of the temporary audio file.")
+    }
+
+    /** Transcribes the source recording, then asks the configured Gemini model for factual minutes. */
+    suspend fun createMeetingMinutes(attachment: ChatAttachment): Result<String> {
+        val transcript = transcribeAudio(attachment).getOrElse { return Result.failure(it) }
+        if (transcript.trim().trim('[', ']').equals("no speech", ignoreCase = true) || transcript.equals("No speech detected.", ignoreCase = true)) {
+            return Result.failure(IOException("No speech was detected in this recording."))
+        }
+        if (transcript.isBlank()) return Result.failure(IOException("The recording did not produce a transcript."))
+        return plainTextRequest(
+            prompt = "Create concise meeting minutes from this transcript.\n\n$transcript",
+            instruction = "Create factual meeting minutes using only the supplied transcript. Use headings Summary, Decisions, Action items, and Open questions. Mark missing owners or dates as unspecified. Do not invent attendees, decisions, dates, or actions. Return only the minutes.",
+        )
+    }
+
+    private suspend fun plainTextRequest(prompt: String, instruction: String, attachment: ChatAttachment? = null): Result<String> {
+        val output = StringBuilder()
+        return stream(
+            turns = listOf(ChatTurn("user", prompt, listOfNotNull(attachment))),
+            systemInstruction = instruction,
+            mode = "auto",
+            onDelta = { output.append(it) },
+        ).map { output.toString().trim() }
+    }
+
     /**
      * Streams a reply. [onDelta] is called (on IO) with each text chunk. Returns the full text.
      * [onActivity] receives a short label for `thinking` / `progress` events (no-op if never sent).
@@ -103,23 +285,38 @@ class ChatRepository(
     suspend fun stream(
         turns: List<ChatTurn>,
         systemInstruction: String? = null,
+        allowedTools: List<String>? = null,
+        mode: String = "agent",
+        resumeRunId: String? = null,
         onActivity: suspend (String) -> Unit = {},
+        onAgentRunId: suspend (String) -> Unit = {},
         onDelta: suspend (String) -> Unit,
     ): Result<String> =
         withContext(Dispatchers.IO) {
             runCatching {
+                requireEnforcedToolPolicy(allowedTools)
                 val conn = open("text/event-stream")
                 // Blocking SSE reads ignore coroutine cancel; disconnect on cancel so Stop is immediate.
                 val watcher = launch { try { awaitCancellation() } finally { conn.disconnect() } }
                 try {
-                    conn.outputStream.use { it.write(body(turns, true, systemInstruction).toString().toByteArray()) }
+                    conn.outputStream.use { it.write(body(turns, true, systemInstruction, allowedTools, mode, resumeRunId).toString().toByteArray()) }
                     val code = conn.responseCode
                     if (code == 401) {
                         onUnauthorized()
                         throw FatalChatException("Session expired — please sign in again")
                     }
                     if (isFallbackStatus(code)) throw FallbackEligibleStreamException("HTTP $code")
-                    if (code !in 200..299) error("HTTP $code")
+                    if (code !in 200..299) {
+                        val raw = conn.errorStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                        val error = runCatching { JSONObject(raw) }.getOrNull()
+                        val unavailable = error?.optJSONArray("tools")?.let { ids ->
+                            List(ids.length()) { ids.optString(it) }.filter(String::isNotBlank)
+                        }.orEmpty()
+                        val message = if (error?.optString("code") == "tool_unavailable" && unavailable.isNotEmpty())
+                            "These selected tools are no longer available: ${unavailable.joinToString()}"
+                        else error?.optString("error")?.ifBlank { null } ?: "HTTP $code"
+                        throw IOException(message)
+                    }
                     if (conn.contentType?.contains("text/event-stream") != true) {
                         throw FallbackEligibleStreamException("Not an SSE response")
                     }
@@ -149,6 +346,9 @@ class ChatRepository(
                                             field = { k -> ev.optString(k) },
                                             nested = { k -> ev.optJSONObject("data")?.optString(k).orEmpty() },
                                         )?.let { onActivity(it) }
+                                        "agent_session" -> ev.optString("runId")
+                                            .takeIf { it.isNotBlank() && ev.optBoolean("resumable") }
+                                            ?.let { onAgentRunId(it) }
                                     }
                                 }
                             }
@@ -163,10 +363,12 @@ class ChatRepository(
             }
         }
 
-    suspend fun send(turns: List<ChatTurn>, systemInstruction: String? = null): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun send(turns: List<ChatTurn>, systemInstruction: String? = null,
+                     allowedTools: List<String>? = null): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
+            requireEnforcedToolPolicy(allowedTools)
             val conn = open("application/json")
-            val body = body(turns, false, systemInstruction)
+            val body = body(turns, false, systemInstruction, allowedTools)
             try {
                 conn.outputStream.use { it.write(body.toString().toByteArray()) }
                 val code = conn.responseCode

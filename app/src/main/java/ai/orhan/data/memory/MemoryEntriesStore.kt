@@ -15,7 +15,7 @@ import java.io.OutputStream
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
-/* Local notes, to-dos and topics. On-device only; never sent to the engine. */
+/* Local notes, to-dos and topics. Topic text is sent only when the user opts in. */
 const val MAX_NOTE_CONTENT = 8_000
 const val MAX_TODO_CONTENT = 2_000
 const val MAX_ENTRY_TITLE = 200
@@ -27,12 +27,21 @@ data class MemoryEntry(
     val content: String,
     val done: Boolean,
     val createdAt: Long,
+    /** Chat title when the user saved this action from a message. Blank for a typed to-do. */
+    val sourceChatTitle: String = "",
+    /** Message id inside [sourceChatTitle]. Zero when the action was typed in Next Actions. */
+    val sourceMessageId: Long = 0L,
 )
+
+enum class ActionSaveResult { Saved, Duplicate, Dismissed, Blank, WriteFailed }
+data class MeetingActionSaveSummary(val saved: Int, val duplicates: Int, val notAdded: Int = 0, val dismissed: Boolean = false)
 
 data class MemoryEntries(
     val notes: List<MemoryEntry> = emptyList(),
     val todos: List<MemoryEntry> = emptyList(),
     val topics: List<MemoryTopic> = emptyList(),
+    /** Source keys the user deleted, so that chat message is not saved as an action again. */
+    val dismissedActionSources: List<String> = emptyList(),
 )
 
 object MemoryEntriesSerializer : Serializer<MemoryEntries> {
@@ -77,32 +86,177 @@ class MemoryEntriesStore(private val dataStore: DataStore<MemoryEntries>) {
         return true
     }
 
-    suspend fun upsertTodo(id: String?, title: String, content: String = ""): Boolean {
-        val t = title.trim().take(MAX_ENTRY_TITLE)
-        if (t.isBlank()) return false
-        dataStore.updateData { d ->
-            val old = d.todos.firstOrNull { it.id == id }
-            val e = MemoryEntry(old?.id ?: UUID.randomUUID().toString(), t, content.trim().take(MAX_TODO_CONTENT), old?.done ?: false, old?.createdAt ?: System.currentTimeMillis())
-            d.copy(todos = d.todos.upsertedEntry(e))
+    /**
+     * Creates or edits a to-do. Saving stores the text only. It does not send a
+     * message, call a tool, or run any other action. A blank title is rejected.
+     * A title that matches another to-do is rejected and the saved list stays
+     * as it was. Editing keeps the original source, done flag, and created time.
+     */
+    suspend fun saveTodo(id: String?, title: String, content: String = ""): ActionSaveResult {
+        val cleanTitle = title.trim().take(MAX_ENTRY_TITLE)
+        if (cleanTitle.isBlank()) return ActionSaveResult.Blank
+        return try {
+            var result = ActionSaveResult.Saved
+            dataStore.updateData { current ->
+                val existing = if (id.isNullOrBlank()) null else current.todos.firstOrNull { it.id == id }
+                if (isDuplicateAction(current.todos, cleanTitle, ignoreId = existing?.id)) {
+                    result = ActionSaveResult.Duplicate
+                    return@updateData current
+                }
+                val entry = MemoryEntry(
+                    id = existing?.id ?: UUID.randomUUID().toString(),
+                    title = cleanTitle,
+                    content = content.trim().take(MAX_TODO_CONTENT),
+                    done = existing?.done ?: false,
+                    createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+                    sourceChatTitle = existing?.sourceChatTitle.orEmpty(),
+                    sourceMessageId = existing?.sourceMessageId ?: 0L,
+                )
+                current.copy(todos = current.todos.upsertedEntry(entry))
+            }
+            result
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            ActionSaveResult.WriteFailed
         }
-        return true
     }
 
-    suspend fun toggleDone(id: String) {
-        dataStore.updateData { d -> d.copy(todos = d.todos.map { if (it.id == id) it.copy(done = !it.done) else it }) }
+    /** Completes or reopens a to-do. A failed write leaves [done] unchanged. */
+    suspend fun toggleDone(id: String): Boolean {
+        return try {
+            dataStore.updateData { current ->
+                current.copy(todos = current.todos.map { if (it.id == id) it.copy(done = !it.done) else it })
+            }
+            true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        }
     }
 
     suspend fun deleteNote(id: String) {
         dataStore.updateData { d -> d.copy(notes = d.notes.filterNot { it.id == id }) }
     }
 
-    suspend fun deleteTodo(id: String) {
-        dataStore.updateData { d -> d.copy(todos = d.todos.filterNot { it.id == id }) }
+    /**
+     * Confirmed delete. When the to-do came from a chat message, its source key
+     * is remembered only after the write succeeds, so that same message is not
+     * saved again. A typed to-do with the same title can still be created later.
+     */
+    suspend fun deleteTodo(id: String): Boolean {
+        return try {
+            dataStore.updateData { current ->
+                val removed = current.todos.firstOrNull { it.id == id } ?: return@updateData current
+                val dismissed = if (removed.sourceChatTitle.isNotBlank() && removed.sourceMessageId != 0L) {
+                    rememberDismissed(
+                        current.dismissedActionSources,
+                        sourceKey(removed.sourceChatTitle, removed.sourceMessageId),
+                    )
+                } else {
+                    current.dismissedActionSources
+                }
+                current.copy(
+                    todos = current.todos.filterNot { it.id == id },
+                    dismissedActionSources = dismissed,
+                )
+            }
+            true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Explicit save of one user message as a to-do. This does not scan older
+     * chats and does not run the message. A deleted source is not recreated.
+     */
+    suspend fun addActionFromChat(text: String, chatTitle: String, messageId: Long): ActionSaveResult {
+        val cleanTitle = actionTitleFromMessage(text)
+        val chat = chatTitle.trim()
+        if (cleanTitle.isBlank() || chat.isEmpty() || messageId == 0L) return ActionSaveResult.Blank
+        val key = sourceKey(chat, messageId)
+        return try {
+            var result = ActionSaveResult.Saved
+            dataStore.updateData { raw ->
+                val current = raw.withNotesMigrated()
+                if (key in current.dismissedActionSources) {
+                    result = ActionSaveResult.Dismissed
+                    return@updateData current
+                }
+                val sameSource = current.todos.any {
+                    it.sourceMessageId != 0L && sourceKey(it.sourceChatTitle, it.sourceMessageId) == key
+                }
+                if (sameSource || isDuplicateAction(current.todos, cleanTitle)) {
+                    result = ActionSaveResult.Duplicate
+                    return@updateData current
+                }
+                val entry = MemoryEntry(
+                    id = UUID.randomUUID().toString(),
+                    title = cleanTitle,
+                    content = text.trim().take(MAX_TODO_CONTENT),
+                    done = false,
+                    createdAt = System.currentTimeMillis(),
+                    sourceChatTitle = chat,
+                    sourceMessageId = messageId,
+                )
+                current.copy(todos = current.todos.upsertedEntry(entry))
+            }
+            result
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            ActionSaveResult.WriteFailed
+        }
+    }
+
+    /** Adds only explicitly selected meeting action items, preserving their shared message source link. */
+    suspend fun addMeetingActionsFromChat(items: List<String>, chatTitle: String, messageId: Long): MeetingActionSaveSummary {
+        val cleanItems = items.map { it.trim().take(MAX_TODO_CONTENT) }
+            .filter(String::isNotBlank).distinctBy { actionTitleFromMessage(it).lowercase() }.take(20)
+        val chat = chatTitle.trim()
+        if (cleanItems.isEmpty() || chat.isEmpty() || messageId == 0L) return MeetingActionSaveSummary(0, 0)
+        val key = sourceKey(chat, messageId)
+        var saved = 0
+        var duplicates = 0
+        var notAdded = 0
+        var dismissed = false
+        dataStore.updateData { raw ->
+            val current = raw.withNotesMigrated()
+            if (key in current.dismissedActionSources) {
+                dismissed = true
+                return@updateData current
+            }
+            val additions = cleanItems.mapNotNull { text ->
+                val title = actionTitleFromMessage(text)
+                if (title.isBlank() || current.todos.any { it.title.equals(title, ignoreCase = true) }) {
+                    duplicates++
+                    null
+                } else MemoryEntry(
+                    id = UUID.randomUUID().toString(), title = title, content = text, done = false,
+                    createdAt = System.currentTimeMillis(), sourceChatTitle = chat, sourceMessageId = messageId,
+                )
+            }
+            val available = (MAX_ENTRIES - current.todos.size).coerceAtLeast(0)
+            val accepted = additions.take(available)
+            saved = accepted.size
+            notAdded = additions.size - accepted.size
+            current.copy(todos = accepted + current.todos)
+        }
+        return MeetingActionSaveSummary(saved, duplicates, notAdded, dismissed)
     }
 
     /**
      * Insert or replace a topic. Returns false when the title is blank or the
      * write fails. A failed write leaves the saved topic unchanged.
+     */
+    /**
+     * Insert or replace a topic. [artifactId] null keeps the saved link.
+     * An empty id removes the link. The topic never copies artifact text.
+     * Returns false when the title is blank or the write fails.
      */
     suspend fun upsertTopic(
         id: String?,
@@ -111,6 +265,7 @@ class MemoryEntriesStore(private val dataStore: DataStore<MemoryEntries>) {
         content: String,
         group: String,
         tags: List<String>,
+        artifactId: String? = null,
     ): Boolean {
         if (title.trim().isEmpty()) return false
         return try {
@@ -126,6 +281,7 @@ class MemoryEntriesStore(private val dataStore: DataStore<MemoryEntries>) {
                     tags = tags,
                     now = System.currentTimeMillis(),
                     newId = UUID.randomUUID().toString(),
+                    artifactId = artifactId ?: existing?.artifactId.orEmpty(),
                 ) ?: return@updateData current
                 current.copy(topics = current.topics.upsertedTopic(topic))
             }
@@ -152,6 +308,52 @@ class MemoryEntriesStore(private val dataStore: DataStore<MemoryEntries>) {
             throw cancelled
         } catch (_: Exception) {
             false
+        }
+    }
+
+    /**
+     * Saves one validated statement from a new chat message. The topic is unread
+     * and keeps [chatTitle] plus [messageId]. A duplicate, a rejected statement,
+     * or a failed write does not report success and does not replace saved topics.
+     */
+    suspend fun addAutomaticTopic(
+        userText: String,
+        chatTitle: String,
+        messageId: Long,
+        now: Long = System.currentTimeMillis(),
+    ): AutomaticSaveResult {
+        val extracted = extractDurableStatement(userText) ?: return AutomaticSaveResult.NotUseful
+        if (!isValidExtraction(extracted.content, extracted)) return AutomaticSaveResult.NotUseful
+        val title = chatTitle.trim()
+        if (title.isEmpty() || messageId == 0L) return AutomaticSaveResult.NotUseful
+        return try {
+            var result = AutomaticSaveResult.Saved
+            dataStore.updateData { raw ->
+                val current = raw.withNotesMigrated()
+                if (isDuplicateMemory(current.topics, extracted, title, messageId)) {
+                    result = AutomaticSaveResult.Duplicate
+                    return@updateData current
+                }
+                val topic = MemoryTopic(
+                    id = UUID.randomUUID().toString(),
+                    title = extracted.title,
+                    summary = extracted.summary,
+                    content = extracted.content,
+                    group = AUTOMATIC_TOPIC_GROUP,
+                    tags = listOf(AUTOMATIC_TOPIC_TAG),
+                    unread = true,
+                    createdAt = now,
+                    updatedAt = now,
+                    sourceChatTitle = title,
+                    sourceMessageId = messageId,
+                )
+                current.copy(topics = current.topics.upsertedTopic(topic))
+            }
+            result
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            AutomaticSaveResult.WriteFailed
         }
     }
 

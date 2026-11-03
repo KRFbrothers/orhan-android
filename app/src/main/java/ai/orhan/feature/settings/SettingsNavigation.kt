@@ -98,7 +98,7 @@ fun NavGraphBuilder.settingsDetailPages(navController: NavHostController) {
             chatThreadCount = threads?.size,
             chatMediaBytes = mediaBytes,
             onClearChatMedia = { threadStore.clearAttachments() },
-            onOpenArtifacts = { navController.navigate(AppRoutes.ARTIFACTS) },
+            onOpenArtifacts = { navController.navigate(AppRoutes.artifacts()) },
         )
     }
     composable(SettingsRoutes.LANGUAGE) { LanguageScreen(onBack = back) }

@@ -16,10 +16,12 @@ import java.io.OutputStream
 import java.util.UUID
 
 /* Local store for reusable saved prompts ("workflows"). No backend, no scheduling. */
-private const val FORMAT_VERSION = 1
+private const val FORMAT_VERSION = 2
 const val WORKFLOW_MAX_CONTENT = 4000
 const val WORKFLOW_MAX_ITEMS = 200
 private const val TITLE_FALLBACK_LEN = 42
+
+class WorkflowCapacityException : IOException("Workflow storage is full. Remove a saved workflow before adding another.")
 
 data class Workflow(
     val id: String,
@@ -28,7 +30,23 @@ data class Workflow(
     /** Blank = default assistant. */
     val agentName: String = "",
     val createdAt: Long,
+    val agentId: String? = null,
 )
+
+/** Rebinds only title-linked records for a confirmed local rename, preserving prompt content and IDs. */
+fun List<Workflow>.relinkRenamedAgent(previousName: String, currentName: String, agentId: String): List<Workflow> =
+    map { workflow ->
+        val belongsById = workflow.agentId == agentId
+        val belongsByLegacyName = workflow.agentId == null && workflow.agentName.equals(previousName, ignoreCase = true)
+        if (belongsById || belongsByLegacyName) workflow.copy(agentName = currentName, agentId = agentId) else workflow
+    }
+
+/** Blank workflow agent means Orhan; a missing named agent is unresolved and must not be guessed. */
+fun resolveWorkflowAgentName(requested: String, availableAgentNames: List<String>, defaultName: String = "Orhan"): String? {
+    val name = requested.trim()
+    if (name.isEmpty()) return defaultName
+    return availableAgentNames.firstOrNull { it.equals(name, ignoreCase = true) }
+}
 
 object WorkflowsSerializer : Serializer<List<Workflow>> {
     override val defaultValue: List<Workflow> = emptyList()
@@ -38,15 +56,16 @@ object WorkflowsSerializer : Serializer<List<Workflow>> {
         if (bytes.isEmpty()) return defaultValue
         return try {
             DataInputStream(bytes.inputStream()).use { d ->
-                if (d.readInt() != FORMAT_VERSION) return defaultValue
+                val version = d.readInt()
+                if (version !in 1..FORMAT_VERSION) return defaultValue
                 List(d.readInt()) {
-                    Workflow(
-                        id = d.readUTF(),
-                        title = d.readUTF(),
-                        content = d.readUTF(),
-                        agentName = d.readUTF(),
-                        createdAt = d.readLong(),
-                    )
+                    val id = d.readUTF()
+                    val title = d.readUTF()
+                    val content = d.readUTF()
+                    val agentName = d.readUTF()
+                    val createdAt = d.readLong()
+                    val agentId = if (version >= 2 && d.readBoolean()) d.readUTF() else null
+                    Workflow(id, title, content, agentName, createdAt, agentId)
                 }
             }
         } catch (e: IOException) { defaultValue }
@@ -59,6 +78,8 @@ object WorkflowsSerializer : Serializer<List<Workflow>> {
         t.forEach { w ->
             d.writeUTF(w.id); d.writeUTF(w.title); d.writeUTF(w.content); d.writeUTF(w.agentName)
             d.writeLong(w.createdAt)
+            d.writeBoolean(w.agentId != null)
+            w.agentId?.let(d::writeUTF)
         }
         d.flush()
     }
@@ -92,7 +113,17 @@ class WorkflowStore(private val dataStore: DataStore<List<Workflow>>) {
     suspend fun upsert(workflow: Workflow) {
         val w = workflow.normalized()
         if (w.content.isBlank()) return
-        dataStore.updateData { it.upserted(w) }
+        dataStore.updateData { current ->
+            if (current.size >= WORKFLOW_MAX_ITEMS && current.none { it.id == w.id }) {
+                throw WorkflowCapacityException()
+            }
+            current.upserted(w)
+        }
+    }
+
+    suspend fun relinkAgentRename(previousName: String, currentName: String, agentId: String) {
+        if (previousName.isBlank() || currentName.isBlank() || agentId.isBlank()) return
+        dataStore.updateData { it.relinkRenamedAgent(previousName, currentName, agentId) }
     }
 
     suspend fun delete(id: String) {

@@ -46,6 +46,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import android.graphics.BitmapFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,6 +68,7 @@ data class InstalledAgent(
     val category: String,
     val working: Boolean,
     @DrawableRes val avatar: Int,
+    val avatarPath: String? = null,
 )
 
 /** The single built-in agent so a new chat always has a target. User agents are added on top. */
@@ -83,50 +95,69 @@ fun AgentsScreen(
     modifier: Modifier = Modifier,
     agents: List<InstalledAgent> = SampleInstalledAgents,
     onOpenAgent: (InstalledAgent) -> Unit = {},
+    onViewAgent: (InstalledAgent) -> Unit = {},
     onCreateAgent: () -> Unit = {},
     /** Opens the editor for a user-saved agent. Samples are not editable. */
     onEditAgent: ((InstalledAgent) -> Unit)? = null,
     /** Names of user-saved agents that may be removed. Samples are never in this set. */
     deletableNames: Set<String> = emptySet(),
     /** When null, no delete affordance is shown. */
-    onDeleteAgent: ((InstalledAgent) -> Unit)? = null,
+    onDeleteAgent: (suspend (InstalledAgent) -> Boolean)? = null,
     workflows: List<Workflow> = emptyList(),
     onOpenWorkflow: (Workflow) -> Unit = {},
+    onRunWorkflow: (Workflow) -> Unit = {},
     onCreateWorkflow: () -> Unit = {},
     onEditWorkflow: (Workflow) -> Unit = {},
-    onDeleteWorkflow: ((Workflow) -> Unit)? = null,
+    onDeleteWorkflow: (suspend (Workflow) -> Boolean)? = null,
 ) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var pendingWorkflowDelete by remember { mutableStateOf<Workflow?>(null) }
+    var workflowDeleteError by remember { mutableStateOf<String?>(null) }
+    var deletingWorkflow by remember { mutableStateOf(false) }
     pendingWorkflowDelete?.let { target ->
         AlertDialog(
-            onDismissRequest = { pendingWorkflowDelete = null },
+            onDismissRequest = { if (!deletingWorkflow) { pendingWorkflowDelete = null; workflowDeleteError = null } },
             title = { Text("Delete ${target.title}?") },
-            text = { Text("This workflow will be removed.") },
+            text = { Text(workflowDeleteError ?: "This workflow will be removed.") },
             confirmButton = {
-                TextButton(onClick = {
-                    pendingWorkflowDelete = null
-                    onDeleteWorkflow?.invoke(target)
-                }) { Text("Delete") }
+                TextButton(enabled = !deletingWorkflow, onClick = {
+                    if (!deletingWorkflow) scope.launch {
+                        deletingWorkflow = true
+                        val removed = try { onDeleteWorkflow?.invoke(target) == true }
+                        catch (cancel: CancellationException) { throw cancel }
+                        catch (_: Exception) { false }
+                        finally { deletingWorkflow = false }
+                        if (removed) { pendingWorkflowDelete = null; workflowDeleteError = null }
+                        else workflowDeleteError = "Couldn't delete this workflow. Your saved workflow is unchanged."
+                    }
+                }) { Text(if (deletingWorkflow) "Deleting…" else "Delete") }
             },
             dismissButton = {
-                TextButton(onClick = { pendingWorkflowDelete = null }) { Text("Cancel") }
+                TextButton(enabled = !deletingWorkflow, onClick = { pendingWorkflowDelete = null; workflowDeleteError = null }) { Text("Cancel") }
             },
         )
     }
     var pendingDelete by remember { mutableStateOf<InstalledAgent?>(null) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
+    var deleting by remember { mutableStateOf(false) }
     pendingDelete?.let { target ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text("Remove ${target.name}?") },
-            text = { Text("This agent will be removed from your agents.") },
+            text = { Text(deleteError ?: "This agent will be removed from your agents.") },
             confirmButton = {
                 TextButton(onClick = {
-                    pendingDelete = null
-                    onDeleteAgent?.invoke(target)
-                }) { Text("Remove") }
+                    if (!deleting) scope.launch {
+                        deleting = true
+                        val removed = try { onDeleteAgent?.invoke(target) == true } catch (_: Exception) { false }
+                        deleting = false
+                        if (removed) { pendingDelete = null; deleteError = null }
+                        else deleteError = "Couldn't remove this agent. Your saved agent is unchanged."
+                    }
+                }, enabled = !deleting) { Text(if (deleting) "Removing…" else "Remove") }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingDelete = null; deleteError = null }) { Text("Cancel") }
             },
         )
     }
@@ -162,6 +193,7 @@ fun AgentsScreen(
                     AgentCard(
                         agent,
                         onOpen = { onOpenAgent(agent) },
+                        onProfile = { onViewAgent(agent) },
                         onEdit = if (canDelete && onEditAgent != null) ({ onEditAgent(agent) }) else null,
                         onLongPress = if (canDelete) ({ pendingDelete = agent }) else null,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
@@ -194,8 +226,9 @@ fun AgentsScreen(
                     WorkflowRow(
                         wf,
                         onOpen = { onOpenWorkflow(wf) },
+                        onRun = { onRunWorkflow(wf) },
                         onEdit = { onEditWorkflow(wf) },
-                        onLongPress = if (onDeleteWorkflow != null) ({ pendingWorkflowDelete = wf }) else null,
+                        onLongPress = if (onDeleteWorkflow != null) ({ workflowDeleteError = null; pendingWorkflowDelete = wf }) else null,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                     )
                 }
@@ -248,6 +281,7 @@ private fun AgentCard(
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
     onEdit: (() -> Unit)? = null,
+    onProfile: () -> Unit = {},
     onLongPress: (() -> Unit)? = null,
 ) {
     val colors = OrhanTheme.colors
@@ -262,18 +296,13 @@ private fun AgentCard(
                 role = Role.Button,
                 onClickLabel = "Chat with ${agent.name}",
                 onClick = onOpen,
-                onLongClick = onLongPress,
+                onLongClick = { onLongPress?.invoke() },
                 onLongClickLabel = if (onLongPress != null) "Remove agent" else null,
             )
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Image(
-            painter = painterResource(agent.avatar),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.size(48.dp).clip(CircleShape),
-        )
+        AgentAvatarImage(agent.avatarPath, agent.avatar, 48.dp, null)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -298,6 +327,9 @@ private fun AgentCard(
                 Text("Edit", style = OrhanTextStyles.meta)
             }
         }
+        TextButton(onClick = onProfile, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text("Profile", style = OrhanTextStyles.meta)
+        }
         Box(
             modifier = Modifier
                 .heightIn(min = 40.dp)
@@ -313,11 +345,27 @@ private fun AgentCard(
     }
 }
 
+@Composable
+internal fun AgentAvatarImage(path: String?, fallback: Int, size: Dp, description: String?) {
+    var bitmap by remember(path) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(path) {
+        bitmap = if (path == null) null else withContext(Dispatchers.IO) {
+            BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = 4 })?.asImageBitmap()
+        }
+    }
+    if (bitmap != null) {
+        Image(bitmap!!, description, contentScale = ContentScale.Crop, modifier = Modifier.size(size).clip(CircleShape))
+    } else {
+        Image(painterResource(fallback), description, contentScale = ContentScale.Crop, modifier = Modifier.size(size).clip(CircleShape))
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun WorkflowRow(
     wf: Workflow,
     onOpen: () -> Unit,
+    onRun: () -> Unit,
     onEdit: () -> Unit,
     modifier: Modifier = Modifier,
     onLongPress: (() -> Unit)? = null,
@@ -363,6 +411,9 @@ private fun WorkflowRow(
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
+        }
+        TextButton(onClick = onRun, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text("Run", style = OrhanTextStyles.meta)
         }
         TextButton(onClick = onEdit, modifier = Modifier.heightIn(min = 48.dp)) {
             Text("Edit", style = OrhanTextStyles.meta)

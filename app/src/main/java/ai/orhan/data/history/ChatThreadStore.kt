@@ -25,7 +25,12 @@ import java.io.OutputStream
  * Local per-chat message threads keyed by chat title (same string as AppRoutes.chat(title)).
  * Device-only; no cloud sync.
  */
-private const val THREAD_FORMAT_VERSION = 2
+private const val THREAD_FORMAT_VERSION = 7
+private const val THREAD_FORMAT_V6 = 6
+private const val THREAD_FORMAT_V5 = 5
+private const val THREAD_FORMAT_V4 = 4
+private const val THREAD_FORMAT_V3 = 3
+private const val THREAD_FORMAT_V2 = 2
 private const val THREAD_FORMAT_V1 = 1
 /** Total on-disk budget for persisted chat attachment files; oldest files are pruned beyond it. */
 const val MAX_ATTACHMENT_DISK_BYTES = 40L * 1024 * 1024
@@ -38,8 +43,31 @@ data class StoredAttachment(val name: String, val mimeType: String, val sizeByte
 data class StoredMessage(
     val id: Long, val role: String, val text: String, val time: String,
     val attachment: StoredAttachment? = null,
+    /** Epoch millis when the bubble was created. Zero on threads saved before automatic memory. */
+    val createdAt: Long = 0L,
+    val transcript: String? = null,
 )
-data class ChatThread(val title: String, val updatedAt: Long, val messages: List<StoredMessage>)
+data class StoredHandoffRetry(
+    val sourceReplyId: Long,
+    val agentName: String,
+    val instructions: String,
+    val task: String,
+    val allowedTools: List<String>? = null,
+)
+data class ChatThread(
+    val title: String,
+    val updatedAt: Long,
+    val messages: List<StoredMessage>,
+    val pendingHandoffRetry: StoredHandoffRetry? = null,
+    val agentId: String? = null,
+)
+
+/** Link an old title-keyed thread only when it has no identity yet. */
+fun List<ChatThread>.associatingLegacyAgent(title: String, agentId: String): List<ChatThread> =
+    map { thread ->
+        if (thread.title.equals(title, ignoreCase = true) && thread.agentId == null) thread.copy(agentId = agentId)
+        else thread
+    }
 
 object ChatThreadsSerializer : Serializer<List<ChatThread>> {
     override val defaultValue: List<ChatThread> = emptyList()
@@ -50,7 +78,9 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
         return try {
             DataInputStream(bytes.inputStream()).use { d ->
                 val version = d.readInt()
-                if (version != THREAD_FORMAT_VERSION && version != THREAD_FORMAT_V1) return defaultValue
+                if (version !in THREAD_FORMAT_V1..THREAD_FORMAT_VERSION) {
+                    return defaultValue
+                }
                 val threadCount = d.readInt()
                 if (threadCount < 0 || threadCount > 10_000) throw IOException("corrupt thread count $threadCount")
                 List(threadCount) {
@@ -59,12 +89,28 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
                     val msgCount = d.readInt()
                     if (msgCount < 0 || msgCount > 100_000) throw IOException("corrupt message count $msgCount")
                     val msgs = List(msgCount) {
-                        val m = StoredMessage(d.readLong(), d.readUTF(), readLongString(d), d.readUTF())
-                        if (version >= 2 && d.readBoolean()) {
-                            m.copy(attachment = StoredAttachment(d.readUTF(), d.readUTF(), d.readLong(), d.readUTF()))
-                        } else m
+                        val id = d.readLong()
+                        val role = d.readUTF()
+                        val text = readLongString(d)
+                        val time = d.readUTF()
+                        val createdAt = if (version >= THREAD_FORMAT_V3) d.readLong() else 0L
+                        var message = StoredMessage(id, role, text, time, createdAt = createdAt)
+                        if (version >= THREAD_FORMAT_V2 && d.readBoolean()) {
+                            message = message.copy(attachment = StoredAttachment(d.readUTF(), d.readUTF(), d.readLong(), d.readUTF()))
+                        }
+                        if (version >= THREAD_FORMAT_VERSION && d.readBoolean()) {
+                            message = message.copy(transcript = readLongString(d))
+                        }
+                        message
                     }
-                    ChatThread(title, updatedAt, msgs)
+                    val pending = if (version >= THREAD_FORMAT_V4 && d.readBoolean()) {
+                        val replyId = d.readLong(); val agentName = d.readUTF()
+                        val instructions = readLongString(d); val task = readLongString(d)
+                        val allowedTools = if (version >= THREAD_FORMAT_V6 && d.readBoolean()) List(d.readInt()) { d.readUTF() } else null
+                        StoredHandoffRetry(replyId, agentName, instructions, task, allowedTools)
+                    } else null
+                    val agentId = if (version >= THREAD_FORMAT_V5 && d.readBoolean()) d.readUTF() else null
+                    ChatThread(title, updatedAt, msgs, pending, agentId)
                 }
             }
         } catch (e: IOException) { defaultValue }
@@ -76,11 +122,25 @@ object ChatThreadsSerializer : Serializer<List<ChatThread>> {
         d.writeInt(t.size)
         t.forEach { th ->
             d.writeUTF(th.title); d.writeLong(th.updatedAt); d.writeInt(th.messages.size)
-            th.messages.forEach { m -> d.writeLong(m.id); d.writeUTF(m.role); writeLongString(d, m.text); d.writeUTF(m.time)
+            th.messages.forEach { m ->
+                d.writeLong(m.id); d.writeUTF(m.role); writeLongString(d, m.text); d.writeUTF(m.time)
+                d.writeLong(m.createdAt)
                 val a = m.attachment
                 d.writeBoolean(a != null)
                 if (a != null) { d.writeUTF(a.name); d.writeUTF(a.mimeType); d.writeLong(a.sizeBytes); d.writeUTF(a.fileName) }
+                d.writeBoolean(m.transcript != null)
+                m.transcript?.let { writeLongString(d, it) }
             }
+            val handoff = th.pendingHandoffRetry
+            d.writeBoolean(handoff != null)
+            if (handoff != null) {
+                d.writeLong(handoff.sourceReplyId); d.writeUTF(handoff.agentName.take(200))
+                writeLongString(d, handoff.instructions); writeLongString(d, handoff.task)
+                d.writeBoolean(handoff.allowedTools != null)
+                handoff.allowedTools?.let { tools -> d.writeInt(tools.size); tools.forEach(d::writeUTF) }
+            }
+            d.writeBoolean(th.agentId != null)
+            th.agentId?.let { d.writeUTF(it.take(100)) }
         }
         d.flush()
     }
@@ -102,10 +162,10 @@ val Context.chatThreadsDataStore: DataStore<List<ChatThread>> by dataStore(
 )
 
 internal fun ChatMessage.toStored(attachment: StoredAttachment? = null) =
-    StoredMessage(id, if (role == ChatRole.User) "user" else "agent", text, time, attachment)
+    StoredMessage(id, if (role == ChatRole.User) "user" else "agent", text, time, attachment, createdAt, transcript)
 
 internal fun StoredMessage.toUi() =
-    ChatMessage(id, if (role == "user") ChatRole.User else ChatRole.Agent, text, time)
+    ChatMessage(id, if (role == "user") ChatRole.User else ChatRole.Agent, text, time, createdAt = createdAt, transcript = transcript)
 
 /** Pure helper: upsert a thread, cap messages and thread count (drop oldest by updatedAt). */
 fun List<ChatThread>.withSaved(
@@ -113,10 +173,13 @@ fun List<ChatThread>.withSaved(
     messages: List<ChatMessage>,
     now: Long,
     attachments: Map<Long, StoredAttachment> = emptyMap(),
+    pendingHandoffRetry: StoredHandoffRetry? = null,
+    agentId: String? = null,
 ): List<ChatThread> {
+    val previous = firstOrNull { it.title == title }
     val rest = filterNot { it.title == title }
     if (messages.isEmpty()) return rest
-    val th = ChatThread(title, now, messages.takeLast(MAX_THREAD_MESSAGES).map { it.toStored(attachments[it.id]) })
+    val th = ChatThread(title, now, messages.takeLast(MAX_THREAD_MESSAGES).map { it.toStored(attachments[it.id]) }, pendingHandoffRetry, agentId ?: previous?.agentId)
     return (rest + th).sortedByDescending { it.updatedAt }.take(MAX_THREADS)
 }
 
@@ -125,7 +188,16 @@ fun List<ChatThread>.withoutAttachments(): List<ChatThread> =
     map { t -> t.copy(messages = t.messages.map { it.copy(attachment = null) }) }
 
 /** A restored thread: UI messages plus re-sendable attachments keyed by user message id. */
-data class LoadedThread(val messages: List<ChatMessage>, val attachments: Map<Long, ChatAttachment>)
+data class LoadedThread(
+    val messages: List<ChatMessage>,
+    val attachments: Map<Long, ChatAttachment>,
+    val pendingHandoffRetry: StoredHandoffRetry? = null,
+    val agentId: String? = null,
+)
+
+/** Reattaches file payloads to visible message models after loading local metadata and bytes. */
+fun LoadedThread.messagesWithAttachments(): List<ChatMessage> =
+    messages.map { message -> message.copy(attachment = attachments[message.id]) }
 
 /**
  * File-backed attachment bytes under [dir] (app filesDir/chat_attachments). Raw bytes, not base64,
@@ -196,9 +268,10 @@ class ChatThreadStore(
 
     /** Loads messages and any attachment files still on disk (missing files are skipped; the 📎 label stays). */
     suspend fun loadThread(title: String): LoadedThread = withContext(Dispatchers.IO) {
-        val msgs = threads.first().firstOrNull { it.title == title }?.messages.orEmpty()
+        val thread = threads.first().firstOrNull { it.title == title }
+        val msgs = thread?.messages.orEmpty()
         val atts = msgs.mapNotNull { m -> m.attachment?.let { s -> files.read(s, ::b64encode)?.let { m.id to it } } }.toMap()
-        LoadedThread(msgs.map { it.toUi() }, atts)
+        LoadedThread(msgs.map { it.toUi() }, atts, thread?.pendingHandoffRetry, thread?.agentId)
     }
 
     suspend fun save(
@@ -206,15 +279,29 @@ class ChatThreadStore(
         messages: List<ChatMessage>,
         attachments: Map<Long, ChatAttachment> = emptyMap(),
         now: Long = System.currentTimeMillis(),
+        pendingHandoffRetry: StoredHandoffRetry? = null,
+        agentId: String? = null,
     ) {
         if (title.isBlank()) return
         withContext(Dispatchers.IO) {
             val kept = messages.takeLast(MAX_THREAD_MESSAGES).map { it.id }.toSet()
             val stored = attachments.filterKeys { it in kept }
                 .mapNotNull { (id, a) -> files.put(title, id, a, ::b64decode)?.let { id to it } }.toMap()
-            val all = dataStore.updateData { it.withSaved(title, messages, now, stored) }
+            val all = dataStore.updateData { it.withSaved(title, messages, now, stored, pendingHandoffRetry, agentId) }
             prune(all)
         }
+    }
+
+    /** Associates a legacy title-matched thread with its current agent identity without rewriting messages. */
+    suspend fun associateAgent(title: String, agentId: String) {
+        if (title.isBlank() || agentId.isBlank()) return
+        dataStore.updateData { threads -> threads.associatingLegacyAgent(title, agentId) }
+    }
+
+    /** Rename-time migration for chats whose old title still identifies the renamed profile. */
+    suspend fun associateLegacyChatsForRename(previousName: String, agentId: String) {
+        if (previousName.isBlank() || agentId.isBlank()) return
+        dataStore.updateData { threads -> threads.associatingLegacyAgent(previousName, agentId) }
     }
 
     suspend fun remove(title: String) {

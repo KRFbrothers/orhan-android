@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import ai.orhan.data.artifacts.Artifact
+import ai.orhan.data.history.ChatThread
 import ai.orhan.data.memory.memoryTabBadge
 import ai.orhan.feature.artifacts.ArtifactsScreen
 import ai.orhan.feature.memory.MemoryScreen
@@ -184,6 +185,7 @@ internal fun OrhanCard(
 fun HomeScreen(
     modifier: Modifier = Modifier,
     onOpenChat: (OrhanChat) -> Unit = {},
+    onOpenChatMessage: (OrhanChat, Long) -> Unit = { chat, _ -> onOpenChat(chat) },
     onOpenSettings: () -> Unit = {},
     onToggleTheme: () -> Unit = {},
     onOpenAppearance: () -> Unit = onOpenSettings,
@@ -192,10 +194,14 @@ fun HomeScreen(
     onEditAgent: ((InstalledAgent) -> Unit)? = null,
     onEditProfile: () -> Unit = {},
     onOpenMemory: () -> Unit = {},
+    /** Opens the chat message a memory topic was taken from. */
+    onOpenMemorySource: (String, Long) -> Unit = { _, _ -> },
+    /** Opens the source chat/message for a saved-message artifact. */
+    onOpenArtifactSource: (String, Long) -> Unit = { _, _ -> },
     onOpenArtifacts: () -> Unit = {},
     artifacts: List<Artifact> = emptyList(),
-    onUpsertArtifact: (Artifact) -> Unit = {},
-    onDeleteArtifact: (String) -> Unit = {},
+    onUpsertArtifact: suspend (Artifact) -> Boolean = { false },
+    onDeleteArtifact: suspend (String) -> Boolean = { false },
     artifactCount: Int = 0,
     /** Unread Memory topics. The tab badge uses this count and hides at zero. */
     memoryUpdates: Int = 0,
@@ -209,6 +215,8 @@ fun HomeScreen(
     profile: UserProfile = UserProfile(),
     /** Recently opened chats (local history), newest first; shown above the samples. */
     recentChats: List<OrhanChat> = emptyList(),
+    /** Persisted thread bodies and transcript metadata used by local message search. */
+    chatThreads: List<ChatThread> = emptyList(),
     /** Titles of pinned chats (persisted locally). */
     pinnedTitles: Set<String> = emptySet(),
     onTogglePin: (OrhanChat) -> Unit = {},
@@ -217,12 +225,15 @@ fun HomeScreen(
     /** Agents tab list: user-created agents first, then samples. */
     agents: List<InstalledAgent> = SampleInstalledAgents,
     deletableAgentNames: Set<String> = emptySet(),
-    onDeleteAgent: ((InstalledAgent) -> Unit)? = null,
+    onDeleteAgent: (suspend (InstalledAgent) -> Boolean)? = null,
+    onViewAgent: (InstalledAgent) -> Unit = {},
     workflows: List<ai.orhan.data.workflows.Workflow> = emptyList(),
     onOpenWorkflow: (ai.orhan.data.workflows.Workflow) -> Unit = {},
+    onRunWorkflow: (ai.orhan.data.workflows.Workflow) -> Unit = {},
     onCreateWorkflow: () -> Unit = {},
+    onOpenAutomations: () -> Unit = {},
     onEditWorkflow: (ai.orhan.data.workflows.Workflow) -> Unit = {},
-    onDeleteWorkflow: ((ai.orhan.data.workflows.Workflow) -> Unit)? = null,
+    onDeleteWorkflow: (suspend (ai.orhan.data.workflows.Workflow) -> Boolean)? = null,
     onOpenPlaybook: (ai.orhan.feature.discover.Playbook) -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(OrhanTab.Chats) }
@@ -233,12 +244,18 @@ fun HomeScreen(
         BackHandler { searchOpen = false }
         LocalSearchScreen(
             chats = recentChats,
+            threads = chatThreads,
+            pinnedTitles = pinnedTitles,
             agents = agents,
             artifacts = artifacts,
             onCancel = { searchOpen = false },
             onOpenChat = { chat ->
                 searchOpen = false
                 onOpenChat(chat)
+            },
+            onOpenChatMessage = { chat, messageId ->
+                searchOpen = false
+                onOpenChatMessage(chat, messageId)
             },
             onOpenAgent = { agent ->
                 searchOpen = false
@@ -270,6 +287,7 @@ fun HomeScreen(
                 onNewChat = {
                     onOpenChat(OrhanChat(title = "Orhan", snippet = "", time = "", isAgent = true))
                 },
+                onOpenAutomations = onOpenAutomations,
             )
         }
         if (profileOpen) {
@@ -335,12 +353,14 @@ fun HomeScreen(
                     OrhanTab.Agents -> AgentsScreen(
                         agents = agents,
                         onOpenAgent = { onOpenChat(OrhanChat(it.name, it.blurb, "", isAgent = true)) },
+                        onViewAgent = onViewAgent,
                         onCreateAgent = onCreateAgent,
                         onEditAgent = onEditAgent,
                         deletableNames = deletableAgentNames,
                         onDeleteAgent = onDeleteAgent,
                         workflows = workflows,
                         onOpenWorkflow = onOpenWorkflow,
+                        onRunWorkflow = onRunWorkflow,
                         onCreateWorkflow = onCreateWorkflow,
                         onEditWorkflow = onEditWorkflow,
                         onDeleteWorkflow = onDeleteWorkflow,
@@ -354,6 +374,11 @@ fun HomeScreen(
                         onBack = { tab = OrhanTab.Chats },
                         embedded = true,
                         onEditProfile = onEditProfile,
+                        onOpenSource = onOpenMemorySource,
+                        onOpenArtifact = { id ->
+                            artifactToOpen = id
+                            tab = OrhanTab.Artifacts
+                        },
                     )
                     OrhanTab.Artifacts -> ArtifactsScreen(
                         artifacts = artifacts,
@@ -361,6 +386,7 @@ fun HomeScreen(
                         onDelete = onDeleteArtifact,
                         onBack = { tab = OrhanTab.Chats },
                         embedded = true,
+                        onOpenSourceMessage = onOpenArtifactSource,
                         pendingOpenId = artifactToOpen,
                         onPendingOpenConsumed = { artifactToOpen = null },
                     )
@@ -388,8 +414,10 @@ private fun HomeTopBar(
     profile: UserProfile,
     onOpenProfile: () -> Unit,
     onNewChat: () -> Unit,
+    onOpenAutomations: () -> Unit,
 ) {
     val colors = OrhanTheme.colors
+    var createMenuOpen by rememberSaveable { mutableStateOf(false) }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -424,19 +452,23 @@ private fun HomeTopBar(
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .size(40.dp)
+                .size(48.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surface)
                 .border(1.dp, colors.fieldEdge, CircleShape)
-                .clickable(onClick = onNewChat),
+                .clickable(onClick = { createMenuOpen = true }),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Rounded.Add,
-                contentDescription = "Chat with Orhan",
+                contentDescription = "Create menu",
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(22.dp),
             )
+            DropdownMenu(expanded = createMenuOpen, onDismissRequest = { createMenuOpen = false }) {
+                DropdownMenuItem(text = { Text("New chat") }, onClick = { createMenuOpen = false; onNewChat() })
+                DropdownMenuItem(text = { Text("Automations") }, onClick = { createMenuOpen = false; onOpenAutomations() })
+            }
         }
     }
 }
