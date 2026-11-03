@@ -30,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -54,7 +55,7 @@ fun AutomationsScreen(
     onBack: () -> Unit,
     onSetUpManually: () -> Unit,
     onEditWorkflow: (Workflow) -> Unit,
-    onGenerate: suspend (Workflow) -> Boolean,
+    onGenerate: suspend (Workflow, Boolean) -> Boolean,
 ) {
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var savedTab by rememberSaveable { mutableStateOf(false) }
@@ -113,7 +114,7 @@ private fun AutomationPromptBuilder(
     template: AutomationTemplate,
     agents: List<SavedAgent>,
     onBack: () -> Unit,
-    onGenerate: suspend (Workflow) -> Boolean,
+    onGenerate: suspend (Workflow, Boolean) -> Boolean,
 ) {
     var task by rememberSaveable(template.id) { mutableStateOf("") }
     var intentId by rememberSaveable(template.id) { mutableStateOf(template.intent.name) }
@@ -128,6 +129,19 @@ private fun AutomationPromptBuilder(
     val agent = agents.firstOrNull { it.id == agentId }
     val missingAgent = agentId != null && agent == null
     val prompt = remember(intent, task, agent?.name) { compileAutomationPrompt(intent, task, agent?.name.orEmpty()) }
+    fun save(configureExecution: Boolean) {
+        if (busy || task.isBlank() || missingAgent) return
+        busy = true
+        error = null
+        scope.launch {
+            try {
+                val saved = onGenerate(Workflow(workflowId, template.title, prompt, agent?.name.orEmpty(), createdAt, agent?.id), configureExecution)
+                if (!saved) error = "Couldn't save your prompt. Your draft is still here."
+            } catch (cancel: CancellationException) { throw cancel }
+            catch (failure: Exception) { error = if (failure is WorkflowCapacityException) failure.message else "Couldn't save your prompt. Your draft is still here." }
+            finally { busy = false }
+        }
+    }
     fun back() { if (!busy) { if (task.isNotBlank()) discard = true else onBack() } }
     BackHandler { back() }
     if (discard) AlertDialog(onDismissRequest = { discard = false }, title = { Text("Discard this draft?") },
@@ -137,18 +151,11 @@ private fun AutomationPromptBuilder(
     Scaffold(bottomBar = {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Button(enabled = !busy && task.isNotBlank() && !missingAgent, onClick = {
-                busy = true
-                scope.launch {
-                    try {
-                        val saved = onGenerate(Workflow(workflowId, template.title, prompt, agent?.name.orEmpty(), createdAt, agent?.id))
-                        if (!saved) error = "Couldn't save your prompt. Your draft is still here."
-                    } catch (cancel: CancellationException) { throw cancel }
-                    catch (failure: Exception) { error = if (failure is WorkflowCapacityException) failure.message else "Couldn't save your prompt. Your draft is still here." }
-                    finally { busy = false }
-                }
-            }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(if (busy) "Saving prompt…" else "Generate Prompt") }
-            Text("Saved first, then opened for review in chat. Scheduled delivery is configured separately.", style = MaterialTheme.typography.bodySmall)
+            Button(enabled = !busy && task.isNotBlank() && !missingAgent, onClick = { save(false) },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(if (busy) "Saving prompt…" else "Generate Prompt") }
+            OutlinedButton(enabled = !busy && task.isNotBlank() && !missingAgent, onClick = { save(true) },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Save & configure execution") }
+            Text("Generate opens a chat draft. Configure opens run, handoff and schedule controls. Neither button starts a run.", style = MaterialTheme.typography.bodySmall)
         }
     }) { insets ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(insets), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {

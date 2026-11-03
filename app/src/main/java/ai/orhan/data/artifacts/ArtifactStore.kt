@@ -69,8 +69,11 @@ object ArtifactsSerializer : Serializer<List<Artifact>> {
                             ArtifactType.entries.firstOrNull { it.wireName == name }
                                 ?: throw IOException("Unsupported artifact type")
                         },
-                        kind = if (version >= 3) ArtifactKind.entries.firstOrNull { it.wireName == d.readUTF() }
-                            ?: throw IOException("Unsupported artifact kind") else ArtifactKind.DOCUMENT,
+                        kind = if (version >= 3) {
+                            val kindName = d.readUTF()
+                            ArtifactKind.entries.firstOrNull { it.wireName == kindName }
+                                ?: throw IOException("Unsupported artifact kind")
+                        } else ArtifactKind.DOCUMENT,
                         sourceChatId = if (version >= 3) d.readNullableUTF() else null,
                         sourceMessageId = if (version >= 3 && d.readBoolean()) d.readLong() else null,
                         author = if (version >= 3) d.readNullableUTF() else null,

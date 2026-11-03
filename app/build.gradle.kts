@@ -278,7 +278,8 @@ tasks.register<Exec>("instrumentDebugOnEmulator") {
         val output = instrumentationOutput.toString("UTF-8") + instrumentationError.toString("UTF-8")
         logger.lifecycle(output)
         val code = Regex("INSTRUMENTATION_CODE: (-?\\d+)").find(output)?.groupValues?.get(1)
-        check(executionResult.get().exitValue == 0 && code == "0" &&
+        // AndroidJUnitRunner finishes normally with Activity.RESULT_OK (-1).
+        check(executionResult.get().exitValue == 0 && code == "-1" &&
             !output.contains("INSTRUMENTATION_FAILED", ignoreCase = true) &&
             !output.contains("Process crashed", ignoreCase = true) &&
             !output.contains("FAILURES!!!", ignoreCase = true)) {

@@ -335,13 +335,14 @@ fun OrhanNavHost(isDark: Boolean) {
                 onBack = { navController.popBackStack() },
                 onSetUpManually = { navController.navigate(AppRoutes.workflowEdit()) },
                 onEditWorkflow = { navController.navigate(AppRoutes.workflowEdit(it.id)) },
-                onGenerate = { draft ->
+                onGenerate = { draft, configureExecution ->
                     val currentAgent = draft.agentId?.let { id -> agentStore.agents.first().firstOrNull { it.id == id } }
                     if (draft.agentId != null && currentAgent == null) false
                     else {
                         val saved = draft.copy(agentName = currentAgent?.name.orEmpty())
                         workflowStore.upsert(saved)
-                        navController.navigate(AppRoutes.chat(saved.agentName.ifBlank { "Orhan" }, saved.content))
+                        navController.navigate(if (configureExecution) AppRoutes.workflowEdit(saved.id)
+                            else AppRoutes.chat(saved.agentName.ifBlank { "Orhan" }, saved.content))
                         true
                     }
                 },
