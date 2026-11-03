@@ -10,8 +10,12 @@
 - **Current task phase:** **Phases 1–5 — reference governance**.
 - **Current task:** install the exact approved reference, make it mandatory in
   agent entry instructions, and replace the obsolete phase-order guidance.
+- **Current task status:** verified for documentation/reference governance only.
 - **Current task evidence:** approved attachment and repository documentation
-  inspection; content/hash/link checks are recorded in the change handoff.
+  inspection. Exact upload bytes/SHA-256 and the GitHub reference blob identity
+  match; 30 feature IDs, all five phase mappings, 13 repository-relative links,
+  Markdown fences and `git diff --check` were checked. GitHub content read-back
+  matches the prepared documents (the reader omits a final newline where present).
 - **Feature implementation in this task:** none. No new REA observation, Android
   test/build/device result or feature acceptance is claimed.
 - **Next feature task:** Phase 1 — F1.1, inventory the existing send/composer/
