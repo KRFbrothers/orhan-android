@@ -4,11 +4,11 @@
 
 - **Approved baseline:** [TEAMLY_FEATURE_REFERENCE.md](../reference/TEAMLY_FEATURE_REFERENCE.md), v2.0 — 2026-11-03, user-approved in PR #120 (`a5470992377d4003dac8cad240063630cb23042b`).
 - **Active phase:** **Phase 1 — Chats (F1.1–F1.6)**.
-- **Current task phase / feature:** **Phase 1 — F1.1 — Text sending, mentions, and composer-draft persistence**.
-- **Task status:** **Partial**. Existing send and agent mention flows were reused. Restart-persistent draft storage and migration were implemented, unit-tested, and verified on an updated device build. Group mentions remain blocked by the lack of an Orhan group/member model; updated-build send was not tested in the existing personal assistant thread.
-- **Task evidence:** [sanitized REA record](f1-1-rea-evidence-2026-11-03.md); captures under ignored `captures/f1-1-2026-11-03/` are raw and are not committed.
+- **Current task phase / feature:** **Phase 1 — F1.2 — Existing message actions** (F1.1 remains partial).
+- **F1.1 status:** **Partial**. Existing send and agent mention flows were reused. Restart-persistent draft storage and migration were implemented, unit-tested, and verified on an updated device build. Group mentions remain blocked by the lack of an Orhan group/member model; updated-build send was not tested in the existing personal assistant thread.
+- **Task evidence:** [F1.1 REA record](f1-1-rea-evidence-2026-11-03.md), [F1.2 REA record](f1-2-rea-evidence-2026-11-04.md), and [F1.2 build/device verification](f1-2-build-verification-2026-11-04.md); raw captures and full logs remain ignored under `captures/`.
 - **Source revision:** focused local commit `feat(android): persist F1.1 composer drafts` on branch `docs/chat-f11-reference-inspection`, based on `b5e4360`. The pre-existing edit in `HomeScreen.kt` was preserved and remains outside this commit.
-- **Next in-phase slice:** Phase 1 — F1.2 baseline inventory may proceed while the F1.1 group mention gap stays blocked on an Orhan-owned group/member model. Do not add guessed group storage or backend behavior. Revisit F1.1 if that capability becomes available.
+- **Next in-phase slice:** Continue Phase 1 — F1.2 by verifying Copy, quote cancellation, and other safe action eligibility/outcomes in a synthetic context. Updated-device Reply/quote/send/source navigation has now been verified. F1.1 group mentions remain blocked on an Orhan-owned group/member model; do not add guessed group storage or backend behavior.
 
 ## F1.1 acceptance status
 
@@ -30,21 +30,32 @@
 - Draft-only threads are retained; message saves preserve drafts; clearing a draft preserves existing messages. Draft save errors are surfaced beside the composer.
 - No second composer, screen, store, message model, API client, group backend, or send route was introduced.
 
+## F1.2 — Existing message actions (partial)
+
+- **Approved baseline:** [TEAMLY_FEATURE_REFERENCE.md](../reference/TEAMLY_FEATURE_REFERENCE.md), v2.0, PR #120.
+- **Runtime reference:** realme RMX5051 / RMX5051IN, Android 16, REA device observation `ev_dff603877295ad2fe5b83cfaf0115433185d82b965ff4fb3c6ee065e3a72d3e3`; installed `ai.teamily.mobile` v2.0.20 / code 234, REA package observation `ev_0a1d2a1645adf6ac84777e2beb14849c3b4ef701e19e06094e99d27b584db8c5`; foreground app `ai.teamily.mobile/.MainActivity`, REA observation `ev_919b3588803bdee0d2486cf9ae8ebe826bd63fbb719e247601a392a4f6f0d66e`.
+- **Evidence:** [F1.2 REA record](f1-2-rea-evidence-2026-11-04.md); raw screenshots remain ignored under `captures/f1-2-2026-11-04/`.
+- **Verified reference flow:** in the existing synthetic Content Creator 1:1 thread, long-press opened message actions (`ev_77b396997061e3453803f92218bbbf8262da112a764ca57844dd863c37c11a24`); Reply opened a composer quote with clear X (`ev_0d975abd327631518c845c60cb6977f832d1028afc274fc40c83ff095fd783`); synthetic reply sent with its quote visible (`ev_282f3d6eacd00313c5f57f64cdb222bcc3a1eb4d4aca8140e9a85f7c2666ce10`). Tapping the quote was captured, but the frame did not conclusively establish original-message highlight (`ev_1f35d9ec09f2f75fae596d25671bb0f58973dc8fe9298014438df8e859ed4bb7`). Own-message sheet offered Unsend; agent-message sheet did not (`ev_77b396997061e3453803f92218bbbf8262da112a764ca57844dd863c37c11a24`, `ev_ac93ca675c98d35d6ab875f8889ae67b032667468b2a94ceede99e0f685c3adf`). Report was absent in this 1:1 sheet. Back dismissed the sheet without action (`ev_92db3389803e6f8cbbafc0f6430641632004e5ae086e29bd2fc6d03cc9899dcc`). Copy, forward, reaction, cancellation via X, failed-send eligibility, and group-only Report remain unverified; no destructive action was taken.
+- **Orhan source inventory:** reused `ChatScreen`, `ChatViewModel`, `ChatThreadStore`, and existing exact-message `focusMessageId` scrolling/highlight. Added the Reply action and composer quote/clear affordance; sent messages store the source message ID and render it as a tap target. Thread format advances from v8 to v9 while retaining earlier decoders and the F1.1 draft field.
+- **Current status:** F1.2 remains partial. The existing Reply flow is verified on updated Orhan v0.2.0/code 369: quote composer, synthetic send, tap-to-exact-source scroll/highlight, cold-restart persistence/navigation, and light/dark highlight. Teamly's quote-tap capture did not conclusively prove its highlight, so reference parity for that point remains unknown. The compile failure was reproduced and localized to inconsistent incremental compiler state; a one-invocation full compile restored state, and the normal compile then passed. No source/toolchain/dependency repair was necessary. Existing HomeScreen local change remains preserved. Details/logs: [F1.2 build/device verification](f1-2-build-verification-2026-11-04.md).
+- **Unchanged failure baseline:** `MeetingMinutesActionsTest.emptyOrUnstructuredActionSectionDoesNotCreateActions` previously reproduced as 1 failure out of 2 tests at `MeetingMinutesActionsTest.kt:25`; test/meeting-action implementation are unchanged since baseline `b5e4360`. It was not suppressed or modified.
+- **Remaining F1.1 blocker:** group mentions still lack an Orhan group/member model; F1.1 remains partial.
+- **Next in-phase slice:** verify non-destructive Copy, quote cancellation, and remaining safe action eligibility/outcomes in synthetic context. Keep destructive reference actions blocked.
+
 ## Executed checks
 
 - Targeted tests: `ChatThreadStoreTest`, `ChatAttachmentPersistenceTest`, and `HandoffParseTest` — **passed**.
-- Full unit suite: **193 tests, 1 failure** in unchanged `MeetingMinutesActionsTest.emptyOrUnstructuredActionSectionDoesNotCreateActions` (`MeetingMinutesActionsTest.kt:25`). The F1.1 changes do not touch this test or its implementation.
-- `:app:assembleDebug :app:lintDebug -PversionCodeOffset=105` — **passed** on final source. The wrapper's Kotlin daemon connection failed; Gradle's in-process fallback completed compilation. Lint report: `app/build/reports/lint-results-debug.html`.
+- Relevant history/reply tests passed. The separately run `MeetingMinutesActionsTest` had 1 failure of 2 at `MeetingMinutesActionsTest.kt:25`; it and its implementation are unchanged from baseline. The full unit suite was not rerun as a clean pass.
+- Build blocker reproduction/restoration, exact checks, and results are recorded in [F1.2 build/device verification](f1-2-build-verification-2026-11-04.md). `:app:assembleDebug -PversionCodeOffset=106` and `:app:lintDebug -PversionCodeOffset=106` passed; lint report: `app/build/reports/lint-results-debug.html`.
 - `git diff HEAD^ HEAD --check` and working-tree `git diff --check` — **passed** after the final status/evidence updates.
-- Installed Orhan before update: `ai.orhan`, version `0.2.0`, versionCode `366`. Final APK: same package/name, versionCode `367`. Signer SHA-256 matched (`8de8c2e46e572df1a7dcedce00b48a6ba0e53c042d52079c510f2923be88e06e`). The committed derivation/configuration was unchanged; a one-build `versionCodeOffset=105` produced 262 + 105 = 367.
-- `adb install -r` succeeded and REA observed versionCode 367; the original first-install timestamp was retained. No uninstall or app-data clear was performed.
-- Updated build was observed on the device. The synthetic draft survived leaving/reopening the thread and force-stop/cold relaunch (`ev_f74904d4…`, `ev_b4972f5c…`). No Orhan message was sent into the existing personal assistant conversation.
+- Installed Orhan was code 367 and compatible update code 369 (`ai.orhan`, v0.2.0); signer matched and first-install timestamp was retained. `adb install -r` succeeded. No uninstall or app-data clear was performed.
+- Updated build persisted and navigated the synthetic reply after cold restart in light theme; quote navigation/highlight was also checked in dark theme. This F1.2 verification sent only a synthetic message in Orhan, not a personal Teamly message.
 
 ## Phase ledger
 
 | Phase | Area | Approved features | Current status / exit evidence |
 | --- | --- | --- | --- |
-| 1 | Chats | F1.1–F1.6 | **Active; F1.1 partial** as detailed above. Draft persistence is runtime-verified; group mention support lacks an Orhan group/member model and send/failure parity remains unverified. F1.2–F1.6 remain queued. |
+| 1 | Chats | F1.1–F1.6 | **Active; F1.1 partial and F1.2 partial** as detailed above. Draft persistence is runtime-verified; group mention support lacks an Orhan group/member model. F1.2 Reply/source navigation is build- and updated-device-verified; other message actions remain open. F1.3–F1.6 remain queued. |
 | 2 | Agents | F2.1–F2.6 | Queued under v2.0; existing source preserved, no phase sign-off recorded. |
 | 3 | Memory | F3.1–F3.8 | Queued under v2.0; existing source/data preserved, no phase sign-off recorded. |
 | 4 | Artifacts | F4.1–F4.7 | Queued under v2.0; existing source preserved, no phase sign-off recorded. |
