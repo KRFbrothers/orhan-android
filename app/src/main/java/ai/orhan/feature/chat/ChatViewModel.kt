@@ -390,25 +390,25 @@ class ChatViewModel(
     fun send(raw: String) = send(raw, null)
 
     /** Sends [raw] with an optional inline file. The bubble shows a "📎 name" line for the file. */
-    fun send(raw: String, attachment: ChatAttachment?, onAgentRunId: suspend (String) -> Unit = {}) {
+    fun send(raw: String, attachment: ChatAttachment?, onAgentRunId: suspend (String) -> Unit = {}, replyToMessageId: Long? = null) {
         val text = raw.trim()
         if ((text.isEmpty() && attachment == null) || _state.value.busy) return
         pendingHandoffRetry = null
         val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
-        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis(), attachment = attachment)
+        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis(), attachment = attachment, replyToMessageId = replyToMessageId)
         if (attachment != null) attachmentsById[user.id] = attachment
         _state.update { it.copy(messages = it.messages + user, loading = true, activityLabel = null, busy = true, error = null) }
         streamReply(onAgentRunId = onAgentRunId)
     }
 
     /** Explicit @mentions use the same specialist engine path and retry persistence as model handoffs. */
-    fun sendToAgent(raw: String, agent: RosterAgent, task: String, attachment: ChatAttachment? = null) {
+    fun sendToAgent(raw: String, agent: RosterAgent, task: String, attachment: ChatAttachment? = null, replyToMessageId: Long? = null) {
         val text = raw.trim()
         val requestedTask = task.trim()
         if (text.isEmpty() || requestedTask.isEmpty() || _state.value.busy) return
         pendingHandoffRetry = null
         val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
-        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis())
+        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis(), replyToMessageId = replyToMessageId)
         if (attachment != null) attachmentsById[user.id] = attachment
         val sourceId = nextId()
         val assignment = ChatMessage(sourceId, ChatRole.Agent, "I assigned this request to ${agent.name}: $requestedTask", currentTimeString())

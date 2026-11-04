@@ -79,6 +79,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Reply
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -158,6 +159,8 @@ data class ChatMessage(
     val attachment: ChatAttachment? = null,
     /** Transcript explicitly requested for this audio message; persisted separately from the source bytes. */
     val transcript: String? = null,
+    /** Exact earlier message quoted by this reply. */
+    val replyToMessageId: Long? = null,
 )
 
 /**
@@ -229,8 +232,10 @@ fun ChatScreen(
     systemNotice: String? = null,
     agentMentions: List<String> = emptyList(),
     onSendMessage: ((String) -> Unit)? = null,
+    onSendReplyMessage: ((String, Long?) -> Unit)? = null,
     /** Sends text plus one inline file to the engine. When null, Attach explains files aren't available here. */
     onSendAttachment: ((text: String, attachment: ChatAttachment) -> Unit)? = null,
+    onSendReplyAttachment: ((text: String, attachment: ChatAttachment, replyToMessageId: Long?) -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
     onStopGeneration: (() -> Unit)? = null,
     sendWithEnter: Boolean = true,
@@ -271,6 +276,8 @@ fun ChatScreen(
     val messages = messagesOverride ?: localMessages
     var input by rememberSaveable { mutableStateOf(initialComposerText) }
     var inputEdited by rememberSaveable { mutableStateOf(false) }
+    var replyToMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var highlightedReplyMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
     var composerDraftApplied by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(threadRestored, restoredComposerDraft) {
         if (threadRestored && !composerDraftApplied) {
@@ -481,9 +488,14 @@ fun ChatScreen(
 
     fun deliver(text: String) {
         val file = attachment
-        if (file != null && onSendAttachment != null) {
+        if (file != null && onSendReplyAttachment != null) {
+            onSendReplyAttachment(text, file, replyToMessageId)
+            attachment = null
+        } else if (file != null && onSendAttachment != null) {
             onSendAttachment(text, file)
             attachment = null
+        } else if (onSendReplyMessage != null) {
+            onSendReplyMessage(text, replyToMessageId)
         } else if (onSendMessage != null) {
             onSendMessage(text)
         } else {
@@ -492,9 +504,11 @@ fun ChatScreen(
                 role = ChatRole.User,
                 text = text,
                 time = "now",
+                replyToMessageId = replyToMessageId,
             )
         }
         input = ""
+        replyToMessageId = null
         onComposerDraftChange?.invoke("")
     }
 
@@ -588,10 +602,21 @@ fun ChatScreen(
             items(items = messages, key = { it.id }) { message ->
                 MessageBubble(
                     message = message,
+                    quotedMessage = message.replyToMessageId?.let { id -> messages.firstOrNull { it.id == id } },
                     agentName = agentName,
                     selected = message.id == actionMessageId ||
+                        message.id == highlightedReplyMessageId ||
                         (actionMessageId == null && focusMessageId != 0L && message.id == focusMessageId),
-                    sourceMessage = focusMessageId != 0L && message.id == focusMessageId,
+                    sourceMessage = (focusMessageId != 0L && message.id == focusMessageId) || message.id == highlightedReplyMessageId,
+                    onQuoteClick = message.replyToMessageId?.let { quotedId -> {
+                        val index = messages.indexOfFirst { it.id == quotedId }
+                        if (index >= 0) scope.launch {
+                            listState.animateScrollToItem(index + 1)
+                            highlightedReplyMessageId = quotedId
+                        } else {
+                            Toast.makeText(context, "The quoted message is no longer in this chat.", Toast.LENGTH_LONG).show()
+                        }
+                    } },
                     showActivityCards = showActivityCards,
                     onLongPress = if (message.text.isNotBlank()) {
                         { actionMessageId = message.id }
@@ -651,6 +676,9 @@ fun ChatScreen(
         }
         Composer(
             value = input,
+            agentName = agentName,
+            replyPreview = replyToMessageId?.let { id -> messages.firstOrNull { it.id == id } },
+            onClearReply = { replyToMessageId = null },
             onValueChange = {
                 input = it
                 inputEdited = true
@@ -690,6 +718,10 @@ fun ChatScreen(
             canTranscribe = onTranscribeAudio != null && onSaveTranscript != null && actionMessage.attachment?.mimeType?.startsWith("audio/") == true,
             canCreateMinutes = onCreateMeetingMinutes != null && actionMessage.attachment?.mimeType?.startsWith("audio/") == true,
             onDismiss = { actionMessageId = null },
+            onReply = {
+                replyToMessageId = actionMessage.id
+                actionMessageId = null
+            },
             onCopy = {
                 copyText(context, actionMessage.text)
                 actionMessageId = null
@@ -893,11 +925,13 @@ private fun shareTranscript(context: Context, agentName: String, messages: List<
 @Composable
 private fun MessageBubble(
     message: ChatMessage,
+    quotedMessage: ChatMessage? = null,
     agentName: String,
     selected: Boolean,
     showActivityCards: Boolean = true,
     onLongPress: (() -> Unit)? = null,
     sourceMessage: Boolean = false,
+    onQuoteClick: (() -> Unit)? = null,
 ) {
     val colors = OrhanTheme.colors
     val isUser = message.role == ChatRole.User
@@ -940,6 +974,31 @@ private fun MessageBubble(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(bottom = 4.dp),
                 )
+            }
+            if (quotedMessage != null) {
+                Column(
+                    modifier = Modifier
+                        .widthIn(max = 300.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f))
+                        .then(if (onQuoteClick != null) Modifier.clickable(onClick = onQuoteClick) else Modifier)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        text = if (quotedMessage.role == ChatRole.User) "You" else agentName,
+                        style = OrhanTextStyles.meta,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = quotedMessage.text.take(140),
+                        style = OrhanTextStyles.meta,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(modifier = Modifier.height(5.dp))
             }
             val bubbleModifier = Modifier
                 .clip(bubbleShape)
@@ -1271,6 +1330,9 @@ private fun Dot(alpha: Float) {
 @Composable
 private fun Composer(
     value: String,
+    agentName: String = "Orhan",
+    replyPreview: ChatMessage? = null,
+    onClearReply: () -> Unit = {},
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
     onAttach: () -> Unit = {},
@@ -1314,6 +1376,22 @@ private fun Composer(
                 .background(MaterialTheme.colorScheme.surface)
                 .border(1.dp, colors.fieldEdge, cardShape),
         ) {
+            if (replyPreview != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp)
+                        .clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f))
+                        .padding(start = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(vertical = 6.dp)) {
+                        Text(if (replyPreview.role == ChatRole.User) "Reply to you" else "Reply to $agentName", style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.primary, maxLines = 1)
+                        Text(replyPreview.text.take(120), style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    IconButton(onClick = onClearReply, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Clear reply", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
             if (attachment != null) {
                 Row(
                     modifier = Modifier
@@ -1558,6 +1636,7 @@ private fun MessageActionsSheet(
     canTranscribe: Boolean,
     canCreateMinutes: Boolean,
     onDismiss: () -> Unit,
+    onReply: () -> Unit,
     onCopy: () -> Unit,
     onShare: () -> Unit,
     onSave: () -> Unit,
@@ -1578,6 +1657,7 @@ private fun MessageActionsSheet(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
+            SheetAction(Icons.Rounded.Reply, "Reply", null, onReply)
             SheetAction(Icons.Rounded.ContentCopy, "Copy", null, onCopy)
             SheetAction(Icons.Rounded.Share, "Share", null, onShare)
             if (canTranslate) SheetAction(Icons.Rounded.Description, "Translate", "Uses the configured language model.", onTranslate)

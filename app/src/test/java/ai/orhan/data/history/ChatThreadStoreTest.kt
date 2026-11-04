@@ -38,11 +38,21 @@ class ChatAttachmentPersistenceTest {
     private fun enc(b: ByteArray) = java.util.Base64.getEncoder().encodeToString(b)
 
     @Test fun serializerRoundTripsAttachmentMetadata() = kotlinx.coroutines.runBlocking {
-        val m = StoredMessage(1, "user", "\uD83D\uDCCE note.m4a", "now", StoredAttachment("note.m4a", "audio/mp4", 3, "a_1.bin"), transcript = "saved transcript")
+        val m = StoredMessage(1, "user", "\uD83D\uDCCE note.m4a", "now", StoredAttachment("note.m4a", "audio/mp4", 3, "a_1.bin"), transcript = "saved transcript", replyToMessageId = 9L)
         val list = listOf(ChatThread("t", 5, listOf(m, StoredMessage(2, "agent", "hi", "now"))))
         val out = java.io.ByteArrayOutputStream()
         ChatThreadsSerializer.writeTo(list, out)
         assertEquals(list, ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()))
+    }
+
+    @Test fun replyRelationshipSurvivesThreadMappingAndSerialization() = kotlinx.coroutines.runBlocking {
+        val reply = ChatMessage(10, ChatRole.User, "answer", "now", replyToMessageId = 7L)
+        val thread = emptyList<ChatThread>().withSaved("Orhan", listOf(reply), 11L)
+        val out = java.io.ByteArrayOutputStream()
+        ChatThreadsSerializer.writeTo(thread, out)
+        val restored = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
+        assertEquals(7L, restored.messages.single().replyToMessageId)
+        assertEquals(7L, restored.messages.single().toUi().replyToMessageId)
     }
 
     @Test fun serializerRoundTripsDraftAndPreservesItWhenMessagesAreSaved() = kotlinx.coroutines.runBlocking {
@@ -81,6 +91,25 @@ class ChatAttachmentPersistenceTest {
         val migrated = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
         assertEquals("saved transcript", migrated.messages.single().transcript)
         assertEquals(null, migrated.draft)
+    }
+
+    @Test fun v8DraftMigratesAndDoesNotInventReplyRelationship() = kotlinx.coroutines.runBlocking {
+        val out = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(out).apply {
+            writeInt(8); writeInt(1); writeUTF("Orhan"); writeLong(30); writeInt(1)
+            writeLong(17); writeUTF("user")
+            val text = "hello".toByteArray(Charsets.UTF_8)
+            writeInt(text.size); write(text); writeUTF("now"); writeLong(12)
+            writeBoolean(false); writeBoolean(false)
+            writeBoolean(false); writeBoolean(false)
+            writeBoolean(true)
+            val draft = "unfinished".toByteArray(Charsets.UTF_8)
+            writeInt(draft.size); write(draft)
+            flush()
+        }
+        val migrated = ChatThreadsSerializer.readFrom(out.toByteArray().inputStream()).single()
+        assertEquals("unfinished", migrated.draft)
+        assertEquals(null, migrated.messages.single().replyToMessageId)
     }
 
     @Test fun v6ThreadMigratesWithoutAStoredTranscript() = kotlinx.coroutines.runBlocking {

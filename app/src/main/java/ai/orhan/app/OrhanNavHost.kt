@@ -610,10 +610,20 @@ fun OrhanNavHost(isDark: Boolean) {
                     if (title.equals("Orhan", true) && mention != null) chatViewModel.sendToAgent(text, mention.first, mention.second)
                     else chatViewModel.send(text)
                 },
+                onSendReplyMessage = { text, replyToMessageId ->
+                    val mention = explicitAgentMention(text, mentionRoster)
+                    if (title.equals("Orhan", true) && mention != null) chatViewModel.sendToAgent(text, mention.first, mention.second, replyToMessageId = replyToMessageId)
+                    else chatViewModel.send(text, null, replyToMessageId = replyToMessageId)
+                },
                 onSendAttachment = { text, file ->
                     val mention = explicitAgentMention(text, mentionRoster)
                     if (title.equals("Orhan", true) && mention != null) chatViewModel.sendToAgent(text, mention.first, mention.second, file)
                     else chatViewModel.send(text, file)
+                },
+                onSendReplyAttachment = { text, file, replyToMessageId ->
+                    val mention = explicitAgentMention(text, mentionRoster)
+                    if (title.equals("Orhan", true) && mention != null) chatViewModel.sendToAgent(text, mention.first, mention.second, file, replyToMessageId)
+                    else chatViewModel.send(text, file, replyToMessageId = replyToMessageId)
                 },
                 onRetry = chatViewModel::retry,
                 onStopGeneration = {
