@@ -3,6 +3,17 @@
 Orhan is an Android AI chat app (`ai.orhan`), built with Jetpack Compose + Material 3.
 The app code and the HTML design live together in this repo.
 
+## Before any AI-assisted work
+
+Read [AGENTS.md](AGENTS.md), the final user-approved
+[Teamily feature reference v2.0](docs/reference/TEAMLY_FEATURE_REFERENCE.md),
+and [current phase/task status](docs/verification/TEAMLY_PHASE_STATUS.md) before
+starting. Every task must name its active phase and approved feature ID.
+Approved order: **1 Chats → 2 Agents → 3 Memory → 4 Artifacts → 5 Meetings**.
+Do not add behavior outside the approved reference or implement inferred/unknown
+behavior by assumption. Earlier stage-order/next-task notes are historical and
+do not override this baseline.
+
 ## Design preview (live)
 - **https://krfbrothers.github.io/orhan-android/** — 14-screen HTML design
 - **https://krfbrothers.github.io/orhan-android/m3-gallery.html** — Material 3 component gallery

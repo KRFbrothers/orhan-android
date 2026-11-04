@@ -4,10 +4,10 @@
 
 - **Approved baseline:** [TEAMLY_FEATURE_REFERENCE.md](../reference/TEAMLY_FEATURE_REFERENCE.md), v2.0 — 2026-11-03, user-approved in PR #120 (`a5470992377d4003dac8cad240063630cb23042b`).
 - **Active phase:** **Phase 1 — Chats (F1.1–F1.6)**.
-- **Current task phase / feature:** **Phase 1 — F1.2 — Copy and action-sheet dismissal**, verified for the tested text context; F1.1/F1.2 remain partial overall.
+- **Current task phase / feature:** **Phase 1 — F1.2 — PR #121 merge-conflict resolution**, verified for the tested text context; F1.1/F1.2 remain partial overall.
 - **F1.1 status:** **Partial**. Existing send and agent mention flows were reused. Restart-persistent draft storage and migration were implemented, unit-tested, and verified on an updated device build. Group mentions remain blocked by the lack of an Orhan group/member model; updated-build send was not tested in the existing personal assistant thread.
 - **Task evidence:** [F1.1 REA record](f1-1-rea-evidence-2026-11-03.md), [F1.2 REA record](f1-2-rea-evidence-2026-11-04.md), and [F1.2 build/device verification](f1-2-build-verification-2026-11-04.md); raw captures and full logs remain ignored under `captures/`.
-- **Source revision:** focused local commit `feat(android): persist F1.1 composer drafts` on branch `docs/chat-f11-reference-inspection`, based on `b5e4360`. The pre-existing edit in `HomeScreen.kt` was preserved and remains outside this commit.
+- **Source revision:** PR #121 branch `feat/android-phase1-chat-f11-f12`, originally at `cfd5483`, with latest `origin/main` integrated by the conflict-resolution commit. The unrelated `HomeScreen.kt` working-tree edit was preserved and excluded.
 - **Next in-phase slice:** Phase 1 — F1.2 Translate language picker/cancellation and remaining safe action eligibility. Text Copy and chosen Back/outside semantics are verified; image/media Copy and other actions remain open. F1.1 group mentions remain blocked on an Orhan-owned group/member model.
 
 ## F1.1 acceptance status
@@ -64,3 +64,17 @@
 | 5 | Meetings | F5.1–F5.3 | Queued; Android entry point and unknowns require evidence before new behavior is added. |
 
 “Queued” means queued for verification/delivery under v2.0; it does not claim related source is absent. Existing authentication, stored data, signing, and unrelated work remain preserved.
+
+## Required task record and evidence limits
+
+At each task handoff, record the feature/task state, source revision, evidence/report location, actual checks/results, blockers and next in-phase slice. Use `verified`, `partial`, `blocked` or `not started`, distinguishing source implementation from updated-build runtime proof. Do not mark a task or phase complete because a blocker exists.
+
+The approved document's labels do not establish runtime parity. REA tools/device/package availability must be checked in the executing session; do not assume access from an old capture. Missing or inferred behavior requires supported observation or a user decision. Do not invent backend contracts, UI options, extra features or success results. Phase advancement follows the approved order and recorded acceptance, or an explicit user-directed phase change. Existing auth, consent, stored data, signing and unrelated work remain preserved.
+
+## PR #121 conflict-resolution handoff
+
+- Fetched `origin/main` at `8fb774108f536c7a816e0d8477e74a6ea5fa3349` on the existing branch `feat/android-phase1-chat-f11-f12`. Merge preview and actual merge identified one content conflict: this ledger. The two ledger histories were reconciled: the current F1.1/F1.2 evidence and partial status remain, while v2.0 task-record and evidence-limit requirements from `origin/main` are retained. The four F1.1/F1.2 evidence reports remain in the PR branch; no evidence was removed.
+- The unrelated local `HomeScreen.kt` edit was left unstaged and excluded. No device/reference interaction occurred for this integration task; prior device evidence is reused only at its recorded scope above.
+- Checks, run sequentially: `:app:testDebugUnitTest --tests ai.orhan.data.history.ChatThreadStoreTest --tests ai.orhan.data.history.ChatAttachmentPersistenceTest --tests ai.orhan.feature.chat.HandoffParseTest` **passed**; `:app:assembleDebug` **passed**; `:app:lintDebug` **passed**; `git diff --check` **passed**.
+- Historical baseline: `MeetingMinutesActionsTest.emptyOrUnstructuredActionSectionDoesNotCreateActions` had failed at line 25 before this merge. The fetched `origin/main` includes a change to `MeetingMinutesActions.kt`; the same test was run separately on the merged source and **passed**. The test was not suppressed or skipped. The full unit suite was not run, so no full-suite pass is claimed.
+- PR remains the existing PR #121, unmerged. F1.1 group mentions remain blocked; F1.1 and F1.2 remain partial. Next in-phase feature slice remains F1.2 Translate language picker/cancellation and remaining safe action eligibility.
