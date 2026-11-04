@@ -1,4 +1,4 @@
-# design/ — the 14-screen HTML showcase
+# design/ — the HTML showcase
 
 Open `index.html` in a browser. It is fully self-contained: the Lato fonts, the Teamily brand marks and
 every agent/user avatar ship in `fonts/` and `images/`, so it renders with no network access and no build
@@ -8,11 +8,13 @@ step.
 
 | # | Screen | Key content |
 |---|---|---|
-| 1 | Home (Chats) | Teamily wordmark top bar, search, 4 filter chips, recent chats, FAB, bottom nav |
+| 1 | Home (Chats) | Avatar (opens Profile), Teamily mark + sync status, new-chat plus, 4 filter chips, Pinned / Chats collapsible groups, Quick actions sheet, bottom nav |
 | 2 | Chat | Agent top bar, tailed bubbles, inline artifact card, typing indicator, composer |
 | 3 | Agents | Agent grid with presence dots and capability tags |
 | 4 | Discover | Featured agent hero + trend grid |
-| 5 | Profile | Identity card, 3-up stat row, quick actions, account section |
+| 4a | Memory | What the assistant remembers, grouped by topic, with attach / recall actions. Memory nav tab carries a dot badge when new memories land |
+| 4b | Artifacts | Everything the agents produced — pages, decks, files — with type, size and the agent that made it |
+| 5 | Profile | Pushed route with back arrow, identity card, 3-up stat row, quick actions, account section. **No bottom nav** (matches `HomeScreen.kt:397`) |
 | 6 | Settings | Grouped rows -> Appearance, Notifications, Privacy, Chat, Storage, Language, About |
 | 7 | Appearance | System / Night / Day radio cards with live previews |
 | 8 | Edit profile | Avatar picker, name / email / handle / bio fields |
@@ -28,13 +30,22 @@ System / Day / Night control, so each screen is visible in both themes.
 
 ## Bottom navigation
 
-**4 destinations** — Chats, Agents, Discover, Profile — on the four top-level screens (Home, Agents,
-Discover, Profile). Chat and the eight Settings sub-screens are pushed routes with a back arrow and no
-bottom bar, matching Material 3 behaviour.
+**5 destinations** — Chats, Agents, Discover, Memory, Artifacts — exactly matching the `OrhanTab` enum in
+`app/.../screens/HomeScreen.kt:141`.
+
+**Profile is not a nav destination.** It opens from the header avatar and is a pushed route, and the
+bottom bar is hidden while it is open (`HomeScreen.kt:397`). The eight Settings sub-screens and Chat are
+also pushed routes with a back arrow and no bottom bar.
+
+(An earlier version of this file said 4 destinations including Profile. That was wrong — corrected
+against the shipped Kotlin, not against the mockup.)
 
 ## Interactions that actually work
 
-- Bottom nav switches between the four tabs and moves the active indicator pill
+- Bottom nav switches between the five tabs and moves the active indicator pill
+- The header avatar opens Profile; Back returns to Chats
+- Pinned / Chats headers collapse and expand
+- The FAB opens the Quick actions sheet (7 automation templates from `AutomationTemplates.kt`)
 - The screen rail (desktop) jumps to any of the 14 screens
 - Tapping a chat row opens Chat; the back arrow returns to the list
 - Theme control flips Day / Night / System and persists the choice to `localStorage`
