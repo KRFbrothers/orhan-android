@@ -13,6 +13,8 @@ Approved behavior source: `docs/reference/TEAMLY_FEATURE_REFERENCE.md` v2.0, app
 
 ## Observed synthetic 1:1 flow
 
+The Copy/dismissal follow-up is tracked in `f1-2-copy-dismiss-2026-11-04.md`. Fresh confirmed-sheet Back checks supersede the earlier Back interpretation below: Android Back returned to the chat list twice (before/after Evidence `ev_878440dc9d6d6d5a2e437a0f05347ca0db3d6eb363c0229414fc2c095f7c0e33` / `ev_adf30ce65d925b40ee0ac4d80d27e3a1754d01c096ca00dd62380091562d65c9`, and `ev_376643502c96b5b2b42c0ffc8af41dc18353869f74639cc8923a7bd8e1467863` / `ev_c59a420d48d1a88dd3715d4c5a021ee0b73b68fc8a44eb02ea6bf4ef6cb750d8`). The user explicitly chose this chat-list destination for Orhan, preserving draft/reply state. Outside tap dismissed only the sheet. Copy of a synthetic agent text response was verified by exact text comparison after paste into an empty Orhan scratch composer; a toast was not used as clipboard proof. Raw captures remain ignored under `captures/f1-2-copy-dismiss/`.
+
 All chat interactions below used the existing synthetic Content Creator thread containing a prior synthetic F1.1 message. No personal chat was modified. The synthetic F1.2 reply message was sent during the previous authorized inspection; no unsend/delete/forward was attempted.
 
 | Action | Evidence / capture | Expected from v2.0 | Actual observation and limits |

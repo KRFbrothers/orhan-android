@@ -84,6 +84,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TextButton
@@ -223,6 +225,9 @@ fun ChatScreen(
     sourceChatId: String = agentName,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
+    onMessageActionsBack: () -> Unit = onBack,
+    replyTarget: Long? = null,
+    onReplyTargetChange: ((Long?) -> Unit)? = null,
     messagesOverride: List<ChatMessage>? = null,
     loading: Boolean = false,
     busy: Boolean = false,
@@ -276,7 +281,11 @@ fun ChatScreen(
     val messages = messagesOverride ?: localMessages
     var input by rememberSaveable { mutableStateOf(initialComposerText) }
     var inputEdited by rememberSaveable { mutableStateOf(false) }
-    var replyToMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var localReplyTarget by rememberSaveable { mutableStateOf<Long?>(null) }
+    val replyToMessageId = if (onReplyTargetChange != null) replyTarget else localReplyTarget
+    fun updateReplyTarget(id: Long?) {
+        if (onReplyTargetChange != null) onReplyTargetChange(id) else localReplyTarget = id
+    }
     var highlightedReplyMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
     var composerDraftApplied by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(threadRestored, restoredComposerDraft) {
@@ -508,7 +517,7 @@ fun ChatScreen(
             )
         }
         input = ""
-        replyToMessageId = null
+        updateReplyTarget(null)
         onComposerDraftChange?.invoke("")
     }
 
@@ -678,7 +687,7 @@ fun ChatScreen(
             value = input,
             agentName = agentName,
             replyPreview = replyToMessageId?.let { id -> messages.firstOrNull { it.id == id } },
-            onClearReply = { replyToMessageId = null },
+            onClearReply = { updateReplyTarget(null) },
             onValueChange = {
                 input = it
                 inputEdited = true
@@ -718,8 +727,12 @@ fun ChatScreen(
             canTranscribe = onTranscribeAudio != null && onSaveTranscript != null && actionMessage.attachment?.mimeType?.startsWith("audio/") == true,
             canCreateMinutes = onCreateMeetingMinutes != null && actionMessage.attachment?.mimeType?.startsWith("audio/") == true,
             onDismiss = { actionMessageId = null },
+            onBack = {
+                actionMessageId = null
+                onMessageActionsBack()
+            },
             onReply = {
-                replyToMessageId = actionMessage.id
+                updateReplyTarget(actionMessage.id)
                 actionMessageId = null
             },
             onCopy = {
@@ -1636,6 +1649,7 @@ private fun MessageActionsSheet(
     canTranscribe: Boolean,
     canCreateMinutes: Boolean,
     onDismiss: () -> Unit,
+    onBack: () -> Unit,
     onReply: () -> Unit,
     onCopy: () -> Unit,
     onShare: () -> Unit,
@@ -1647,9 +1661,11 @@ private fun MessageActionsSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
         containerColor = MaterialTheme.colorScheme.surface,
         shape = OrhanTheme.shapes.sheet,
     ) {
+        BackHandler(onBack = onBack)
         Column(modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 28.dp)) {
             Text(
                 text = "Message",

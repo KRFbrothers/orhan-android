@@ -118,6 +118,8 @@ object AppRoutes {
 @Composable
 fun OrhanNavHost(isDark: Boolean) {
     val navController = rememberNavController()
+    // Composer reply selection belongs to its thread even while the chat route is closed.
+    var chatReplyTargets by rememberSaveable { mutableStateOf(mapOf<String, Long>()) }
     val context = LocalContext.current.applicationContext
     val authRepository = remember(context) { AuthRepository.get(context) }
     val agentToolRepository = remember(context) {
@@ -593,6 +595,11 @@ fun OrhanNavHost(isDark: Boolean) {
             ChatScreen(
                 agentName = effectivePersona,
                 sourceChatId = title,
+                onMessageActionsBack = { navController.popBackStack(AppRoutes.HOME, false) },
+                replyTarget = chatReplyTargets[title],
+                onReplyTargetChange = { id ->
+                    chatReplyTargets = if (id == null) chatReplyTargets - title else chatReplyTargets + (title to id)
+                },
                 onBack = { navController.popBackStack() },
                 messagesOverride = chat.messages,
                 loading = chat.loading,

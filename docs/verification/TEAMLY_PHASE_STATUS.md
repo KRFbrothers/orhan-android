@@ -4,11 +4,11 @@
 
 - **Approved baseline:** [TEAMLY_FEATURE_REFERENCE.md](../reference/TEAMLY_FEATURE_REFERENCE.md), v2.0 — 2026-11-03, user-approved in PR #120 (`a5470992377d4003dac8cad240063630cb23042b`).
 - **Active phase:** **Phase 1 — Chats (F1.1–F1.6)**.
-- **Current task phase / feature:** **Phase 1 — F1.2 — Existing message actions** (F1.1 remains partial).
+- **Current task phase / feature:** **Phase 1 — F1.2 — Copy and action-sheet dismissal**, verified for the tested text context; F1.1/F1.2 remain partial overall.
 - **F1.1 status:** **Partial**. Existing send and agent mention flows were reused. Restart-persistent draft storage and migration were implemented, unit-tested, and verified on an updated device build. Group mentions remain blocked by the lack of an Orhan group/member model; updated-build send was not tested in the existing personal assistant thread.
 - **Task evidence:** [F1.1 REA record](f1-1-rea-evidence-2026-11-03.md), [F1.2 REA record](f1-2-rea-evidence-2026-11-04.md), and [F1.2 build/device verification](f1-2-build-verification-2026-11-04.md); raw captures and full logs remain ignored under `captures/`.
 - **Source revision:** focused local commit `feat(android): persist F1.1 composer drafts` on branch `docs/chat-f11-reference-inspection`, based on `b5e4360`. The pre-existing edit in `HomeScreen.kt` was preserved and remains outside this commit.
-- **Next in-phase slice:** Continue Phase 1 — F1.2 by verifying Copy, quote cancellation, and other safe action eligibility/outcomes in a synthetic context. Updated-device Reply/quote/send/source navigation has now been verified. F1.1 group mentions remain blocked on an Orhan-owned group/member model; do not add guessed group storage or backend behavior.
+- **Next in-phase slice:** Phase 1 — F1.2 Translate language picker/cancellation and remaining safe action eligibility. Text Copy and chosen Back/outside semantics are verified; image/media Copy and other actions remain open. F1.1 group mentions remain blocked on an Orhan-owned group/member model.
 
 ## F1.1 acceptance status
 
@@ -32,6 +32,8 @@
 
 ## F1.2 — Existing message actions (partial)
 
+**Latest slice:** [Copy/dismissal evidence and checks](f1-2-copy-dismiss-2026-11-04.md). Fresh reference checks supersede the earlier Back interpretation below: confirmed-sheet Android Back returned to chat list twice. The user chose that destination while preserving draft/reply. The existing sheet now uses a dedicated Back callback to HOME; outside dismissal still clears only the sheet. Reply selection is retained per thread in the existing navigation host. Copy's existing helper was preserved and actual synthetic paste matched exactly on reference and Orhan. Updated signer-compatible Orhan code 371 verified Back → chat list → reopen with the same draft/reply, outside dismissal, Copy, draft cold restart and exact saved-quote navigation. Relevant tests/assemble/lint passed; MeetingMinutesActionsTest separately reproduced 1 failure of 2. Earlier reference/build observations below are historical snapshots, not the current Copy status. F1.1 group mention blocker remains open.
+
 - **Approved baseline:** [TEAMLY_FEATURE_REFERENCE.md](../reference/TEAMLY_FEATURE_REFERENCE.md), v2.0, PR #120.
 - **Runtime reference:** realme RMX5051 / RMX5051IN, Android 16, REA device observation `ev_dff603877295ad2fe5b83cfaf0115433185d82b965ff4fb3c6ee065e3a72d3e3`; installed `ai.teamily.mobile` v2.0.20 / code 234, REA package observation `ev_0a1d2a1645adf6ac84777e2beb14849c3b4ef701e19e06094e99d27b584db8c5`; foreground app `ai.teamily.mobile/.MainActivity`, REA observation `ev_919b3588803bdee0d2486cf9ae8ebe826bd63fbb719e247601a392a4f6f0d66e`.
 - **Evidence:** [F1.2 REA record](f1-2-rea-evidence-2026-11-04.md); raw screenshots remain ignored under `captures/f1-2-2026-11-04/`.
@@ -40,7 +42,7 @@
 - **Current status:** F1.2 remains partial. The existing Reply flow is verified on updated Orhan v0.2.0/code 369: quote composer, synthetic send, tap-to-exact-source scroll/highlight, cold-restart persistence/navigation, and light/dark highlight. Teamly's quote-tap capture did not conclusively prove its highlight, so reference parity for that point remains unknown. The compile failure was reproduced and localized to inconsistent incremental compiler state; a one-invocation full compile restored state, and the normal compile then passed. No source/toolchain/dependency repair was necessary. Existing HomeScreen local change remains preserved. Details/logs: [F1.2 build/device verification](f1-2-build-verification-2026-11-04.md).
 - **Unchanged failure baseline:** `MeetingMinutesActionsTest.emptyOrUnstructuredActionSectionDoesNotCreateActions` previously reproduced as 1 failure out of 2 tests at `MeetingMinutesActionsTest.kt:25`; test/meeting-action implementation are unchanged since baseline `b5e4360`. It was not suppressed or modified.
 - **Remaining F1.1 blocker:** group mentions still lack an Orhan group/member model; F1.1 remains partial.
-- **Next in-phase slice:** verify non-destructive Copy, quote cancellation, and remaining safe action eligibility/outcomes in synthetic context. Keep destructive reference actions blocked.
+- **Next in-phase slice:** inspect Translate language picker/cancellation and other remaining safe eligibility/outcomes in synthetic context. Text Copy and chosen Back/outside behavior are covered by the latest report; other Copy media types and actions remain open.
 
 ## Executed checks
 
