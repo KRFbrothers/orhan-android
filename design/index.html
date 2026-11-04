@@ -205,6 +205,19 @@ h1 .accent{color:var(--primary)}
 /* app bar */
 .appbar{flex:none;min-height:60px;padding:6px 8px 6px 14px;display:flex;align-items:center;gap:8px;background:var(--canvas)}
 .brandlock{display:flex;align-items:center;gap:9px;min-width:0;flex:1 1 auto}
+.headava{
+  width:48px;height:48px;flex:none;padding:0;border:0;border-radius:50%;background:transparent;
+  cursor:pointer;display:inline-flex;align-items:center;justify-content:center;position:relative;
+}
+.headava img{width:36px;height:36px;border-radius:50%;object-fit:cover}
+.headava::after{content:"";position:absolute;right:5px;bottom:5px;width:11px;height:11px;border-radius:50%;
+  background:var(--mint);box-shadow:0 0 0 2px var(--canvas)}
+.syncline{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--ink-3);white-space:nowrap}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--mint);flex:none;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.addbtn{background:var(--surface-2);color:var(--ink)}
+.addbtn:hover{background:var(--surface-3);color:var(--ink)}
+[data-theme="dark"] .addbtn{background:#2c4a3a;color:#cbe7d2}
 .mark{width:34px;height:34px;border-radius:11px;flex:none;box-shadow:0 2px 6px rgba(8,124,69,.28)}
 .wm{height:21px;width:auto;flex:none}
 .wm-dark{display:none}
@@ -270,6 +283,21 @@ h1 .accent{color:var(--primary)}
   display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 20px 8px;
   font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);
 }
+.secbtn{cursor:pointer;min-height:44px;border-radius:14px;-webkit-user-select:none;user-select:none}
+.secbtn:hover{color:var(--ink)}
+.secbtn:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+[data-theme="dark"] .secbtn:focus-visible{outline-color:var(--mint)}
+.seclabel .chev{width:18px;height:18px;flex:none;transition:transform .2s ease}
+.secbtn[aria-expanded="false"] .chev{transform:rotate(-90deg)}
+.secbtn[aria-expanded="false"] + .list{display:none}
+.row.is-pinned{background:var(--primary-soft)}
+[data-theme="dark"] .row.is-pinned{background:#233c31}
+.row.is-pinned:hover{background:var(--primary-soft)}
+[data-theme="dark"] .row.is-pinned:hover{background:#294638}
+.draft{
+  font-size:11px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;flex:none;
+  padding:2px 7px;border-radius:6px;background:var(--surface-3);color:var(--ink-2);
+}
 .list{padding:0 8px 12px}
 .row{
   display:flex;align-items:center;gap:13px;width:100%;padding:11px 12px;border-radius:18px;
@@ -323,9 +351,9 @@ h1 .accent{color:var(--primary)}
 }
 .navi:focus-visible{outline:2px solid var(--primary);outline-offset:-4px}
 [data-theme="dark"] .navi:focus-visible{outline-color:var(--mint)}
-.navi .pill{display:flex;align-items:center;justify-content:center;width:58px;height:30px;border-radius:999px;transition:background .18s ease}
+.navi .pill{display:flex;align-items:center;justify-content:center;width:52px;height:30px;border-radius:999px;transition:background .18s ease}
 .navi .ic{width:23px;height:23px}
-.navi .lbl{font-size:11px;font-weight:700;letter-spacing:.01em;line-height:1;white-space:nowrap}
+.navi .lbl{font-size:10.5px;font-weight:700;letter-spacing:0;line-height:1;white-space:nowrap}
 .navi[aria-current="page"]{color:var(--ink)}
 .navi[aria-current="page"] .pill{background:var(--primary-soft)}
 [data-theme="dark"] .navi[aria-current="page"] .pill{background:#2c4a3a}
@@ -337,6 +365,7 @@ h1 .accent{color:var(--primary)}
   display:inline-flex;align-items:center;justify-content:center;
 }
 .navi .icwrap{position:relative;display:flex}
+.navi .count.dot{min-width:9px;width:9px;height:9px;padding:0;transform:translate(11px,-8px)}
 
 /* ================= CHAT ================= */
 .chatbar{
@@ -700,6 +729,43 @@ h1 .accent{color:var(--primary)}
 .sheetbox h4{margin:0 0 6px;font-size:17px;font-weight:900;color:var(--ink)}
 .sheetbox p{margin:0 0 16px;font-size:13px;line-height:1.5;color:var(--ink-2)}
 .sheetbtns{display:flex;flex-direction:column;gap:10px}
+/* ---- quick actions sheet ---- */
+.qsbox{max-height:88%;overflow-y:auto;overscroll-behavior:contain}
+.qshead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.qshead h4{margin:0;font-size:17px;font-weight:900;color:var(--ink)}
+.qsclose{background:var(--surface-2);color:var(--ink-2)}
+.qsclose .ic{transform:rotate(-90deg)}
+.qsgrouphd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;
+  font-size:11px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+.qsmore{border:0;background:transparent;color:var(--primary-ink);font-size:12px;font-weight:700;
+  cursor:pointer;min-height:44px;padding:0 4px;border-radius:10px}
+[data-theme="dark"] .qsmore{color:#bde9cb}
+.qsmore:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.qsgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.qcard{
+  display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;
+  padding:11px;border-radius:16px;border:1px solid var(--line-soft);background:var(--surface-2);
+  color:var(--ink);font:inherit;cursor:pointer;min-height:48px;
+}
+.qcard:hover{background:var(--surface-3)}
+.qcard:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+[data-theme="dark"] .qcard:focus-visible{outline-color:var(--mint)}
+.qcard b{font-size:12.5px;font-weight:900;line-height:1.25}
+.qsd{font-size:11.5px;line-height:1.35;color:var(--ink-3)}
+.qsico{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;flex:none;
+  border-radius:10px;background:var(--primary-soft);color:var(--primary-ink)}
+[data-theme="dark"] .qsico{background:#2c4a3a;color:#cbe7d2}
+.qsico .ic{width:17px;height:17px}
+.qsico.lg{width:44px;height:44px;border-radius:14px}
+.qsico.lg .ic{width:22px;height:22px}
+.qsmemhd{margin-top:16px}
+.qsrow2{display:flex;gap:8px}
+.qmem{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 8px;
+  border-radius:16px;border:1px solid var(--line-soft);background:var(--surface-2);
+  color:var(--ink);font:inherit;font-size:12px;font-weight:700;cursor:pointer;min-height:48px}
+.qmem:hover{background:var(--surface-3)}
+.qmem:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+[data-theme="dark"] .qmem:focus-visible{outline-color:var(--mint)}
 
 /* ================= SPEC ================= */
 .specwrap{margin-top:52px;display:flex;flex-direction:column;gap:16px}
@@ -773,8 +839,8 @@ footer b{color:var(--page-ink)}
 @media (max-width:380px){
   .appbar{padding-left:10px;gap:2px}
   .wm{height:19px}
-  .navi .lbl{font-size:10px}
-  .navi .pill{width:52px}
+  .navi .lbl{font-size:9.5px}
+  .navi .pill{width:46px}
   .bubble{max-width:82%}
   .row{padding:10px 8px;gap:11px}
   .ava{width:46px;height:46px;border-radius:15px}
@@ -821,6 +887,8 @@ footer b{color:var(--page-ink)}
     <symbol id="i-agents" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.1"/><path d="M3.4 19.2c0-3.1 2.5-5.2 5.6-5.2s5.6 2.1 5.6 5.2"/><circle cx="17.2" cy="9.4" r="2.4"/><path d="M16.4 14.2c2.4.2 4.2 2 4.2 4.4"/></symbol>
     <symbol id="i-discover" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M15.6 8.4 13.7 13.7 8.4 15.6 10.3 10.3z"/></symbol>
     <symbol id="i-profile" viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.9"/><path d="M4.6 20.4c0-3.7 3.3-6 7.4-6s7.4 2.3 7.4 6"/></symbol>
+    <symbol id="i-memory" viewBox="0 0 24 24"><path d="M9.5 4.2a2.4 2.4 0 0 0-2.4 2.4 2.3 2.3 0 0 0-1.6 4 2.3 2.3 0 0 0 .5 4.1 2.4 2.4 0 0 0 3.5 3.2"/><path d="M14.5 4.2a2.4 2.4 0 0 1 2.4 2.4 2.3 2.3 0 0 1 1.6 4 2.3 2.3 0 0 1-.5 4.1 2.4 2.4 0 0 1-3.5 3.2"/><path d="M12 4.4v15.2"/><path d="M9.5 9.2h2.5M12 13.4h2.4"/></symbol>
+    <symbol id="i-artifacts" viewBox="0 0 24 24"><path d="M12 3.3 20.2 7.7 12 12.1 3.8 7.7z"/><path d="M3.8 12.1 12 16.5l8.2-4.4"/><path d="M3.8 16.4 12 20.8l8.2-4.4"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.6 9 17.5 20 6.6"/></symbol>
     <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.6v2M12 19.4v2M2.6 12h2M19.4 12h2M5.4 5.4l1.4 1.4M17.2 17.2l1.4 1.4M18.6 5.4l-1.4 1.4M6.8 17.2l-1.4 1.4"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.4 14.8A8.6 8.6 0 0 1 9.2 3.6a8.6 8.6 0 1 0 11.2 11.2z"/></symbol>
@@ -882,6 +950,8 @@ footer b{color:var(--page-ink)}
       <button class="rbtn" type="button" data-go="chat"><span class="n">02</span>Chat</button>
       <button class="rbtn" type="button" data-go="agents"><span class="n">03</span>Agents</button>
       <button class="rbtn" type="button" data-go="discover"><span class="n">04</span>Discover</button>
+      <button class="rbtn" type="button" data-go="memory"><span class="n">04a</span>Memory</button>
+      <button class="rbtn" type="button" data-go="artifacts"><span class="n">04b</span>Artifacts</button>
       <button class="rbtn" type="button" data-go="profile"><span class="n">05</span>Profile</button>
 
       <div class="rgrp">Settings</div>
@@ -913,17 +983,18 @@ footer b{color:var(--page-ink)}
             </div>
 
             <div class="appbar">
+              <button class="headava" type="button" aria-label="Open profile" data-go="profile">
+                <img src="images/user-alice.png" alt="">
+              </button>
               <div class="brandlock">
                 <img class="mark" src="images/teamily-mark.png" alt="Teamily AI logo">
-                <img class="wm wm-light" src="images/teamily-wordmark.png" alt="Teamily AI">
-                <img class="wm wm-dark" src="images/teamily-wordmark-dark.png" alt="" aria-hidden="true">
+                <span class="syncline"><span class="sync-dot" aria-hidden="true"></span>Updating…</span>
               </div>
-              <button class="iconbtn" type="button" aria-label="Search"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></button>
               <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
                 <svg class="ic i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
                 <svg class="ic i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
               </button>
-              <button class="iconbtn" type="button" aria-label="Open settings" data-go="settings"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
+              <button class="iconbtn addbtn" type="button" aria-label="New chat" data-toast="New chat sheet would open here"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button>
             </div>
 
             <div class="scroll">
@@ -941,9 +1012,27 @@ footer b{color:var(--page-ink)}
                 <button class="chip" type="button">Groups</button>
               </div>
 
-              <div class="seclabel"><span>Recent</span><span>4 pinned</span></div>
+              <div class="seclabel secbtn" role="button" tabindex="0" aria-expanded="true" aria-controls="grp-pinned">
+                <span>Pinned · 1</span>
+                <svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
+              </div>
 
-              <div class="list">
+              <div class="list" id="grp-pinned">
+                <button class="row is-pinned" type="button" data-go="chat">
+                  <span class="ava"><img src="images/user-alex.png" alt=""></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">Full-Stack Delivery Guild</span><span class="rowtime">Tue</span></span>
+                    <span class="rowsnip"><span class="draft">Draft</span><span class="txt">Prompt Engineer, Data Engineer, Frontend …</span></span>
+                  </span>
+                </button>
+              </div>
+
+              <div class="seclabel secbtn" role="button" tabindex="0" aria-expanded="true" aria-controls="grp-chats">
+                <span>Chats · 15</span>
+                <svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
+              </div>
+
+              <div class="list" id="grp-chats">
                 <button class="row" type="button" data-go="chat">
                   <span class="ava agent"><img src="images/agent-webpage.png" alt=""><span class="presence"></span></span>
                   <span class="rowbody">
@@ -1023,9 +1112,36 @@ footer b{color:var(--page-ink)}
               </div>
             </div>
 
-            <button class="fab" type="button" aria-label="New chat" data-toast="New chat sheet would open here">
+            <button class="fab" type="button" aria-label="New chat" data-sheet="quickactions">
               <svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg>
             </button>
+
+            <div class="sheet" id="quickactions">
+              <div class="sheetbox qsbox">
+                <div class="qshead">
+                  <h4>Quick actions</h4>
+                  <button class="iconbtn qsclose" type="button" aria-label="Close quick actions" data-close-sheet="1"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+                </div>
+
+                <div class="qsgrouphd"><span>Create automation</span><button class="qsmore" type="button" data-toast="Opens the full automation template list">Explore more</button></div>
+
+                <div class="qsgrid">
+                  <button class="qcard" type="button" data-toast="Meeting reminder + prep"><span class="qsico"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg></span><b>Meeting reminder + prep</b><span class="qsd">Prepare an agenda and a reminder request.</span></button>
+                  <button class="qcard" type="button" data-toast="Daily work brief"><span class="qsico"><svg class="ic" aria-hidden="true"><use href="#i-filetext"/></svg></span><b>Daily work brief</b><span class="qsd">Turn your work context into a brief request.</span></button>
+                  <button class="qcard" type="button" data-toast="Competitor / industry monitor"><span class="qsico"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span><b>Competitor / industry monitor</b><span class="qsd">Specify the changes you want to track.</span></button>
+                  <button class="qcard" type="button" data-toast="Expert group research"><span class="qsico"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span><b>Expert group research</b><span class="qsd">Prepare a research question for your agent.</span></button>
+                  <button class="qcard" type="button" data-toast="Make a deck / report"><span class="qsico"><svg class="ic" aria-hidden="true"><use href="#i-palette"/></svg></span><b>Make a deck / report</b><span class="qsd">Describe the deliverable you need.</span></button>
+                  <button class="qcard" type="button" data-toast="Build a webpage / tool"><span class="qsico"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span><b>Build a webpage / tool</b><span class="qsd">Describe a page or utility to build.</span></button>
+                  <button class="qcard" type="button" data-toast="Break down &amp; assign tasks"><span class="qsico"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span><b>Break down &amp; assign tasks</b><span class="qsd">Prepare a task breakdown for review.</span></button>
+                </div>
+
+                <div class="qsgrouphd qsmemhd"><span>Memory</span></div>
+                <div class="qsrow2">
+                  <button class="qmem" type="button" data-go="memory"><span class="qsico lg"><svg class="ic" aria-hidden="true"><use href="#i-userplus"/></svg></span><span>Attach memory</span></button>
+                  <button class="qmem" type="button" data-go="memory"><span class="qsico lg"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg></span><span>Recall memory</span></button>
+                </div>
+              </div>
+            </div>
 
             <nav class="navbar" aria-label="Primary">
               <button class="navi" type="button" data-go="home" aria-current="page">
@@ -1040,9 +1156,13 @@ footer b{color:var(--page-ink)}
                 <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
                 <span class="lbl">Discover</span>
               </button>
-              <button class="navi" type="button" data-go="profile">
-                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
-                <span class="lbl">Profile</span>
+              <button class="navi" type="button" data-go="memory">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-memory"/></svg><span class="count dot" aria-hidden="true"></span></span></span>
+                <span class="lbl">Memory</span>
+              </button>
+              <button class="navi" type="button" data-go="artifacts">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-artifacts"/></svg></span>
+                <span class="lbl">Artifacts</span>
               </button>
             </nav>
           </div>
@@ -1242,9 +1362,13 @@ footer b{color:var(--page-ink)}
                 <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
                 <span class="lbl">Discover</span>
               </button>
-              <button class="navi" type="button" data-go="profile">
-                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
-                <span class="lbl">Profile</span>
+              <button class="navi" type="button" data-go="memory">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-memory"/></svg><span class="count dot" aria-hidden="true"></span></span></span>
+                <span class="lbl">Memory</span>
+              </button>
+              <button class="navi" type="button" data-go="artifacts">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-artifacts"/></svg></span>
+                <span class="lbl">Artifacts</span>
               </button>
             </nav>
           </div>
@@ -1365,14 +1489,221 @@ footer b{color:var(--page-ink)}
                 <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
                 <span class="lbl">Discover</span>
               </button>
-              <button class="navi" type="button" data-go="profile">
-                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
-                <span class="lbl">Profile</span>
+              <button class="navi" type="button" data-go="memory">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-memory"/></svg><span class="count dot" aria-hidden="true"></span></span></span>
+                <span class="lbl">Memory</span>
+              </button>
+              <button class="navi" type="button" data-go="artifacts">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-artifacts"/></svg></span>
+                <span class="lbl">Artifacts</span>
               </button>
             </nav>
           </div>
         </div>
         <div class="caption"><b>04</b> Discover tab</div>
+      </div>
+
+      <!-- ==================== 04a · MEMORY (nav destination) ==================== -->
+      <div class="slot" id="p-memory">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="detailbar">
+              <button class="iconbtn" type="button" aria-label="Back to chats" data-go="home"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+              <div class="detailtitle">Memory</div>
+              <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
+                <svg class="ic i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+                <svg class="ic i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+              </button>
+            </div>
+
+            <div class="scroll">
+              <div class="searchrow">
+                <div class="searchfield">
+                  <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+                  <span>Search memories</span>
+                </div>
+              </div>
+
+              <div class="seclabel"><span>Work</span><span>3</span></div>
+              <div class="list">
+                <button class="row" type="button" data-toast="Edit this memory">
+                  <span class="ava"><svg class="ic" style="width:22px;height:22px"><use href="#i-filetext"/></svg></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">Prefers short status updates</span><span class="rowtime">2d</span></span>
+                    <span class="rowsnip"><span class="txt">Asked for bullet points, no preamble</span></span>
+                  </span>
+                </button>
+                <button class="row" type="button" data-toast="Edit this memory">
+                  <span class="ava"><svg class="ic" style="width:22px;height:22px"><use href="#i-agents"/></svg></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">Ships to Cloud Run</span><span class="rowtime">4d</span></span>
+                    <span class="rowsnip"><span class="txt">Deploys come from the engine image, not GitHub Pages</span></span>
+                  </span>
+                </button>
+                <button class="row" type="button" data-toast="Edit this memory">
+                  <span class="ava"><svg class="ic" style="width:22px;height:22px"><use href="#i-palette"/></svg></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">Brand green is #087c45</span><span class="rowtime">1w</span></span>
+                    <span class="rowsnip"><span class="txt">Use mint only as a fill, never as text</span></span>
+                  </span>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>Personal</span><span>1</span></div>
+              <div class="list">
+                <button class="row" type="button" data-toast="Edit this memory">
+                  <span class="ava"><svg class="ic" style="width:22px;height:22px"><use href="#i-clock"/></svg></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">Works Asia/Kolkata hours</span><span class="rowtime">2w</span></span>
+                    <span class="rowsnip"><span class="txt">Avoid scheduling before 10:00 IST</span></span>
+                  </span>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>Attach &amp; recall</span></div>
+              <div class="qsrow2" style="padding:0 8px 16px">
+                <button class="qmem" type="button" data-toast="Attach a memory"><span class="qsico lg"><svg class="ic" aria-hidden="true"><use href="#i-userplus"/></svg></span><span>Attach memory</span></button>
+                <button class="qmem" type="button" data-toast="Recall a memory"><span class="qsico lg"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg></span><span>Recall memory</span></button>
+              </div>
+            </div>
+
+            <nav class="navbar" aria-label="Primary">
+              <button class="navi" type="button" data-go="home">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-chats"/></svg><span class="count">3</span></span></span>
+                <span class="lbl">Chats</span>
+              </button>
+              <button class="navi" type="button" data-go="agents">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span>
+                <span class="lbl">Agents</span>
+              </button>
+              <button class="navi" type="button" data-go="discover">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
+                <span class="lbl">Discover</span>
+              </button>
+              <button class="navi" type="button" data-go="memory" aria-current="page">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-memory"/></svg></span>
+                <span class="lbl">Memory</span>
+              </button>
+              <button class="navi" type="button" data-go="artifacts">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-artifacts"/></svg></span>
+                <span class="lbl">Artifacts</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+        <div class="caption"><b>04a</b> Memory tab</div>
+      </div>
+
+      <!-- ==================== 04b · ARTIFACTS (nav destination) ==================== -->
+      <div class="slot" id="p-artifacts">
+        <div class="phone">
+          <div class="screen">
+            <div class="camera" aria-hidden="true"></div>
+            <div class="statusbar">
+              <div class="sb-left">9:41</div>
+              <div class="sb-right" aria-hidden="true">
+                <svg class="ic"><use href="#i-signal"/></svg>
+                <svg class="ic"><use href="#i-wifi"/></svg>
+                <svg class="ic"><use href="#i-batt"/></svg>
+              </div>
+            </div>
+
+            <div class="detailbar">
+              <button class="iconbtn" type="button" aria-label="Back to chats" data-go="home"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+              <div class="detailtitle">Artifacts</div>
+              <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
+                <svg class="ic i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+                <svg class="ic i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+              </button>
+            </div>
+
+            <div class="scroll">
+              <div class="searchrow">
+                <div class="searchfield">
+                  <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+                  <span>Search artifacts</span>
+                </div>
+              </div>
+
+              <div class="seclabel"><span>This week</span><span>3</span></div>
+              <div class="list">
+                <button class="row" type="button" data-toast="Opens the source message">
+                  <span class="ava"><svg class="ic" style="width:22px;height:22px"><use href="#i-file"/></svg></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">landing-page-v2.html</span><span class="rowtime">2d</span></span>
+                    <span class="rowsnip"><span class="txt">Webpage · 162 KB</span></span>
+                  </span>
+                </button>
+                <button class="row" type="button" data-toast="Opens the source message">
+                  <span class="ava"><svg class="ic" style="width:22px;height:22px"><use href="#i-image"/></svg></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">q4-deck.pptx</span><span class="rowtime">3d</span></span>
+                    <span class="rowsnip"><span class="txt">Deck · 12 slides</span></span>
+                  </span>
+                </button>
+                <button class="row" type="button" data-toast="Opens the source message">
+                  <span class="ava"><svg class="ic" style="width:22px;height:22px"><use href="#i-db"/></svg></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">competitor-brief.csv</span><span class="rowtime">4d</span></span>
+                    <span class="rowsnip"><span class="txt">Data · 8 sources</span></span>
+                  </span>
+                </button>
+              </div>
+
+              <div class="seclabel"><span>Older</span><span>2</span></div>
+              <div class="list">
+                <button class="row" type="button" data-toast="Opens the source message">
+                  <span class="ava"><svg class="ic" style="width:22px;height:22px"><use href="#i-filetext"/></svg></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">invoice-2211.pdf</span><span class="rowtime">2w</span></span>
+                    <span class="rowsnip"><span class="txt">Document · 340 KB</span></span>
+                  </span>
+                </button>
+                <button class="row" type="button" data-toast="Opens the source message">
+                  <span class="ava"><svg class="ic" style="width:22px;height:22px"><use href="#i-video"/></svg></span>
+                  <span class="rowbody">
+                    <span class="rowtop"><span class="rownm">launch-clip.mp4</span><span class="rowtime">3w</span></span>
+                    <span class="rowsnip"><span class="txt">Video · 11 s</span></span>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <nav class="navbar" aria-label="Primary">
+              <button class="navi" type="button" data-go="home">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-chats"/></svg><span class="count">3</span></span></span>
+                <span class="lbl">Chats</span>
+              </button>
+              <button class="navi" type="button" data-go="agents">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span>
+                <span class="lbl">Agents</span>
+              </button>
+              <button class="navi" type="button" data-go="discover">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
+                <span class="lbl">Discover</span>
+              </button>
+              <button class="navi" type="button" data-go="memory">
+                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-memory"/></svg><span class="count dot" aria-hidden="true"></span></span></span>
+                <span class="lbl">Memory</span>
+              </button>
+              <button class="navi" type="button" data-go="artifacts" aria-current="page">
+                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-artifacts"/></svg></span>
+                <span class="lbl">Artifacts</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+        <div class="caption"><b>04b</b> Artifacts tab</div>
       </div>
 
       <!-- ==================== 05 · PROFILE ==================== -->
@@ -1389,12 +1720,9 @@ footer b{color:var(--page-ink)}
               </div>
             </div>
 
-            <div class="appbar">
-              <div class="brandlock">
-                <img class="mark" src="images/teamily-mark.png" alt="Teamily AI logo">
-                <img class="wm wm-light" src="images/teamily-wordmark.png" alt="Teamily AI">
-                <img class="wm wm-dark" src="images/teamily-wordmark-dark.png" alt="" aria-hidden="true">
-              </div>
+            <div class="detailbar">
+              <button class="iconbtn" type="button" aria-label="Back to chats" data-go="home"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+              <div class="detailtitle">Profile</div>
               <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
                 <svg class="ic i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
                 <svg class="ic i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
@@ -1490,24 +1818,6 @@ footer b{color:var(--page-ink)}
               </div>
             </div>
 
-            <nav class="navbar" aria-label="Primary">
-              <button class="navi" type="button" data-go="home">
-                <span class="pill"><span class="icwrap"><svg class="ic" aria-hidden="true"><use href="#i-chats"/></svg><span class="count">3</span></span></span>
-                <span class="lbl">Chats</span>
-              </button>
-              <button class="navi" type="button" data-go="agents">
-                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-agents"/></svg></span>
-                <span class="lbl">Agents</span>
-              </button>
-              <button class="navi" type="button" data-go="discover">
-                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-discover"/></svg></span>
-                <span class="lbl">Discover</span>
-              </button>
-              <button class="navi" type="button" data-go="profile" aria-current="page">
-                <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-profile"/></svg></span>
-                <span class="lbl">Profile</span>
-              </button>
-            </nav>
           </div>
         </div>
         <div class="caption"><b>05</b> Profile</div>
@@ -2451,9 +2761,11 @@ footer b{color:var(--page-ink)}
   var railBtns = Array.prototype.slice.call(document.querySelectorAll('.rail [data-go]'));
 
   var NOTES = {
-    home:        ['Home / Chats', 'Top bar with the real Teamily lockup, search and settings. Recent chats mix agents (mint spark + presence dot) with people and groups.', ['<b>4 nav destinations</b> — Chats, Agents, Discover, Profile', '<b>Every row</b> ≥ 72px tall']],
+    home:        ['Home / Chats', 'Header carries the profile avatar (opens Profile), the Teamily mark with live sync status, and the new-chat plus. Pinned and Chats are collapsible sections, exactly like HomeScreen.kt.', ['<b>5 nav destinations</b> — Chats, Agents, Discover, Memory, Artifacts', '<b>Profile</b> opens from the header avatar, not the nav']],
     chat:        ['Chat', 'Agent thread at 14.5px with user and AI bubbles, an inline artifact card, and a composer with attach, mic and send.', ['<b>Send works</b> — type and press send; a reply comes back', '<b>Composer</b> 52px field, 48px send button']],
     agents:      ['Agents', 'Four real agents with status pills, descriptions and an Open CTA that jumps into the chat thread.', ['<b>Open CTA</b> 48px tall', '<b>Create agent</b> dashed row at the end']],
+    memory:      ['Memory', 'What the assistant remembers, grouped by topic, with per-item controls. Reached from the bottom nav — the Memory tab carries an unread badge when new memories land.', ['<b>Nav badge</b> on Memory when updates exist', '<b>Back</b> returns to Chats']],
+    artifacts:   ['Artifacts', 'Everything the agents produced — pages, decks, files — with type, size and the chat it came from.', ['<b>Opens source</b> message from the card', '<b>Back</b> returns to Chats']],
     discover:    ['Discover', 'Featured agent hero on brand green, a trend grid, and a social feed of what people you follow shared.', ['<b>Hero CTA</b> 48px', '<b>2-up cards</b> with tag footer']],
     profile:     ['Profile', 'Avatar with verified badge, name and email, a 3-up stats row, four quick actions and an account section. Sign out opens a real bottom sheet.', ['<b>Stats</b> Chats / Agents / Artifacts', '<b>Sign out</b> → confirm sheet']],
     settings:    ['Settings', 'Full list grouped by Account, Look & feel, Messages, Data and Support. Every row opens a real screen or shows a value.', ['<b>Appearance</b> shows the live mode', '<b>Sign out</b> at the bottom']],
@@ -2555,9 +2867,18 @@ footer b{color:var(--page-ink)}
 
     var sheetBtn = t.closest && t.closest('[data-sheet]');
     if (sheetBtn) {
+      var targetId = sheetBtn.getAttribute('data-sheet');
       var phone = sheetBtn.closest('.screen');
-      var sheet = phone && phone.querySelector('.sheet');
+      var sheet = (targetId && document.getElementById(targetId)) || (phone && phone.querySelector('.sheet'));
       if (sheet) sheet.classList.add('on');
+      return;
+    }
+
+    /* collapsible Pinned / Chats section headers */
+    var secHd = t.closest && t.closest('.secbtn');
+    if (secHd) {
+      var open = secHd.getAttribute('aria-expanded') === 'true';
+      secHd.setAttribute('aria-expanded', open ? 'false' : 'true');
       return;
     }
 
