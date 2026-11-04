@@ -1,55 +1,71 @@
-# design/ - the 14-screen HTML showcase
+# design/ — the 14-screen HTML showcase
 
-Open `index.html` in a browser. It is fully self-contained: the Lato fonts, the Orhan brand marks and
+Open `index.html` in a browser. It is fully self-contained: the Lato fonts, the Teamily brand marks and
 every agent/user avatar ship in `fonts/` and `images/`, so it renders with no network access and no build
 step.
-
-Live on GitHub Pages:
-**https://krfbrothers.github.io/orhan-android/** (M3 gallery: https://krfbrothers.github.io/orhan-android/m3-gallery.html)
 
 ## What the page contains
 
 | # | Screen | Key content |
 |---|---|---|
-| 1 | Home (Chats) | Wordmark top bar, search, 4 filter chips, 7 chat rows, FAB, bottom nav |
+| 1 | Home (Chats) | Teamily wordmark top bar, search, 4 filter chips, recent chats, FAB, bottom nav |
 | 2 | Chat | Agent top bar, tailed bubbles, inline artifact card, typing indicator, composer |
-| 3 | Agents | Agent grid with live dots and capability tags |
-| 4 | Discover | Community / template shelf |
-| 5 | Profile | Identity card, stat row, settings entry |
+| 3 | Agents | Agent grid with presence dots and capability tags |
+| 4 | Discover | Featured agent hero + trend grid |
+| 5 | Profile | Identity card, 3-up stat row, quick actions, account section |
 | 6 | Settings | Grouped rows -> Appearance, Notifications, Privacy, Chat, Storage, Language, About |
-| 7 | Appearance | System / Light / Dark radio rows with live swatches |
-| 8 | Edit profile | Avatar picker, name/about fields |
+| 7 | Appearance | System / Night / Day radio cards with live previews |
+| 8 | Edit profile | Avatar picker, name / email / handle / bio fields |
 | 9 | Notifications | Per-category switches |
-| 10 | Privacy | App lock, two-step verification, read receipts |
-| 11 | Chat preferences | Send-with-Enter, hold-to-record, preview-before-send |
-| 12 | Storage | On-device counts (documents, saved chats), local-only note, clean-up placeholders |
+| 10 | Privacy & security | App lock, two-step verification, read receipts, blocked users |
+| 11 | Chat preferences | Send-with-Enter, hold-to-record, typing indicators, activity cards |
+| 12 | Storage | 4-segment usage bar, legend, clean-up rows |
 | 13 | Language | App language + reply language |
-| 14 | About | Version, legal, sign out |
+| 14 | About | Version, legal rows, support, sign out |
 
-Every screen is rendered twice: a day frame and a night frame.
+The page renders one frame and switches every screen between **Day** and **Night** with the page-level
+System / Day / Night control, so each screen is visible in both themes.
+
+## Bottom navigation
+
+**4 destinations** — Chats, Agents, Discover, Profile — on the four top-level screens (Home, Agents,
+Discover, Profile). Chat and the eight Settings sub-screens are pushed routes with a back arrow and no
+bottom bar, matching Material 3 behaviour.
 
 ## Interactions that actually work
 
-- Bottom nav switches between the four tabs and moves the indicator pill
+- Bottom nav switches between the four tabs and moves the active indicator pill
+- The screen rail (desktop) jumps to any of the 14 screens
 - Tapping a chat row opens Chat; the back arrow returns to the list
-- Theme toggle flips day/night and persists the choice to `localStorage`
-- Settings -> Appearance -> Light/Dark actually repaints the whole page
+- Theme control flips Day / Night / System and persists the choice to `localStorage`
+- Settings -> Appearance -> Day/Night actually repaints the whole page
 - Switches toggle, radio rows select, send appends a message, empty send is a no-op
 
-## Verified on this page
+## Brand tokens
 
-Checked at 360 / 390 / 1440 px in both day and night:
+Read from Teamily's production CSS, not approximated:
 
-- horizontal overflow **0**, spill **0**
-- touch targets below 48x48 **0**
-- contrast AA failures **0** (0 of 361 text nodes)
-- failed asset requests **0**
-- console errors **0**
-- bottom nav and composer flush to the frame (gap 0.0)
+| Token | Value |
+|---|---|
+| Primary | `#087c45` |
+| Primary gradient | `180deg #0b8249 -> #087c45` |
+| Logo mint | `#42d982` |
+| Brand soft | `#cbe7d2` |
+| Dark canvas | `#141816` |
+| Light canvas | `#eef2ef` |
+| Ink | `#182b23` |
+| User bubble (night) | `#505752` |
+| Agent bubble (night) | `#303433` |
+| Typeface | Lato 400 / 700 / 900 (self-hosted) |
 
-## One implementation note worth keeping
+**Mint `#42d982` is a fill only.** It is 1.62:1 against the light canvas, so it must never be used as
+text there — badges, dots, presence rings and the logo mark only.
 
-Below a 400 px container width the Chat screen hides the video-call button so the agent name never
-truncates. That rule is scoped with `@container phone (max-width: 400px)` and `container-type: inline-size`
-on `.screen`, **not** a viewport media query. Inside a 390 px phone frame on a 1440 px desktop preview a
-viewport query never fires, which is exactly how the title lost 45 px before the fix.
+## Published URLs
+
+GitHub Pages serves this folder from the `gh-pages` branch:
+
+- **https://krfbrothers.github.io/orhan-android/** — 14-screen HTML design
+
+`gh-pages` is published separately from `main`; updating `design/` here does not republish the site by
+itself. Confirm the Pages branch in the repository settings before relying on the URL.

@@ -16,8 +16,13 @@ do not override this baseline.
 
 ## Design preview (live)
 - **https://krfbrothers.github.io/orhan-android/** — 14-screen HTML design
-- **https://krfbrothers.github.io/orhan-android/m3-gallery.html** — Material 3 component gallery
-- Source: `design/` (`index.html`, `m3-gallery.html`, `code-pages/`), audit in `M3_AUDIT_REPORT.md`
+- Source: `design/` (`index.html` + `design/README.md`), audit history in `M3_AUDIT_REPORT.md`
+
+The design showcase now models the **Teamily AI** app: 14 screens, 4 bottom-nav destinations
+(Chats / Agents / Discover / Profile), Day + Night themes. It replaced the earlier Orhan-branded
+showcase, and the `m3-gallery.html` page and `design/code-pages/` maps were retired with it.
+`M3_AUDIT_REPORT.md` is kept as a historical audit of the Compose layer — it describes the old
+showcase files and no longer matches `design/`.
 
 ## How it works
 - `MainActivity` → `OrhanNavHost`: Home (chats), Chat, Agents, Discover, Profile, Settings
