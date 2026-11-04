@@ -129,6 +129,9 @@ data class ChatUiState(
     /** True after the saved thread has been applied, including when there was nothing to restore. */
     val threadRestored: Boolean = false,
     val agentId: String? = null,
+    /** Persisted composer text for this conversation; null means no saved draft. */
+    val composerDraft: String? = null,
+    val composerDraftError: String? = null,
 )
 
 class ChatViewModel(
@@ -185,9 +188,21 @@ class ChatViewModel(
             if (saved.messages.isNotEmpty() && _state.value.messages.isEmpty()) {
                 saved.attachments.forEach { (id, a) -> attachmentsById.putIfAbsent(id, a) }
                 val restoredMessages = saved.messagesWithAttachments()
-                _state.update { it.copy(messages = restoredMessages, threadRestored = true, agentId = saved.agentId ?: activeAgentId, error = interruptedHandoffError ?: it.error) }
+                _state.update { it.copy(messages = restoredMessages, threadRestored = true, agentId = saved.agentId ?: activeAgentId, composerDraft = saved.draft, error = interruptedHandoffError ?: it.error) }
             } else {
-                _state.update { it.copy(threadRestored = true, agentId = saved.agentId ?: activeAgentId, error = interruptedHandoffError ?: it.error) }
+                _state.update { it.copy(threadRestored = true, agentId = saved.agentId ?: activeAgentId, composerDraft = saved.draft, error = interruptedHandoffError ?: it.error) }
+            }
+            viewModelScope.launch {
+                _state.map { it.composerDraft }.distinctUntilChanged().collect { draft ->
+                    try {
+                        store.saveDraft(title, draft)
+                        _state.update { it.copy(composerDraftError = null) }
+                    } catch (cancel: CancellationException) {
+                        throw cancel
+                    } catch (_: Exception) {
+                        _state.update { it.copy(composerDraftError = "Draft couldn't be saved. Keep this chat open and try again.") }
+                    }
+                }
             }
             _state.filter { !it.busy }
                 .map { it.messages to pendingHandoffRetry?.toStored() }
@@ -210,10 +225,16 @@ class ChatViewModel(
         val store = threadStore ?: return
         val msgs = _state.value.messages
         val atts = attachmentsById.toMap()
+        val draft = _state.value.composerDraft
         if (msgs.isNotEmpty()) viewModelScope.launch {
             store.save(title, msgs, atts, pendingHandoffRetry = pendingHandoffRetry?.toStored(), agentId = activeAgentId)
             automaticMemory?.onMessagesSaved(title, msgs.map { it.toStored() })
         }
+        if (draft != null) viewModelScope.launch { store.saveDraft(title, draft) }
+    }
+
+    fun setComposerDraft(draft: String?) {
+        _state.update { it.copy(composerDraft = draft) }
     }
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -369,25 +390,25 @@ class ChatViewModel(
     fun send(raw: String) = send(raw, null)
 
     /** Sends [raw] with an optional inline file. The bubble shows a "📎 name" line for the file. */
-    fun send(raw: String, attachment: ChatAttachment?, onAgentRunId: suspend (String) -> Unit = {}) {
+    fun send(raw: String, attachment: ChatAttachment?, onAgentRunId: suspend (String) -> Unit = {}, replyToMessageId: Long? = null) {
         val text = raw.trim()
         if ((text.isEmpty() && attachment == null) || _state.value.busy) return
         pendingHandoffRetry = null
         val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
-        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis(), attachment = attachment)
+        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis(), attachment = attachment, replyToMessageId = replyToMessageId)
         if (attachment != null) attachmentsById[user.id] = attachment
         _state.update { it.copy(messages = it.messages + user, loading = true, activityLabel = null, busy = true, error = null) }
         streamReply(onAgentRunId = onAgentRunId)
     }
 
     /** Explicit @mentions use the same specialist engine path and retry persistence as model handoffs. */
-    fun sendToAgent(raw: String, agent: RosterAgent, task: String, attachment: ChatAttachment? = null) {
+    fun sendToAgent(raw: String, agent: RosterAgent, task: String, attachment: ChatAttachment? = null, replyToMessageId: Long? = null) {
         val text = raw.trim()
         val requestedTask = task.trim()
         if (text.isEmpty() || requestedTask.isEmpty() || _state.value.busy) return
         pendingHandoffRetry = null
         val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
-        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis())
+        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis(), replyToMessageId = replyToMessageId)
         if (attachment != null) attachmentsById[user.id] = attachment
         val sourceId = nextId()
         val assignment = ChatMessage(sourceId, ChatRole.Agent, "I assigned this request to ${agent.name}: $requestedTask", currentTimeString())
