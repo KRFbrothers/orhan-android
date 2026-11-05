@@ -1,6 +1,7 @@
 package ai.orhan.design.screens
 
 import ai.orhan.feature.chat.meetingActionItems
+import ai.orhan.design.components.OrhanCubeLogo
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -47,9 +48,14 @@ import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.Translate
+import androidx.compose.material.icons.rounded.Undo
+import androidx.compose.material3.OutlinedTextField
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -79,7 +85,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.Reply
+import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -252,6 +258,10 @@ fun ChatScreen(
     onSaveAction: ((messageId: Long, text: String) -> Unit)? = null,
     /** Uses the signed-in model service and returns only the requested translation. */
     onTranslateMessage: (suspend (String) -> Result<String>)? = null,
+    /** Translates message text into a specifically chosen target language. */
+    onTranslateMessageWithLanguage: (suspend (String, String) -> Result<String>)? = null,
+    /** Deletes or unsends a message from the conversation. */
+    onDeleteMessage: ((Long) -> Unit)? = null,
     /** Sends the original persisted audio payload to the configured speech-capable model. */
     onTranscribeAudio: (suspend (ChatAttachment) -> Result<String>)? = null,
     /** Persists a reviewed transcript on its source audio message before showing success. */
@@ -310,6 +320,10 @@ fun ChatScreen(
     var cameraOutput by remember { mutableStateOf<java.io.File?>(null) }
     var attachSheet by rememberSaveable { mutableStateOf(false) }
     var actionMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var translationTargetMessage by remember { mutableStateOf<ChatMessage?>(null) }
+    var showLanguagePicker by rememberSaveable { mutableStateOf(false) }
+    var messageToUnsend by remember { mutableStateOf<ChatMessage?>(null) }
+    var messageToDelete by remember { mutableStateOf<ChatMessage?>(null) }
     var textActionTitle by rememberSaveable { mutableStateOf<String?>(null) }
     var textActionResult by rememberSaveable { mutableStateOf<String?>(null) }
     var textActionError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -389,7 +403,7 @@ fun ChatScreen(
             return
         }
         val recorder = runCatching {
-            val created = if (android.os.Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else MediaRecorder()
+            val created = if (android.os.Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else @Suppress("DEPRECATION") MediaRecorder()
             created.setAudioSource(MediaRecorder.AudioSource.MIC)
             created.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             created.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
@@ -723,9 +737,11 @@ fun ChatScreen(
         MessageActionsSheet(
             canSave = actionMessage.role == ChatRole.Agent && actionMessage.id != 0L && onSaveArtifact != null,
             canSaveAction = actionMessage.role == ChatRole.User && onSaveAction != null && actionMessage.id != 0L,
-            canTranslate = onTranslateMessage != null,
+            canTranslate = (onTranslateMessageWithLanguage != null || onTranslateMessage != null) && actionMessage.text.isNotBlank(),
             canTranscribe = onTranscribeAudio != null && onSaveTranscript != null && actionMessage.attachment?.mimeType?.startsWith("audio/") == true,
             canCreateMinutes = onCreateMeetingMinutes != null && actionMessage.attachment?.mimeType?.startsWith("audio/") == true,
+            canUnsend = actionMessage.role == ChatRole.User && actionMessage.id != 0L && onDeleteMessage != null,
+            canDelete = actionMessage.id != 0L && onDeleteMessage != null,
             onDismiss = { actionMessageId = null },
             onBack = {
                 actionMessageId = null
@@ -757,7 +773,19 @@ fun ChatScreen(
                 onSaveAction?.invoke(actionMessage.id, actionMessage.text)
                 actionMessageId = null
             },
-            onTranslate = { runTextAction("Translation") { onTranslateMessage?.invoke(actionMessage.text) ?: Result.failure(IllegalStateException("Translation is unavailable.")) } },
+            onTranslate = {
+                translationTargetMessage = actionMessage
+                actionMessageId = null
+                showLanguagePicker = true
+            },
+            onUnsend = {
+                messageToUnsend = actionMessage
+                actionMessageId = null
+            },
+            onDelete = {
+                messageToDelete = actionMessage
+                actionMessageId = null
+            },
             onTranscribe = {
                 val audio = actionMessage.attachment
                 if (audio != null) runTextAction("Transcript", actionMessage.id, persistResult = { text ->
@@ -767,6 +795,71 @@ fun ChatScreen(
             onCreateMinutes = {
                 val audio = actionMessage.attachment
                 if (audio != null) runTextAction("Meeting minutes", actionMessage.id) { onCreateMeetingMinutes?.invoke(audio) ?: Result.failure(IllegalStateException("Meeting minutes are unavailable.")) }
+            },
+        )
+    }
+
+    if (showLanguagePicker && translationTargetMessage != null) {
+        val target = translationTargetMessage!!
+        TranslationLanguagePickerSheet(
+            onDismiss = {
+                showLanguagePicker = false
+                translationTargetMessage = null
+            },
+            onLanguageSelected = { lang ->
+                showLanguagePicker = false
+                translationTargetMessage = null
+                runTextAction("Translation (${lang.displayName})") {
+                    onTranslateMessageWithLanguage?.invoke(target.text, lang.displayName)
+                        ?: onTranslateMessage?.invoke(target.text)
+                        ?: Result.failure(IllegalStateException("Translation is unavailable."))
+                }
+            },
+        )
+    }
+
+    if (messageToUnsend != null) {
+        val target = messageToUnsend!!
+        AlertDialog(
+            onDismissRequest = { messageToUnsend = null },
+            title = { Text("Unsend message?") },
+            text = { Text("This message will be removed from this conversation.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = target.id
+                    messageToUnsend = null
+                    onDeleteMessage?.invoke(id)
+                }) {
+                    Text("Unsend", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { messageToUnsend = null }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    if (messageToDelete != null) {
+        val target = messageToDelete!!
+        AlertDialog(
+            onDismissRequest = { messageToDelete = null },
+            title = { Text("Delete message?") },
+            text = { Text("Are you sure you want to delete this message? This action cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = target.id
+                    messageToDelete = null
+                    onDeleteMessage?.invoke(id)
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { messageToDelete = null }) {
+                    Text("Cancel")
+                }
             },
         )
     }
@@ -796,6 +889,18 @@ fun ChatScreen(
             },
             confirmButton = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (title.startsWith("Translation") && !textActionResult.isNullOrBlank()) {
+                        TextButton(
+                            enabled = !textActionLoading,
+                            onClick = {
+                                textActionResult?.let { copyText(context, it) }
+                            },
+                        ) {
+                            Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Copy")
+                        }
+                    }
                     if (title == "Transcript" && textActionError != null && textActionResult != null && onSaveTranscript != null) {
                         TextButton(enabled = !textActionLoading, onClick = {
                             if (!textActionLoading) scope.launch {
@@ -1591,11 +1696,9 @@ private fun AgentMark(name: String, size: androidx.compose.ui.unit.Dp) {
         contentAlignment = Alignment.Center,
     ) {
         if (name.equals("Orhan", ignoreCase = true)) {
-            Image(
-                painter = painterResource(R.drawable.orhan_mark),
-                contentDescription = null,
-                modifier = Modifier.size(size * 0.7f),
-                contentScale = ContentScale.Fit,
+            OrhanCubeLogo(
+                size = size * 0.7f,
+                strokeColor = colors.onBrandSoft,
             )
         } else {
             Text(
@@ -1640,6 +1743,170 @@ private fun AttachSheet(
     }
 }
 
+/** Target language model for translation language picker. */
+data class TranslationTargetLanguage(
+    val code: String,
+    val displayName: String,
+    val nativeName: String,
+)
+
+val DefaultTranslationLanguages: List<TranslationTargetLanguage> = listOf(
+    TranslationTargetLanguage("en", "English", "English"),
+    TranslationTargetLanguage("es", "Spanish", "Español"),
+    TranslationTargetLanguage("hi", "Hindi", "हिन्दी"),
+    TranslationTargetLanguage("fr", "French", "Français"),
+    TranslationTargetLanguage("de", "German", "Deutsch"),
+    TranslationTargetLanguage("ja", "Japanese", "日本語"),
+    TranslationTargetLanguage("ar", "Arabic", "العربية"),
+    TranslationTargetLanguage("zh", "Chinese (Simplified)", "简体中文"),
+    TranslationTargetLanguage("ru", "Russian", "Русский"),
+    TranslationTargetLanguage("pt", "Portuguese", "Português"),
+    TranslationTargetLanguage("it", "Italian", "Italiano"),
+    TranslationTargetLanguage("ko", "Korean", "한국어"),
+    TranslationTargetLanguage("tr", "Turkish", "Türkçe"),
+    TranslationTargetLanguage("bn", "Bengali", "বাংলা"),
+    TranslationTargetLanguage("id", "Indonesian", "Bahasa Indonesia"),
+    TranslationTargetLanguage("ur", "Urdu", "اردو"),
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TranslationLanguagePickerSheet(
+    onDismiss: () -> Unit,
+    onLanguageSelected: (TranslationTargetLanguage) -> Unit,
+) {
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val filteredLanguages = remember(searchQuery) {
+        if (searchQuery.isBlank()) DefaultTranslationLanguages
+        else DefaultTranslationLanguages.filter {
+            it.displayName.contains(searchQuery, ignoreCase = true) ||
+            it.nativeName.contains(searchQuery, ignoreCase = true) ||
+            it.code.contains(searchQuery, ignoreCase = true)
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = OrhanTheme.shapes.sheet,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column {
+                    Text(
+                        text = "Translate message",
+                        style = OrhanTextStyles.rowTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "Choose target language",
+                        style = OrhanTextStyles.meta,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Cancel",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Search languages…") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+                trailingIcon = if (searchQuery.isNotEmpty()) {
+                    {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Rounded.Close, "Clear search")
+                        }
+                    }
+                } else null,
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                shape = RoundedCornerShape(12.dp),
+            )
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 380.dp),
+            ) {
+                if (filteredLanguages.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                "No languages match '$searchQuery'",
+                                style = OrhanTextStyles.meta,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                } else {
+                    items(filteredLanguages, key = { it.code }) { lang ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 52.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { onLanguageSelected(lang) }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Translate,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Spacer(Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = lang.displayName,
+                                    style = OrhanTextStyles.rowTitle,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Text(
+                                    text = lang.nativeName,
+                                    style = OrhanTextStyles.snippet,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MessageActionsSheet(
@@ -1648,6 +1915,8 @@ private fun MessageActionsSheet(
     canTranslate: Boolean,
     canTranscribe: Boolean,
     canCreateMinutes: Boolean,
+    canUnsend: Boolean = false,
+    canDelete: Boolean = false,
     onDismiss: () -> Unit,
     onBack: () -> Unit,
     onReply: () -> Unit,
@@ -1656,6 +1925,8 @@ private fun MessageActionsSheet(
     onSave: () -> Unit,
     onSaveAction: () -> Unit,
     onTranslate: () -> Unit,
+    onUnsend: () -> Unit = {},
+    onDelete: () -> Unit = {},
     onTranscribe: () -> Unit,
     onCreateMinutes: () -> Unit,
 ) {
@@ -1673,10 +1944,10 @@ private fun MessageActionsSheet(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
-            SheetAction(Icons.Rounded.Reply, "Reply", null, onReply)
+            SheetAction(Icons.AutoMirrored.Rounded.Reply, "Reply", null, onReply)
             SheetAction(Icons.Rounded.ContentCopy, "Copy", null, onCopy)
             SheetAction(Icons.Rounded.Share, "Share", null, onShare)
-            if (canTranslate) SheetAction(Icons.Rounded.Description, "Translate", "Uses the configured language model.", onTranslate)
+            if (canTranslate) SheetAction(Icons.Rounded.Translate, "Translate", "Choose a language to translate this message.", onTranslate)
             if (canTranscribe) SheetAction(Icons.Rounded.Mic, "Transcribe audio", "Sends this saved audio to the speech-capable model.", onTranscribe)
             if (canCreateMinutes) SheetAction(Icons.Rounded.Description, "Create meeting minutes", "Transcribes this saved recording and drafts factual minutes.", onCreateMinutes)
             if (canSave) {
@@ -1684,6 +1955,12 @@ private fun MessageActionsSheet(
             }
             if (canSaveAction) {
                 SheetAction(Icons.Rounded.Add, "Save as action", "Saves the to-do. Nothing is run.", onSaveAction)
+            }
+            if (canUnsend) {
+                SheetAction(Icons.Rounded.Undo, "Unsend", "Revoke this sent message", onUnsend)
+            }
+            if (canDelete) {
+                SheetAction(Icons.Rounded.Delete, "Delete", "Remove this message", onDelete)
             }
         }
     }

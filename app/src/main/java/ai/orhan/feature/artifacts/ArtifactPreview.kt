@@ -38,6 +38,7 @@ internal fun ArtifactPreview(artifact: Artifact) {
                 settings.blockNetworkLoads = true
                 settings.blockNetworkImage = true
                 settings.domStorageEnabled = false
+                @Suppress("DEPRECATION")
                 settings.databaseEnabled = false
                 settings.setSupportMultipleWindows(false)
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)

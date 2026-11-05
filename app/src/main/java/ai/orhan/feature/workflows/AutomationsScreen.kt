@@ -21,7 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -69,7 +69,7 @@ fun AutomationsScreen(
             contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item("header") {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, "Back") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
                     Text("Automations", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(top = 12.dp))
                     TextButton(onClick = onSetUpManually, modifier = Modifier.heightIn(min = 48.dp)) { Text("Set up manually") }
                 }
@@ -161,7 +161,7 @@ private fun AutomationPromptBuilder(
         LazyColumn(modifier = Modifier.fillMaxSize().padding(insets), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             item("heading") {
                 Row {
-                    IconButton(onClick = ::back) { Icon(Icons.Rounded.ArrowBack, "Back") }
+                    IconButton(onClick = ::back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
                     Column(Modifier.padding(top = 8.dp)) {
                         Text(template.title, style = MaterialTheme.typography.titleLarge)
                         Text("Edit your task — the prompt updates below.", style = MaterialTheme.typography.bodyMedium)

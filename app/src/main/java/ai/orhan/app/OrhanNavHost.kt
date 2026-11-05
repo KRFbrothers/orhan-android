@@ -677,6 +677,8 @@ fun OrhanNavHost(isDark: Boolean) {
                     }
                 },
                 onTranslateMessage = { text -> chatViewModel.translateMessage(text, languageName(languagePrefs.code)) },
+                onTranslateMessageWithLanguage = { text, targetLang -> chatViewModel.translateMessage(text, targetLang) },
+                onDeleteMessage = chatViewModel::deleteMessage,
                 onTranscribeAudio = chatViewModel::transcribeAudio,
                 onSaveTranscript = chatViewModel::saveTranscript,
                 onCreateMeetingMinutes = chatViewModel::createMeetingMinutes,

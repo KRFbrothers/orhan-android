@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
      * App lock: true on cold start and after every onStop (app backgrounded).
      * Only shown when the user turned App lock on. Survives rotation only.
      */
-    private var locked by mutableStateOf(true)
+    private var locked by mutableStateOf(value = true)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
                 else if (lockEnabled == false) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
             }
             OrhanApp(themeMode = mode) {
-                val showLock = lockEnabled == true && locked
+                val showLock = (lockEnabled == true) && locked
                 if (lockEnabled != null) {
                     // NavHost stays composed under the lock so the user returns to the same screen,
                     // but it is hidden from accessibility while locked.
@@ -58,18 +58,19 @@ class MainActivity : ComponentActivity() {
                         OrhanNavHost(isDark = mode.isDark())
                     }
                 }
-                if (lockEnabled == null || showLock) {
+                if ((lockEnabled == null) || showLock) {
                     // Opaque layer that swallows all touches.
                     Box(
                         Modifier.fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)
                             .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } },
                     ) {
-                        if (showLock) AppLockScreen(
-                            store = lockStore,
-                            onUnlocked = { locked = false },
-                            onBackExit = { finish() },
-                        )
+                        if (showLock) {
+                            AppLockScreen(
+                                store = lockStore,
+                                onUnlocked = { locked = false },
+                            ) { finish() }
+                        }
                     }
                 }
             }
@@ -89,5 +90,13 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val KEY_UNLOCKED_ACROSS_CONFIG = "orhan.unlocked_config"
+    }
+}
+
+@androidx.compose.ui.tooling.preview.Preview(name = "Orhan App Preview", showBackground = true, widthDp = 390, heightDp = 844)
+@androidx.compose.runtime.Composable
+private fun MainActivityPreview() {
+    ai.orhan.design.theme.OrhanTheme(darkTheme = false) {
+        ai.orhan.design.screens.HomeScreen(isDark = false)
     }
 }

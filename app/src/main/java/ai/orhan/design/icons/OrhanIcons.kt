@@ -105,6 +105,10 @@ object OrhanIcons {
     private const val CHATPREF_RULES =
         "M8.4 9.6h7.2M8.4 12.6h4.4"
 
+    /** `#i-cube` — Orhan official brand logo: 3D isometric cube wireframe. */
+    private const val CUBE =
+        "M12 1.4L21.1 6.7v10.6L12 22.6L2.9 17.3V6.7zM2.9 6.7L12 12l9.1-5.3M12 12v10.6"
+
     /* ------------------------------------------------------------------ *
      *  Builder helpers
      * ------------------------------------------------------------------ */
@@ -200,6 +204,13 @@ object OrhanIcons {
         }.build()
     }
 
+    /** Orhan's official brand logo — the 3D isometric Cube. */
+    val Cube: ImageVector by lazy {
+        builder("Orhan.Cube").apply {
+            stroked("cube_wireframe", CUBE)
+        }.build()
+    }
+
     /**
      * Every Orhan-specific icon, keyed by its design symbol id.
      * Handy for a gallery screen or a screenshot test that renders the whole set.
@@ -211,6 +222,7 @@ object OrhanIcons {
             "i-agents" to Agents,
             "i-discover" to Discover,
             "i-chatpref" to ChatPref,
+            "i-cube" to Cube,
         )
     }
 }

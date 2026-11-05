@@ -568,6 +568,27 @@ class ChatViewModel(
 
     fun clearError() = _state.update { it.copy(error = null) }
 
+    fun deleteMessage(messageId: Long) {
+        val current = _state.value
+        val updated = current.messages.filterNot { it.id == messageId }
+        val store = threadStore
+        val title = threadTitle?.takeIf(String::isNotBlank)
+        if (store != null && title != null) {
+            viewModelScope.launch {
+                try {
+                    store.save(
+                        title = title,
+                        messages = updated,
+                        attachments = attachmentsById.toMap(),
+                        pendingHandoffRetry = pendingHandoffRetry?.toStored(),
+                        agentId = activeAgentId,
+                    )
+                } catch (_: Exception) {}
+            }
+        }
+        _state.update { it.copy(messages = updated) }
+    }
+
     suspend fun translateMessage(text: String, targetLanguage: String): Result<String> =
         serviceRepository.translateText(text, targetLanguage)
 
