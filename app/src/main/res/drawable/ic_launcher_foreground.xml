@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive-icon FOREGROUND layer — Cube 05 from the 42-icon voxel pack,
+  repainted in the Teamily AI brand palette.
+
+  Geometry is not hand-tuned. Cube 05's own viewBox bbox is x 2.47..21.53,
+  y 1.00..23.00 (19.06 x 22.00, centre 12,12). The group below scales that
+  22dp-tall figure to 44dp inside the 108dp canvas at scale
+  2.0000 and centres it, so the ink occupies 66.7% of the 66dp safe zone
+  and survives every mask shape (circle, squircle, rounded square) with
+  11.0dp of margin on the vertical axis.
+
+  Palette (all literals from design/theme/Color.kt):
+    #4F6157 Ink600   #235039 DarkPrimarySoft   #182B23 Ink900   -> body faces
+    #42D982 Mint     #0B8249 Green750          #066A3B Green800 -> accent faces
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="2.0000"
+        android:scaleY="2.0000"
+        android:translateX="30.0000"
+        android:translateY="30.0000">
+<path android:fillColor="#4F6157" android:pathData="M12.00 1.00L14.38 2.38L12.00 3.75L9.62 2.38Z"/><path android:fillColor="#235039" android:pathData="M2.47 17.50L4.86 18.88L4.86 16.12L2.47 14.75Z"/><path android:fillColor="#182B23" android:pathData="M21.53 17.50L19.14 18.88L19.14 16.12L21.53 14.75Z"/><path android:fillColor="#4F6157" android:pathData="M9.62 2.38L12.00 3.75L9.62 5.12L7.24 3.75ZM14.38 2.38L16.76 3.75L14.38 5.12L12.00 3.75Z"/><path android:fillColor="#235039" android:pathData="M4.86 18.88L7.24 20.25L7.24 17.50L4.86 16.12ZM2.47 14.75L4.86 16.12L4.86 13.38L2.47 12.00Z"/><path android:fillColor="#182B23" android:pathData="M19.14 18.88L16.76 20.25L16.76 17.50L19.14 16.12ZM21.53 14.75L19.14 16.12L19.14 13.38L21.53 12.00Z"/><path android:fillColor="#4F6157" android:pathData="M7.24 3.75L9.62 5.12L7.24 6.50L4.86 5.12ZM12.00 3.75L14.38 5.12L12.00 6.50L9.62 5.12ZM16.76 3.75L19.14 5.12L16.76 6.50L14.38 5.12Z"/><path android:fillColor="#235039" android:pathData="M7.24 20.25L9.62 21.62L9.62 18.88L7.24 17.50ZM4.86 16.12L7.24 17.50L7.24 14.75L4.86 13.38ZM2.47 12.00L4.86 13.38L4.86 10.62L2.47 9.25Z"/><path android:fillColor="#182B23" android:pathData="M16.76 20.25L14.38 21.62L14.38 18.88L16.76 17.50ZM19.14 16.12L16.76 17.50L16.76 14.75L19.14 13.38ZM21.53 12.00L19.14 13.38L19.14 10.62L21.53 9.25Z"/><path android:fillColor="#42D982" android:pathData="M12.00 12.00L14.38 13.38L12.00 14.75L9.62 13.38Z"/><path android:fillColor="#0B8249" android:pathData="M12.00 12.00L14.38 13.38L14.38 10.62L12.00 9.25Z"/><path android:fillColor="#066A3B" android:pathData="M12.00 12.00L9.62 13.38L9.62 10.62L12.00 9.25Z"/><path android:fillColor="#4F6157" android:pathData="M4.86 5.12L7.24 6.50L4.86 7.88L2.47 6.50ZM9.62 5.12L12.00 6.50L9.62 7.88L7.24 6.50ZM14.38 5.12L16.76 6.50L14.38 7.88L12.00 6.50ZM19.14 5.12L21.53 6.50L19.14 7.88L16.76 6.50Z"/><path android:fillColor="#235039" android:pathData="M9.62 21.62L12.00 23.00L12.00 20.25L9.62 18.88ZM7.24 17.50L9.62 18.88L9.62 16.12L7.24 14.75ZM4.86 13.38L7.24 14.75L7.24 12.00L4.86 10.62ZM2.47 9.25L4.86 10.62L4.86 7.88L2.47 6.50Z"/><path android:fillColor="#182B23" android:pathData="M14.38 21.62L12.00 23.00L12.00 20.25L14.38 18.88ZM16.76 17.50L14.38 18.88L14.38 16.12L16.76 14.75ZM19.14 13.38L16.76 14.75L16.76 12.00L19.14 10.62ZM21.53 9.25L19.14 10.62L19.14 7.88L21.53 6.50Z"/><path android:fillColor="#42D982" android:pathData="M9.62 13.38L12.00 14.75L9.62 16.12L7.24 14.75ZM14.38 13.38L16.76 14.75L14.38 16.12L12.00 14.75Z"/><path android:fillColor="#0B8249" android:pathData="M14.38 13.38L16.76 14.75L16.76 12.00L14.38 10.62ZM12.00 9.25L14.38 10.62L14.38 7.88L12.00 6.50Z"/><path android:fillColor="#066A3B" android:pathData="M9.62 13.38L7.24 14.75L7.24 12.00L9.62 10.62ZM12.00 9.25L9.62 10.62L9.62 7.88L12.00 6.50Z"/><path android:fillColor="#4F6157" android:pathData="M7.24 6.50L9.62 7.88L7.24 9.25L4.86 7.88ZM16.76 6.50L19.14 7.88L16.76 9.25L14.38 7.88Z"/><path android:fillColor="#235039" android:pathData="M9.62 18.88L12.00 20.25L12.00 17.50L9.62 16.12ZM4.86 10.62L7.24 12.00L7.24 9.25L4.86 7.88Z"/><path android:fillColor="#182B23" android:pathData="M14.38 18.88L12.00 20.25L12.00 17.50L14.38 16.12ZM19.14 10.62L16.76 12.00L16.76 9.25L19.14 7.88Z"/><path android:fillColor="#42D982" android:pathData="M12.00 14.75L14.38 16.12L12.00 17.50L9.62 16.12Z"/><path android:fillColor="#0B8249" android:pathData="M14.38 10.62L16.76 12.00L16.76 9.25L14.38 7.88Z"/><path android:fillColor="#066A3B" android:pathData="M9.62 10.62L7.24 12.00L7.24 9.25L9.62 7.88Z"/>
+    </group>
+</vector>

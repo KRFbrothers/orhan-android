@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive icon (API 26+). minSdk is 26, so every device the app installs on
+     reads this file; the PNG mipmaps are the fallback for launchers that ignore
+     <adaptive-icon>. Both layers are vectors, so there is exactly one copy of
+     the artwork in the APK. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
