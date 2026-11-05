@@ -55,7 +55,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.automirrored.rounded.Chat
-import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SmartToy
@@ -71,6 +70,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
@@ -83,7 +83,6 @@ import ai.orhan.R
 import ai.orhan.feature.agents.AgentsScreen
 import ai.orhan.feature.agents.InstalledAgent
 import ai.orhan.feature.agents.SampleInstalledAgents
-import ai.orhan.feature.discover.DiscoverScreen
 import ai.orhan.design.theme.OrhanTextStyles
 import ai.orhan.design.theme.OrhanTheme
 import ai.orhan.design.theme.ThemeMode
@@ -142,7 +141,6 @@ data class OrhanAgent(
 enum class OrhanTab(val label: String, val icon: ImageVector) {
     Chats("Chats", Icons.AutoMirrored.Rounded.Chat),
     Agents("Agents", Icons.Rounded.SmartToy),
-    Discover("Discover", Icons.Rounded.Explore),
     Memory("Memory", Icons.Rounded.Psychology),
     Artifacts("Artifacts", Icons.Rounded.Layers),
 }
@@ -367,10 +365,6 @@ fun HomeScreen(
                         onDeleteWorkflow = onDeleteWorkflow,
                         modifier = Modifier.fillMaxSize(),
                     )
-                    OrhanTab.Discover -> DiscoverScreen(
-                        onOpenPlaybook = onOpenPlaybook,
-                        modifier = Modifier.fillMaxSize(),
-                    )
                     OrhanTab.Memory -> MemoryScreen(
                         onBack = { tab = OrhanTab.Chats },
                         embedded = true,
@@ -521,7 +515,7 @@ private fun ChatsTab(
         if (pinnedVisible.isNotEmpty()) {
             item(key = "pinned-header") {
                 SectionHeader(
-                    title = "PINNED · ${pinnedVisible.size}",
+                    title = "Pinned · ${pinnedVisible.size}",
                     icon = Icons.Rounded.PushPin,
                     expanded = pinnedExpanded,
                     onToggle = { pinnedExpanded = !pinnedExpanded },
@@ -542,7 +536,7 @@ private fun ChatsTab(
 
         item(key = "recent") {
             SectionHeader(
-                title = "CHATS · ${unpinnedVisible.size}",
+                title = "Chats · ${unpinnedVisible.size}",
                 icon = Icons.AutoMirrored.Rounded.Chat,
                 expanded = chatsExpanded,
                 onToggle = { chatsExpanded = !chatsExpanded },
@@ -696,9 +690,10 @@ private fun SearchPill(
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, colors.fieldEdge, shapes.pill)
             .clickable(onClick = onClick),
-        horizontalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Spacer(modifier = Modifier.width(16.dp))
         Icon(
             imageVector = Icons.Rounded.Search,
             contentDescription = null,
@@ -1047,7 +1042,8 @@ fun OrhanBottomBar(
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (isSelected) colors.brandSoft else Color.Transparent)
                         .selectable(
                             selected = isSelected,
                             onClick = { onSelect(tab) },
