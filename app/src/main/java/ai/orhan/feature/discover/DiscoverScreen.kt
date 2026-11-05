@@ -1,10 +1,9 @@
 package ai.orhan.feature.discover
 
-import ai.orhan.R
+import ai.orhan.design.components.OrhanCubeLogo
 import ai.orhan.design.theme.OrhanTextStyles
 import ai.orhan.design.theme.OrhanTheme
 import ai.orhan.feature.agents.OrhanSectionLabel
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,7 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -92,11 +91,14 @@ private fun FeaturedCard(playbook: Playbook, onStart: () -> Unit, modifier: Modi
         )
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(
-                    painterResource(R.drawable.orhan_mark), contentDescription = null,
+                Box(
                     modifier = Modifier.size(40.dp).clip(RoundedCornerShape(13.dp))
-                        .border(2.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(13.dp)),
-                )
+                        .background(Color.White.copy(alpha = 0.15f))
+                        .border(1.5.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(13.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    OrhanCubeLogo(size = 26.dp, strokeColor = Color.White)
+                }
                 Spacer(Modifier.width(10.dp))
                 Column {
                     Text("TRY THIS PLAYBOOK", style = OrhanTextStyles.eyebrow, color = HeroInk.copy(alpha = 0.9f))
@@ -142,5 +144,21 @@ private fun PlaybookCard(playbook: Playbook, onClick: () -> Unit, modifier: Modi
             Spacer(Modifier.weight(1f, fill = false))
             Text(playbook.agentName, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+@Preview(name = "Discover — Light", showBackground = true, widthDp = 390, heightDp = 844)
+@Composable
+private fun DiscoverScreenLightPreview() {
+    OrhanTheme(darkTheme = false) {
+        DiscoverScreen()
+    }
+}
+
+@Preview(name = "Discover — Dark", showBackground = true, widthDp = 390, heightDp = 844)
+@Composable
+private fun DiscoverScreenDarkPreview() {
+    OrhanTheme(darkTheme = true) {
+        DiscoverScreen()
     }
 }

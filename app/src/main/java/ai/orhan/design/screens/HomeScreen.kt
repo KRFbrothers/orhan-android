@@ -11,7 +11,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Layers
@@ -26,6 +26,7 @@ import ai.orhan.data.memory.memoryTabBadge
 import ai.orhan.feature.artifacts.ArtifactsScreen
 import ai.orhan.feature.memory.MemoryScreen
 import ai.orhan.feature.search.LocalSearchScreen
+import ai.orhan.design.components.OrhanCubeLogo
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.remember
@@ -53,9 +54,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Chat
+import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.rounded.Explore
-import androidx.compose.material.icons.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material3.Icon
@@ -139,7 +140,7 @@ data class OrhanAgent(
 
 /** Bottom-navigation destinations. Profile opens from the header avatar. */
 enum class OrhanTab(val label: String, val icon: ImageVector) {
-    Chats("Chats", Icons.Rounded.Chat),
+    Chats("Chats", Icons.AutoMirrored.Rounded.Chat),
     Agents("Agents", Icons.Rounded.SmartToy),
     Discover("Discover", Icons.Rounded.Explore),
     Memory("Memory", Icons.Rounded.Psychology),
@@ -300,7 +301,7 @@ fun HomeScreen(
             ) {
                 IconButton(onClick = { profileOpen = false }, modifier = Modifier.size(48.dp)) {
                     Icon(
-                        imageVector = Icons.Rounded.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Back",
                         tint = MaterialTheme.colorScheme.onBackground,
                     )
@@ -436,10 +437,9 @@ private fun HomeTopBar(
                 .clickable(onClick = onOpenProfile),
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Image(
-                painter = painterResource(R.drawable.orhan_mark),
-                contentDescription = null,
-                modifier = Modifier.size(28.dp),
+            OrhanCubeLogo(
+                size = 28.dp,
+                strokeColor = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
@@ -543,7 +543,7 @@ private fun ChatsTab(
         item(key = "recent") {
             SectionHeader(
                 title = "CHATS · ${unpinnedVisible.size}",
-                icon = Icons.Rounded.Chat,
+                icon = Icons.AutoMirrored.Rounded.Chat,
                 expanded = chatsExpanded,
                 onToggle = { chatsExpanded = !chatsExpanded },
             )
@@ -601,10 +601,9 @@ private fun OrhanHubCard(
                 .background(MaterialTheme.colorScheme.surface),
             contentAlignment = Alignment.Center,
         ) {
-            Image(
-                painter = painterResource(R.drawable.orhan_mark),
-                contentDescription = null,
-                modifier = Modifier.size(32.dp),
+            OrhanCubeLogo(
+                size = 32.dp,
+                strokeColor = MaterialTheme.colorScheme.primary,
             )
         }
         Spacer(modifier = Modifier.width(12.dp))
@@ -917,7 +916,7 @@ private fun ProfileTab(
                         Text(profile.displayName, style = OrhanTextStyles.rowTitle, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(profile.displayEmail, style = OrhanTextStyles.meta, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = "Edit profile", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = "Edit profile", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 ProfileRow(
                     "About me for Orhan",
@@ -1004,7 +1003,7 @@ private fun ProfileRow(title: String, subtitle: String, danger: Boolean = false,
             }
         }
         Icon(
-            imageVector = Icons.Rounded.KeyboardArrowRight,
+            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1025,6 +1024,10 @@ fun OrhanBottomBar(
     memoryUpdates: Int = 0,
 ) {
     val colors = OrhanTheme.colors
+
+
+
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
