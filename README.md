@@ -18,9 +18,10 @@ do not override this baseline.
 - **https://krfbrothers.github.io/orhan-android/** — 14-screen HTML design
 - Source: `design/` (`index.html` + `design/README.md`), audit history in `M3_AUDIT_REPORT.md`
 
-The design showcase now models the **Teamily AI** app: 14 screens, 4 bottom-nav destinations
-(Chats / Agents / Discover / Profile), Day + Night themes. It replaced the earlier Orhan-branded
-showcase, and the `m3-gallery.html` page and `design/code-pages/` maps were retired with it.
+The design showcase models the **Orhan** app: 14 screens, 5 bottom-nav destinations
+(Chats / Agents / Discover / Memory / Artifacts), Day + Night themes, and the Orhan cube mark +
+wordmark generated from Cube 05. It replaced the earlier Teamily-branded showcase, and the
+`m3-gallery.html` page and `design/code-pages/` maps were retired with it.
 `M3_AUDIT_REPORT.md` is kept as a historical audit of the Compose layer — it describes the old
 showcase files and no longer matches `design/`.
 

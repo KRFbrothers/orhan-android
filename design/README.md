@@ -1,6 +1,6 @@
 # design/ — the HTML showcase
 
-Open `index.html` in a browser. It is fully self-contained: the Lato fonts, the Teamily brand marks and
+Open `index.html` in a browser. It is fully self-contained: the Lato fonts, the Orhan brand marks and
 every agent/user avatar ship in `fonts/` and `images/`, so it renders with no network access and no build
 step.
 
@@ -8,7 +8,7 @@ step.
 
 | # | Screen | Key content |
 |---|---|---|
-| 1 | Home (Chats) | Avatar (opens Profile), Teamily mark + sync status, new-chat plus, 4 filter chips, Pinned / Chats collapsible groups, Quick actions sheet, bottom nav |
+| 1 | Home (Chats) | Avatar (opens Profile), Orhan mark + sync status, new-chat plus, 4 filter chips, Pinned / Chats collapsible groups, Quick actions sheet, bottom nav |
 | 2 | Chat | Agent top bar, tailed bubbles, inline artifact card, typing indicator, composer |
 | 3 | Agents | Agent grid with presence dots and capability tags |
 | 4 | Discover | Featured agent hero + trend grid |
@@ -54,7 +54,7 @@ against the shipped Kotlin, not against the mockup.)
 
 ## Brand tokens
 
-Read from Teamily's production CSS, not approximated:
+Read from the Orhan design tokens (`design/theme/Color.kt`), not approximated:
 
 | Token | Value |
 |---|---|

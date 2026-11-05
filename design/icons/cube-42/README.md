@@ -1,4 +1,4 @@
-# Cube 42 — voxel icon pack, Teamily palette
+# Cube 42 — voxel icon pack, Orhan palette
 
 42 isometric voxel icons, regenerated from a single parametric script so the whole
 set shares one geometry and one palette. This is the pack that ships as

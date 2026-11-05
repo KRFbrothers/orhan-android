@@ -3,12 +3,12 @@
 <head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0d1110">
-<title>Teamily AI — complete Android app UI (Material 3, dark + light)</title>
-<link rel="icon" href="images/teamily-mark.png">
+<title>Orhan — complete Android app UI (Material 3, dark + light)</title>
+<link rel="icon" href="images/orhan-mark.png">
 <script>
 /* resolve theme before first paint so there is no flash */
 (function(){try{
-  var m=localStorage.getItem('teamily-theme-mode')||'dark';
+  var m=localStorage.getItem('orhan-theme-mode')||'dark';
   var t=(m==='system')?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):m;
   document.documentElement.setAttribute('data-theme',t);
   document.documentElement.setAttribute('data-theme-mode',m);
@@ -16,8 +16,8 @@
 </script>
 <style>
 /* ============================================================
-   Teamily AI — complete Android app UI
-   Brand values read from teamily.ai production CSS:
+   Orhan — complete Android app UI
+   Brand values read from the Orhan design tokens (design/theme/Color.kt):
      --nv-green-700   #087c45   (primary)
      --nv-primary-fill gradient 180deg #0b8249 -> #087c45
      --nv-green-50    #eef8f2 / #183826
@@ -28,7 +28,7 @@
      --nv-user-bubble #505752 (dark)   --nv-agent-bubble #303433 (dark)
      --nv-pane #1f2521eb   --nv-canvas #141816
      --font-sans: Lato
-   Logo: real Teamily wordmark + block-T mark from teamily.ai
+   Logo: Orhan cube mark + wordmark, generated from Cube 05 (design/icons/cube-42)
    ============================================================ */
 
 @font-face{font-family:'Lato';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/lato-400.woff2') format('woff2')}
@@ -926,16 +926,16 @@ footer b{color:var(--page-ink)}
 <div class="wrap">
 
   <header class="page-head">
-    <div class="eyebrow"><img src="images/teamily-mark.png" alt="">Teamily AI<span> &middot; Android app &middot; 14 screens</span></div>
-    <h1>Teamily AI Android — <span class="accent">complete</span> app with Profile &amp; Settings</h1>
-    <p class="sub">Material&nbsp;3, mobile-first at a 390px base. Every screen is real markup driven by the same brand tokens as v1 — primary <span class="mono">#087c45</span>, dark canvas <span class="mono">#141816</span>, light canvas <span class="mono">#eef2ef</span>, Lato, and the real Teamily logo. Day and night mode both work on every screen, and the Appearance selector changes the actual theme.</p>
+    <div class="eyebrow"><img src="images/orhan-mark.png" alt="">Orhan<span> &middot; Android app &middot; 14 screens</span></div>
+    <h1>Orhan Android — <span class="accent">complete</span> app with Profile &amp; Settings</h1>
+    <p class="sub">Material&nbsp;3, mobile-first at a 390px base. Every screen is real markup driven by the same brand tokens as v1 — primary <span class="mono">#087c45</span>, dark canvas <span class="mono">#141816</span>, light canvas <span class="mono">#eef2ef</span>, Lato, and the real Orhan logo. Day and night mode both work on every screen, and the Appearance selector changes the actual theme.</p>
     <div class="controls">
       <div class="seg" role="group" aria-label="Theme mode">
         <button type="button" data-mode-btn="system" aria-pressed="false">System</button>
         <button type="button" data-mode-btn="light" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-sun"/></svg>Day</button>
         <button type="button" data-mode-btn="dark" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-moon"/></svg>Night</button>
       </div>
-      <div class="brandsrc"><span class="dot-mint"></span>Brand verified from <b>teamily.ai</b> &middot; #087c45 &middot; Lato</div>
+      <div class="brandsrc"><span class="dot-mint"></span>Brand tokens from <b>Color.kt</b> &middot; #087c45 &middot; Lato</div>
     </div>
   </header>
 
@@ -987,7 +987,7 @@ footer b{color:var(--page-ink)}
                 <img src="images/user-alice.png" alt="">
               </button>
               <div class="brandlock">
-                <img class="mark" src="images/teamily-mark.png" alt="Teamily AI logo">
+                <img class="mark" src="images/orhan-mark.png" alt="Orhan logo">
                 <span class="syncline"><span class="sync-dot" aria-hidden="true"></span>Updating…</span>
               </div>
               <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
@@ -1215,7 +1215,7 @@ footer b{color:var(--page-ink)}
                 <div class="msg agent">
                   <span class="ava"><img src="images/agent-webpage.png" alt=""></span>
                   <div class="bubble">
-                    On it. I’ll use the Teamily green (#087c45) so it stays on-brand, keep one primary CTA, and make it mobile-first.
+                    On it. I’ll use the Orhan green (#087c45) so it stays on-brand, keep one primary CTA, and make it mobile-first.
                     <div class="artcard">
                       <div class="artthumb"><span class="tag">Preview</span></div>
                       <div class="artbody">
@@ -1256,7 +1256,7 @@ footer b{color:var(--page-ink)}
                   <svg class="ic" aria-hidden="true"><use href="#i-attach"/></svg>
                 </button>
                 <label for="msg" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Message</label>
-                <textarea id="msg" rows="1" placeholder="Message Teamily…"></textarea>
+                <textarea id="msg" rows="1" placeholder="Message Orhan…"></textarea>
                 <button class="iconbtn" type="button" aria-label="Voice message" data-toast="Hold to record a voice note">
                   <svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg>
                 </button>
@@ -1286,9 +1286,9 @@ footer b{color:var(--page-ink)}
 
             <div class="appbar">
               <div class="brandlock">
-                <img class="mark" src="images/teamily-mark.png" alt="Teamily AI logo">
-                <img class="wm wm-light" src="images/teamily-wordmark.png" alt="Teamily AI">
-                <img class="wm wm-dark" src="images/teamily-wordmark-dark.png" alt="" aria-hidden="true">
+                <img class="mark" src="images/orhan-mark.png" alt="Orhan logo">
+                <img class="wm wm-light" src="images/orhan-wordmark.png" alt="Orhan">
+                <img class="wm wm-dark" src="images/orhan-wordmark-dark.png" alt="" aria-hidden="true">
               </div>
               <button class="iconbtn" type="button" aria-label="Search agents"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></button>
               <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
@@ -1392,9 +1392,9 @@ footer b{color:var(--page-ink)}
 
             <div class="appbar">
               <div class="brandlock">
-                <img class="mark" src="images/teamily-mark.png" alt="Teamily AI logo">
-                <img class="wm wm-light" src="images/teamily-wordmark.png" alt="Teamily AI">
-                <img class="wm wm-dark" src="images/teamily-wordmark-dark.png" alt="" aria-hidden="true">
+                <img class="mark" src="images/orhan-mark.png" alt="Orhan logo">
+                <img class="wm wm-light" src="images/orhan-wordmark.png" alt="Orhan">
+                <img class="wm wm-dark" src="images/orhan-wordmark-dark.png" alt="" aria-hidden="true">
               </div>
               <button class="iconbtn" type="button" aria-label="Search community"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></button>
               <button class="iconbtn theme-btn" type="button" aria-label="Switch theme" data-theme-toggle="1">
@@ -1407,7 +1407,7 @@ footer b{color:var(--page-ink)}
             <div class="scroll">
               <div class="discover-feature">
                 <div class="df-top">
-                  <img src="images/teamily-mark.png" alt="">
+                  <img src="images/orhan-mark.png" alt="">
                   <div>
                     <div class="df-kicker">Featured agent</div>
                     <div class="df-title">Webpage Developer</div>
@@ -1739,7 +1739,7 @@ footer b{color:var(--page-ink)}
                 <h2 class="pname" id="profileName">Fareed Khan</h2>
                 <div class="pmail" id="profileEmail">fareed.khan@gmail.com</div>
                 <div class="prow">
-                  <span class="protag">Teamily Pro</span>
+                  <span class="protag">Orhan Pro</span>
                   <span class="psince">Member since Mar 2024</span>
                 </div>
                 <button class="pedit" type="button" data-go="editprofile">
@@ -1789,7 +1789,7 @@ footer b{color:var(--page-ink)}
                   <span class="slabel"><span class="t">Privacy &amp; security</span><span class="s">Passcode, blocked users</span></span>
                   <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
                 </button>
-                <button class="srow" type="button" data-toast="Teamily Pro · renews 12 Nov 2026">
+                <button class="srow" type="button" data-toast="Orhan Pro · renews 12 Nov 2026">
                   <span class="sic tint"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg></span>
                   <span class="slabel"><span class="t">Subscription</span><span class="s">Pro · renews 12 Nov</span></span>
                   <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
@@ -1809,7 +1809,7 @@ footer b{color:var(--page-ink)}
 
             <div class="sheet" id="signoutSheet">
               <div class="sheetbox">
-                <h4>Sign out of Teamily AI?</h4>
+                <h4>Sign out of Orhan?</h4>
                 <p>Your chats and artifacts stay on your account. You’ll need to sign in again on this phone.</p>
                 <div class="sheetbtns">
                   <button class="btn btn-primary" type="button" data-close-sheet="1" data-toast="Signed out (demo)">Sign out</button>
@@ -1854,7 +1854,7 @@ footer b{color:var(--page-ink)}
                   <span class="slabel"><span class="t" id="setName">Fareed Khan</span><span class="s" id="setEmail">fareed.khan@gmail.com</span></span>
                   <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
                 </button>
-                <button class="srow" type="button" data-toast="Teamily Pro · renews 12 Nov 2026">
+                <button class="srow" type="button" data-toast="Orhan Pro · renews 12 Nov 2026">
                   <span class="sic tint"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg></span>
                   <span class="slabel"><span class="t">Subscription</span><span class="s">Pro plan · 15 GB storage</span></span>
                   <span class="sval">Renews 12 Nov</span>
@@ -1928,7 +1928,7 @@ footer b{color:var(--page-ink)}
                 </button>
                 <button class="srow" type="button" data-go="about">
                   <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg></span>
-                  <span class="slabel"><span class="t">About Teamily AI</span><span class="s">Version, terms, licenses</span></span>
+                  <span class="slabel"><span class="t">About Orhan</span><span class="s">Version, terms, licenses</span></span>
                   <span class="sval">1.8.2</span>
                   <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
                 </button>
@@ -1937,12 +1937,12 @@ footer b{color:var(--page-ink)}
               <button class="btn btn-outline btnblock" type="button" data-sheet="1">
                 <svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg>Sign out
               </button>
-              <div class="legal">Teamily AI 1.8.2 (build 1820) · Made with Lato</div>
+              <div class="legal">Orhan 1.8.2 (build 1820) · Made with Lato</div>
             </div>
 
             <div class="sheet" id="signoutSheet2">
               <div class="sheetbox">
-                <h4>Sign out of Teamily AI?</h4>
+                <h4>Sign out of Orhan?</h4>
                 <p>Your chats and artifacts stay on your account. You’ll need to sign in again on this phone.</p>
                 <div class="sheetbtns">
                   <button class="btn btn-primary" type="button" data-close-sheet="1" data-toast="Signed out (demo)">Sign out</button>
@@ -1990,7 +1990,7 @@ footer b{color:var(--page-ink)}
                 <span class="tprev dark" aria-hidden="true"><b></b><b></b><b></b></span>
                 <span class="tc-body">
                   <span class="tc-t">Night <em>Dark</em></span>
-                  <span class="tc-s">Deep charcoal canvas #141816 — the Teamily app default.</span>
+                  <span class="tc-s">Deep charcoal canvas #141816 — the Orhan app default.</span>
                 </span>
                 <span class="radio"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span>
               </button>
@@ -2021,7 +2021,7 @@ footer b{color:var(--page-ink)}
                     <div style="background:var(--user-bubble);color:var(--user-ink);border-radius:14px 14px 5px 14px;padding:9px 12px;font-size:12.5px;line-height:1.4;max-width:200px">Yes, publish it.</div>
                   </div>
                   <div style="display:flex;align-items:center;gap:7px;padding-top:2px">
-                    <span style="flex:1 1 auto;height:34px;border-radius:999px;background:var(--field);border:1px solid var(--field-edge);display:flex;align-items:center;padding:0 12px;font-size:11.5px;color:var(--ink-3)">Message Teamily…</span>
+                    <span style="flex:1 1 auto;height:34px;border-radius:999px;background:var(--field);border:1px solid var(--field-edge);display:flex;align-items:center;padding:0 12px;font-size:11.5px;color:var(--ink-3)">Message Orhan…</span>
                     <span style="width:34px;height:34px;border-radius:50%;background:var(--primary-grad);color:var(--on-primary);display:flex;align-items:center;justify-content:center;flex:none">
                       <svg class="ic" style="width:15px;height:15px" aria-hidden="true"><use href="#i-send"/></svg>
                     </span>
@@ -2088,13 +2088,13 @@ footer b{color:var(--page-ink)}
                   <span class="fhint">Used for sign-in and receipts. We’ll send a code to confirm a change.</span>
                 </div>
                 <div class="fld">
-                  <label for="edHandle">Teamily ID</label>
+                  <label for="edHandle">Orhan ID</label>
                   <input id="edHandle" type="text" value="@fareed" autocomplete="off">
                   <span class="fhint">Your handle is unique — 30 days between changes.</span>
                 </div>
                 <div class="fld">
                   <label for="edBio">About you</label>
-                  <textarea id="edBio">Building AI agents at Teamily. Mostly on Android, always in dark mode.</textarea>
+                  <textarea id="edBio">Building AI agents at Orhan. Mostly on Android, always in dark mode.</textarea>
                 </div>
               </div>
 
@@ -2180,10 +2180,10 @@ footer b{color:var(--page-ink)}
                   <span class="sval">22:00 – 07:00</span>
                   <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
                 </button>
-                <button class="srow" type="button" data-toast="Sound: Teamily chime">
+                <button class="srow" type="button" data-toast="Sound: Orhan chime">
                   <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span>
                   <span class="slabel"><span class="t">Sound</span></span>
-                  <span class="sval">Teamily chime</span>
+                  <span class="sval">Orhan chime</span>
                   <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
                 </button>
               </div>
@@ -2218,7 +2218,7 @@ footer b{color:var(--page-ink)}
               <div class="group">
                 <div class="srow">
                   <span class="sic tint"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></span>
-                  <span class="slabel"><span class="t">App lock</span><span class="s">Fingerprint or PIN to open Teamily</span></span>
+                  <span class="slabel"><span class="t">App lock</span><span class="s">Fingerprint or PIN to open Orhan</span></span>
                   <button class="sw" type="button" role="switch" aria-checked="true" aria-label="App lock"><span class="track"></span><span class="thumb"></span></button>
                 </div>
                 <button class="srow" type="button" data-toast="Change passcode">
@@ -2247,8 +2247,8 @@ footer b{color:var(--page-ink)}
                 </div>
                 <div class="srow">
                   <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span>
-                  <span class="slabel"><span class="t">Help improve Teamily</span><span class="s">Share anonymised diagnostics</span></span>
-                  <button class="sw" type="button" role="switch" aria-checked="false" aria-label="Help improve Teamily"><span class="track"></span><span class="thumb"></span></button>
+                  <span class="slabel"><span class="t">Help improve Orhan</span><span class="s">Share anonymised diagnostics</span></span>
+                  <button class="sw" type="button" role="switch" aria-checked="false" aria-label="Help improve Orhan"><span class="track"></span><span class="thumb"></span></button>
                 </div>
               </div>
 
@@ -2531,9 +2531,9 @@ footer b{color:var(--page-ink)}
 
             <div class="scroll">
               <div class="about-hero">
-                <img class="mark-lg" src="images/teamily-mark.png" alt="Teamily AI logo">
-                <img class="wm-lg lt" src="images/teamily-wordmark.png" alt="Teamily AI">
-                <img class="wm-lg dk" src="images/teamily-wordmark-dark.png" alt="" aria-hidden="true">
+                <img class="mark-lg" src="images/orhan-mark.png" alt="Orhan logo">
+                <img class="wm-lg lt" src="images/orhan-wordmark.png" alt="Orhan">
+                <img class="wm-lg dk" src="images/orhan-wordmark-dark.png" alt="" aria-hidden="true">
                 <div class="ver">Version 1.8.2 · build 1820</div>
                 <p>A messenger where people and AI agents work in the same threads.</p>
               </div>
@@ -2559,10 +2559,10 @@ footer b{color:var(--page-ink)}
 
               <div class="seclabel"><span>Support</span></div>
               <div class="group">
-                <button class="srow" type="button" data-toast="support@teamily.ai">
+                <button class="srow" type="button" data-toast="support@orhan.app">
                   <span class="sic"><svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg></span>
                   <span class="slabel"><span class="t">Contact support</span></span>
-                  <span class="sval">support@teamily.ai</span>
+                  <span class="sval">support@orhan.app</span>
                   <svg class="ic schev" aria-hidden="true"><use href="#i-chev"/></svg>
                 </button>
                 <button class="srow" type="button" data-toast="Check for updates — you’re on the latest build">
@@ -2573,9 +2573,9 @@ footer b{color:var(--page-ink)}
               </div>
 
               <div class="legal">
-                Teamily AI · made with Lato<br>
-                © 2026 Teamily Labs. All rights reserved.<br>
-                Package aiteamily.android · 1.8.2 (1820)
+                Orhan · made with Lato<br>
+                © 2026 Orhan Labs. All rights reserved.<br>
+                Package ai.orhan · 1.8.2 (1820)
               </div>
             </div>
           </div>
@@ -2590,7 +2590,7 @@ footer b{color:var(--page-ink)}
       <div class="note">
         <div class="kicker">Now showing</div>
         <h4 id="noteTitle">Home / Chats</h4>
-        <p id="noteBody">Top bar with the real Teamily lockup, search and settings. Recent chats mix agents (mint spark + presence dot) with people and groups. Bottom nav uses the M3 58×30 active indicator.</p>
+        <p id="noteBody">Top bar with the real Orhan lockup, search and settings. Recent chats mix agents (mint spark + presence dot) with people and groups. Bottom nav uses the M3 58×30 active indicator.</p>
         <ul id="noteList">
           <li><b>4 nav destinations</b> — Chats, Agents, Discover, Profile</li>
           <li><b>Touch targets</b> — every row ≥ 72px tall</li>
@@ -2643,7 +2643,7 @@ footer b{color:var(--page-ink)}
 
       <div class="card">
         <h3>Brand palette</h3>
-        <p>Identical to v1 — values read from Teamily’s production CSS, not approximated.</p>
+        <p>Identical to v1 — values read from Orhan’s production CSS, not approximated.</p>
         <div class="swatches">
           <div class="sw"><div class="chipc" style="background:#087c45"></div><div class="meta"><div class="nm">Primary</div><div class="hx">#087c45</div></div></div>
           <div class="sw"><div class="chipc" style="background:#42d982"></div><div class="meta"><div class="nm">Logo mint</div><div class="hx">#42d982</div></div></div>
@@ -2658,7 +2658,7 @@ footer b{color:var(--page-ink)}
         <h3>Theme model</h3>
         <p>One resolver, three modes — System, Day, Night — persisted and reflected in Settings and Appearance.</p>
         <ul class="toklist">
-          <li><span>Storage key</span><b class="mono">teamily-theme-mode</b></li>
+          <li><span>Storage key</span><b class="mono">orhan-theme-mode</b></li>
           <li><span>System mode</span><b>prefers-color-scheme</b></li>
           <li><span>App bar toggle</span><b class="mono">Sun / moon</b></li>
           <li><span>Appearance radios</span><b>change real theme</b></li>
@@ -2683,8 +2683,8 @@ footer b{color:var(--page-ink)}
   </section>
 
   <footer>
-    <b>Teamily AI — complete Android UI mockup.</b> Material 3, mobile-first at a 390px base, 14 screens.<br>
-    Brand source: teamily.ai production CSS — green-700 <span class="mono">#087c45</span>, brand soft <span class="mono">#cbe7d2</span>, dark canvas <span class="mono">#141816</span>, light canvas <span class="mono">#eef2ef</span>, <span class="mono">--font-sans: Lato</span>. Logo and avatars are the real Teamily assets.
+    <b>Orhan — complete Android UI mockup.</b> Material 3, mobile-first at a 390px base, 14 screens.<br>
+    Brand source: Orhan design tokens (Color.kt) — green-700 <span class="mono">#087c45</span>, brand soft <span class="mono">#cbe7d2</span>, dark canvas <span class="mono">#141816</span>, light canvas <span class="mono">#eef2ef</span>, <span class="mono">--font-sans: Lato</span>. Logo and avatars are the real Orhan assets.
   </footer>
 </div>
 
@@ -2693,7 +2693,7 @@ footer b{color:var(--page-ink)}
 <script>
 (function () {
   var root = document.documentElement;
-  var THEME_KEY = 'teamily-theme-mode';
+  var THEME_KEY = 'orhan-theme-mode';
 
   /* ---------------- theme engine ---------------- */
   var MODE_LABEL = { system: 'System', light: 'Day', dark: 'Night' };
@@ -2761,7 +2761,7 @@ footer b{color:var(--page-ink)}
   var railBtns = Array.prototype.slice.call(document.querySelectorAll('.rail [data-go]'));
 
   var NOTES = {
-    home:        ['Home / Chats', 'Header carries the profile avatar (opens Profile), the Teamily mark with live sync status, and the new-chat plus. Pinned and Chats are collapsible sections, exactly like HomeScreen.kt.', ['<b>5 nav destinations</b> — Chats, Agents, Discover, Memory, Artifacts', '<b>Profile</b> opens from the header avatar, not the nav']],
+    home:        ['Home / Chats', 'Header carries the profile avatar (opens Profile), the Orhan mark with live sync status, and the new-chat plus. Pinned and Chats are collapsible sections, exactly like HomeScreen.kt.', ['<b>5 nav destinations</b> — Chats, Agents, Discover, Memory, Artifacts', '<b>Profile</b> opens from the header avatar, not the nav']],
     chat:        ['Chat', 'Agent thread at 14.5px with user and AI bubbles, an inline artifact card, and a composer with attach, mic and send.', ['<b>Send works</b> — type and press send; a reply comes back', '<b>Composer</b> 52px field, 48px send button']],
     agents:      ['Agents', 'Four real agents with status pills, descriptions and an Open CTA that jumps into the chat thread.', ['<b>Open CTA</b> 48px tall', '<b>Create agent</b> dashed row at the end']],
     memory:      ['Memory', 'What the assistant remembers, grouped by topic, with per-item controls. Reached from the bottom nav — the Memory tab carries an unread badge when new memories land.', ['<b>Nav badge</b> on Memory when updates exist', '<b>Back</b> returns to Chats']],
@@ -2776,7 +2776,7 @@ footer b{color:var(--page-ink)}
     chatprefs:   ['Chat preferences', 'Composer and thread behaviour — send with Enter, hold to record, typing indicators, auto-play and agent activity cards.', ['<b>3 composer</b> + <b>3 thread</b> toggles', '<b>Defaults</b> for new chats']],
     storage:     ['Storage', '4-segment usage bar for 3.2 GB of 15 GB, a colour legend, and clean-up rows for cache, old media and agent logs.', ['<b>Bar</b> sums to 100%', '<b>Legend</b> matches segment colours']],
     language:    ['Language', 'Six languages as radio rows, plus an "always reply in app language" switch. Picking one updates the value shown on Settings.', ['<b>Radio rows</b> 58px tall', '<b>Syncs</b> back to Settings']],
-    about:       ['About', 'Real Teamily mark and wordmark, version and build, legal rows for terms, privacy and open-source licenses, and support contacts.', ['<b>Version</b> 1.8.2 (1820)', '<b>3 legal</b> rows + support']]
+    about:       ['About', 'Real Orhan mark and wordmark, version and build, legal rows for terms, privacy and open-source licenses, and support contacts.', ['<b>Version</b> 1.8.2 (1820)', '<b>3 legal</b> rows + support']]
   };
 
   function go(screen) {

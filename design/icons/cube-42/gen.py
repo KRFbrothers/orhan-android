@@ -53,7 +53,7 @@ d(39,5,lambda x,y,z:((O if 0 in(x,y,z) and 4 in(x,y,z) or (x,y,z) in[(0,0,0),(4,
 d(40,5,lambda x,y,z:(O if (x+y)%4==2 else C) if x%2==0 and y%2==0 else None,False)
 d(41,5,lambda x,y,z:C if (x==0 or y==0 or z==0) else (O if 2<=x<=3 and 2<=y<=3 and 1<=z<=2 else None),False)
 d(42,5,lambda x,y,z:O if 1<=z<=3 and (x==4 or y==4) else C,False)
-# --- Teamily AI brand palette ---------------------------------------------
+# --- Orhan brand palette ---------------------------------------------
 # Every value below is a literal from app/src/main/java/ai/orhan/design/theme/Color.kt.
 # Nothing is invented. Face order matches the original pack: t = top face
 # (lightest, key light from above), l = left face (mid), r = right face
