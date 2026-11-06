@@ -1,9 +1,9 @@
-# Teamily AI — the HTML showcase
+# Orhan — the HTML showcase (gh-pages)
 
 This is the `gh-pages` branch: the repository root **is** the published site, so `index.html` here is the
-page GitHub Pages serves.
+page GitHub Pages serves at <https://krfbrothers.github.io/orhan-android/>.
 
-Open `index.html` in a browser. It is fully self-contained: the Lato fonts, the Teamily brand marks and
+Open `index.html` in a browser. It is fully self-contained: the Lato fonts, the Orhan brand marks and
 every agent/user avatar ship in `fonts/` and `images/`, so it renders with no network access and no build
 step.
 
@@ -11,7 +11,7 @@ step.
 
 | # | Screen | Key content |
 |---|---|---|
-| 1 | Home (Chats) | Avatar (opens Profile), Teamily mark + sync status, new-chat plus, 4 filter chips, Pinned / Chats collapsible groups, Quick actions sheet, bottom nav |
+| 1 | Home (Chats) | Avatar (opens Profile), Orhan mark + sync status, new-chat plus, 4 filter chips, Pinned / Chats collapsible groups, Quick actions sheet, bottom nav |
 | 2 | Chat | Agent top bar, tailed bubbles, inline artifact card, typing indicator, composer |
 | 3 | Agents | Agent grid with presence dots and capability tags |
 | 4 | Discover | Featured agent hero + trend grid |
@@ -34,8 +34,7 @@ System / Day / Night control, so each screen is visible in both themes.
 ## Bottom navigation
 
 **5 destinations** — Chats, Agents, Discover, Memory, Artifacts — exactly matching the `OrhanTab` enum in
-`app/.../screens/HomeScreen.kt:140`. (`OrhanTab` is the shipped Kotlin enum's real name; the app's
-package is still `ai.orhan`, so the identifier is left as-is rather than renamed.)
+`app/.../screens/HomeScreen.kt:141`.
 
 **Profile is not a nav destination.** It opens from the header avatar and is a pushed route, and the
 bottom bar is hidden while it is open (`HomeScreen.kt:397`). The eight Settings sub-screens and Chat are
@@ -50,7 +49,7 @@ against the shipped Kotlin, not against the mockup.)
 - The header avatar opens Profile; Back returns to Chats
 - Pinned / Chats headers collapse and expand
 - The FAB opens the Quick actions sheet (7 automation templates from `AutomationTemplates.kt`)
-- The screen rail (desktop) jumps to any of the 16 screens
+- The screen rail (desktop) jumps to any of the 14 screens
 - Tapping a chat row opens Chat; the back arrow returns to the list
 - Theme control flips Day / Night / System and persists the choice to `localStorage`
 - Settings -> Appearance -> Day/Night actually repaints the whole page
@@ -58,7 +57,7 @@ against the shipped Kotlin, not against the mockup.)
 
 ## Brand tokens
 
-Read from Teamily's production CSS, not approximated:
+Read from the Orhan design tokens (`design/theme/Color.kt`), not approximated:
 
 | Token | Value |
 |---|---|
@@ -76,12 +75,11 @@ Read from Teamily's production CSS, not approximated:
 **Mint `#42d982` is a fill only.** It is 1.62:1 against the light canvas, so it must never be used as
 text there — badges, dots, presence rings and the logo mark only.
 
-## Published URL
+## Published URLs
 
-GitHub Pages serves this branch's root:
+GitHub Pages serves this folder from the `gh-pages` branch:
 
-- **https://krfbrothers.github.io/orhan-android/** — 16-screen HTML design
+- **https://krfbrothers.github.io/orhan-android/** — 14-screen HTML design
 
-`gh-pages` is published separately from `main`. The source of truth for the design is `design/` on
-`main`; this branch is a mirror of it, so a change to `main`'s `design/` does not republish the site by
-itself — it has to be copied here and pushed.
+`gh-pages` is published separately from `main`; updating `design/` here does not republish the site by
+itself. Confirm the Pages branch in the repository settings before relying on the URL.
