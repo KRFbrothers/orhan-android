@@ -22,6 +22,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import ai.orhan.BuildConfig
 import ai.orhan.data.auth.AuthRepository
+import ai.orhan.data.chat.chatCredential
 import ai.orhan.design.screens.ChatScreen
 import ai.orhan.feature.agents.CreateAgentScreen
 import ai.orhan.feature.agents.AgentProfileScreen
@@ -124,8 +125,7 @@ fun OrhanNavHost(isDark: Boolean) {
     val authRepository = remember(context) { AuthRepository.get(context) }
     val agentToolRepository = remember(context) {
         ChatRepository(
-            tokenProvider = { authRepository.accessToken() },
-            onUnauthorized = { authRepository.clear() },
+            credentialProvider = { authRepository.chatCredential() },
         )
     }
     val preferences = remember(context) { context.themePreferences() }
@@ -734,10 +734,15 @@ fun OrhanNavHost(isDark: Boolean) {
                 onSignOut = if (session != null) {
                     {
                         scope.launch {
-                            auth.signOut()
-                            navController.navigate(AppRoutes.HOME) {
-                                popUpTo(AppRoutes.HOME) { inclusive = true }
-                                launchSingleTop = true
+                            try {
+                                auth.signOut()
+                                navController.navigate(AppRoutes.HOME) {
+                                    popUpTo(AppRoutes.HOME) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+                            catch (_: Exception) {
+                                android.widget.Toast.makeText(context, "Secure sign-out failed. Please try again.", android.widget.Toast.LENGTH_LONG).show()
                             }
                         }
                     }

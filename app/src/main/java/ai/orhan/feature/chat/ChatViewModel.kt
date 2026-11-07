@@ -3,6 +3,8 @@ package ai.orhan.feature.chat
 import ai.orhan.BuildConfig
 import ai.orhan.data.auth.AuthRepository
 import ai.orhan.data.chat.ChatRepository
+import ai.orhan.data.chat.ChatCredential
+import ai.orhan.data.chat.chatCredential
 import android.app.Application
 import ai.orhan.data.chat.ChatTurn
 import ai.orhan.data.chat.ChatAttachment
@@ -144,16 +146,14 @@ class ChatViewModel(
     constructor(app: Application) : this(
         AuthRepository.get(app).let { auth ->
             ChatRepository(
-                tokenProvider = { auth.accessToken() ?: BuildConfig.DUA_DEV_JWT.ifBlank { null } },
-                onUnauthorized = { auth.clear() },
+                credentialProvider = {
+                    auth.chatCredential() ?: BuildConfig.DUA_DEV_JWT.ifBlank { null }?.let { ChatCredential(it) }
+                },
             )
         },
         app.chatThreads(),
         AutomaticMemoryCoordinator(app.memoryPauseStore(), app.memoryEntriesStore()),
-        ChatRepository(
-            tokenProvider = { AuthRepository.get(app).accessToken() },
-            onUnauthorized = { AuthRepository.get(app).clear() },
-        ),
+        AuthRepository.get(app).let { auth -> ChatRepository(credentialProvider = { auth.chatCredential() }) },
     )
 
     private var threadTitle: String? = null
