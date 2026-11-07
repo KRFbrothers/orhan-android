@@ -2,12 +2,16 @@ package ai.orhan.data.chat
 
 import ai.orhan.BuildConfig
 import android.util.Base64
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import org.json.JSONTokener
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -323,24 +327,40 @@ class ChatRepository(
                     val out = StringBuilder()
                     var done = false
                     val data = StringBuilder()
+                    var eventName: String? = null
                     conn.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
                         while (!done) {
+                            currentCoroutineContext().ensureActive()
                             val line = reader.readLine() ?: break
                             when {
+                                line.startsWith("event:") -> eventName = line.removePrefix("event:").trim()
                                 line.startsWith("data:") -> {
                                     if (data.isNotEmpty()) data.append('\n')
                                     data.append(line.removePrefix("data:").removePrefix(" "))
                                 }
-                                line.isEmpty() && data.isNotEmpty() -> {
-                                    val ev = runCatching { JSONObject(data.toString()) }.getOrNull()
+                                line.isEmpty() -> {
+                                    if (data.isEmpty()) { eventName = null; continue }
+                                    val ev = try {
+                                        val tokens = JSONTokener(data.toString())
+                                        val value = tokens.nextValue() as? JSONObject
+                                            ?: throw IOException("Expected a JSON stream event")
+                                        if (tokens.nextClean() != '\u0000') throw IOException("Trailing stream event data")
+                                        value
+                                    } catch (error: Exception) {
+                                        throw IOException("Invalid stream event. The reply may be incomplete.", error)
+                                    }
                                     data.setLength(0)
-                                    val type = ev?.optString("type")
+                                    val type = ev.optString("type").ifBlank { eventName.orEmpty() }
+                                    eventName = null
                                     when (type) {
                                         "text" -> ev.optString("delta").takeIf { it.isNotEmpty() }?.let {
                                             out.append(it); onDelta(it)
                                         }
                                         "error" -> error(ev.optString("message").ifBlank { "Stream error" })
-                                        "done" -> done = true
+                                        "done" -> {
+                                            if (ev.optBoolean("truncated")) throw IOException("The service stopped at its output limit. The reply is incomplete.")
+                                            done = true
+                                        }
                                         "thinking", "progress" -> SseActivity.label(
                                             type,
                                             field = { k -> ev.optString(k) },
@@ -354,13 +374,16 @@ class ChatRepository(
                             }
                         }
                     }
+                    currentCoroutineContext().ensureActive()
+                    // EOF is not completion, including a done frame missing its blank-line delimiter.
+                    if (!done) throw IOException("Reply interrupted before completion. Please try again when ready.")
                     if (out.isEmpty()) error("Empty reply")
                     out.toString()
                 } finally {
                     watcher.cancel()
                     conn.disconnect()
                 }
-            }
+            }.onFailure { if (it is CancellationException) throw it }
         }
 
     suspend fun send(turns: List<ChatTurn>, systemInstruction: String? = null,

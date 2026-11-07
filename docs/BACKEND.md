@@ -27,11 +27,21 @@ Roles are `user` / `model`. The app sends the last 20 turns.
 ## Streaming (`"stream": true`, SSE) — default
 The app first sends `"stream": true` with `Accept: text/event-stream`. The engine replies with SSE frames
 `event: <type>\ndata: <json>\n\n`; the app uses `text` (`{"type":"text","delta":"..."}`), `error`
-(`{"message":"..."}`) and `done`, and ignores others (`thinking`, `progress`, `sources`, `notice`, `usage`).
+(`{"message":"..."}`) and `done`; `thinking`/`progress` provide activity labels, while other valid JSON events
+(such as `sources`, `notice`, `usage`) are ignored.
 Each delta is appended to the agent bubble live (the typing indicator is replaced by the bubble on the first delta).
-**Fallback:** if the stream fails before any text arrives (non-2xx, non-SSE content type, network/parse error,
-`error` event), the app retries once with `"stream": false`. A 401 is not retried (session cleared). If the
-stream breaks after text was shown, the partial reply is kept and an error is displayed.
+**Completion:** success requires a complete, blank-line-delimited `done` JSON event (or an
+`event: done` frame carrying a JSON object), plus non-empty text. EOF alone, malformed data or an
+unterminated final frame is not completion. JSON event types are authoritative; `event:` supplies
+the type when omitted from JSON. Comments/heartbeats, multiline `data:` and unknown valid JSON
+events remain supported. Raw `[DONE]` is not part of this engine's protocol. A `done` event with
+`truncated: true` reports an incomplete output-limit result, not a completed answer.
+**Fallback:** one non-stream request is allowed only for HTTP 406/415 or a non-SSE response before
+any text was shown. Network errors, missing completion, parse errors, server errors and partial
+output never trigger automatic replay. Partial chat text stays visible with the existing error/
+manual-retry UI. Translation returns a failure rather than a completed partial translation;
+close the error and explicitly select Translate again if you want another request. Stop/cancellation
+is not shown as an interruption error.
 
 ## Android wiring
 - `AndroidManifest.xml`: `INTERNET` permission.
