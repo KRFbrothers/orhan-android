@@ -332,6 +332,7 @@ dependencies {
     implementation(libs.jsoup)
     debugImplementation(libs.bundles.compose.debug)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.bundles.compose.test)
