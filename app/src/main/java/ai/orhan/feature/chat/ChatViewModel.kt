@@ -408,7 +408,7 @@ class ChatViewModel(
         if (text.isEmpty() || requestedTask.isEmpty() || _state.value.busy) return
         pendingHandoffRetry = null
         val shown = if (attachment == null) text else ("\uD83D\uDCCE ${attachment.name}" + if (text.isEmpty()) "" else "\n$text")
-        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis(), replyToMessageId = replyToMessageId)
+        val user = ChatMessage(nextId(), ChatRole.User, shown, currentTimeString(), createdAt = System.currentTimeMillis(), attachment = attachment, replyToMessageId = replyToMessageId)
         if (attachment != null) attachmentsById[user.id] = attachment
         val sourceId = nextId()
         val assignment = ChatMessage(sourceId, ChatRole.Agent, "I assigned this request to ${agent.name}: $requestedTask", currentTimeString())
@@ -571,6 +571,7 @@ class ChatViewModel(
     fun deleteMessage(messageId: Long) {
         val current = _state.value
         val updated = current.messages.filterNot { it.id == messageId }
+        attachmentsById.remove(messageId)
         val store = threadStore
         val title = threadTitle?.takeIf(String::isNotBlank)
         if (store != null && title != null) {
@@ -624,7 +625,14 @@ class ChatViewModel(
     suspend fun createMeetingMinutes(attachment: ChatAttachment): Result<String> =
         serviceRepository.createMeetingMinutes(attachment)
 
-    private fun nextId() = (_state.value.messages.lastOrNull()?.id ?: 0L) + 1L
+    // Reserve immediately, even when the bubble will only appear on a later SSE delta.
+    // Include restored IDs without ever rewinding when messages are deleted or retried.
+    private fun nextId(): Long = messageIds.reserveAfter(_state.value.messages.maxOfOrNull { it.id } ?: 0L)
+
+    private companion object {
+        // Shared across chats/VMs; a fresh process starts in a new time-based ID range.
+        val messageIds = MessageIdAllocator()
+    }
 }
 
 /**
@@ -637,7 +645,9 @@ internal fun turnsForApi(messages: List<ChatMessage>, attachmentsById: Map<Long,
         ChatTurn(
             if (it.role == ChatRole.User) "user" else "model",
             it.text,
-            if (it.id == lastUserId) listOfNotNull(attachmentsById[it.id]) else emptyList(),
+            if (it.role == ChatRole.User && it.id == lastUserId && it.attachment != null) {
+                listOfNotNull(attachmentsById[it.id]?.takeIf { attachment -> attachment == it.attachment })
+            } else emptyList(),
         )
     }
 }
