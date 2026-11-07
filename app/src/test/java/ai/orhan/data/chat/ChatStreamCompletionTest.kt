@@ -14,6 +14,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 import kotlin.time.Duration.Companion.seconds
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -38,10 +40,13 @@ class ChatStreamCompletionTest {
     private val done = "event: done\ndata: {\"type\":\"done\"}\n\n"
 
     @Before fun setUp() { Dispatchers.setMain(dispatcher) }
-    @After fun tearDown() {
-        models.forEach { it.stop() }
-        dispatcher.scheduler.runCurrent()
-        Dispatchers.resetMain()
+    @After fun tearDown() = runTest(dispatcher, timeout = 30.seconds) {
+        try {
+            // Await IO cancellation before removing Main; stop() alone can leave a late resume.
+            models.forEach { it.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }
+        } finally {
+            Dispatchers.resetMain()
+        }
     }
 
     private fun model(fixture: StreamFixture) = ChatViewModel(repository = fixture.repository()).also { models += it }
@@ -233,6 +238,46 @@ class ChatStreamCompletionTest {
         }
     }
 
+    @Test fun stream401UsesTheCredentialCapturedForThatRequest() = runTest(dispatcher, timeout = 30.seconds) {
+        StreamFixture(Reply("{}", 401, "application/json")).use { fixture ->
+            val rejected = mutableListOf<String>()
+            val old = ChatCredential("old-synthetic") { rejected += "old" }
+            val newer = ChatCredential("new-synthetic") { rejected += "new" }
+            var next = old
+            var calls = 0
+            val repo = fixture.repository(credentialProvider = { calls++; next.also { next = newer } })
+            assertTrue(repo.stream(listOf(ChatTurn("user", "hello")), onDelta = {}).isFailure)
+            assertEquals(1, calls)
+            assertEquals(listOf("old"), rejected)
+        }
+    }
+
+    @Test fun nonstream401UsesRequestScopedRejection() = runTest(dispatcher, timeout = 30.seconds) {
+        StreamFixture(Reply("{}", 401, "application/json")).use { fixture ->
+            var rejected = 0
+            val repo = fixture.repository(credentialProvider = { ChatCredential("synthetic") { rejected++ } })
+            assertTrue(repo.send(listOf(ChatTurn("user", "hello"))).isFailure)
+            assertEquals(1, rejected)
+        }
+    }
+
+    @Test fun capability401UsesRequestScopedRejection() = runTest(dispatcher, timeout = 30.seconds) {
+        StreamFixture(Reply("{}", 401, "application/json")).use { fixture ->
+            var rejected = 0
+            val repo = fixture.repository(credentialProvider = { ChatCredential("synthetic") { rejected++ } })
+            assertTrue(repo.agentToolCapabilities().isFailure)
+            assertEquals(1, rejected)
+        }
+    }
+
+    @Test fun missingScopedCredentialNeverFallsBackToLegacyOrDebugProvider() = runTest(dispatcher, timeout = 30.seconds) {
+        StreamFixture(Reply(text + done)).use { fixture ->
+            val repo = fixture.repository(credentialProvider = { null })
+            assertTrue(repo.stream(listOf(ChatTurn("user", "hello")), onDelta = {}).isFailure)
+            assertTrue(fixture.requests.isEmpty())
+        }
+    }
+
     @Test fun stoppingViewModelKeepsPartialWithoutInterruptionError() = runTest(dispatcher, timeout = 30.seconds) {
         StreamFixture(Reply(text, holdOpen = true)).use { fixture ->
             val vm = model(fixture)
@@ -274,8 +319,8 @@ private class StreamFixture(vararg replies: Reply) : java.io.Closeable {
                         tail = (tail shl 8) or byte
                     }
                     val length = header.toString("UTF-8").lineSequence()
-                        .first { it.startsWith("Content-Length:", ignoreCase = true) }
-                        .substringAfter(':').trim().toInt()
+                        .firstOrNull { it.startsWith("Content-Length:", ignoreCase = true) }
+                        ?.substringAfter(':')?.trim()?.toInt() ?: 0
                     val body = ByteArray(length)
                     var offset = 0
                     while (offset < length) {
@@ -284,7 +329,7 @@ private class StreamFixture(vararg replies: Reply) : java.io.Closeable {
                         offset += count
                     }
                     val index = requests.size
-                    requests += JSONObject(String(body, Charsets.UTF_8))
+                    requests += if (body.isEmpty()) JSONObject() else JSONObject(String(body, Charsets.UTF_8))
                     val reply = replies.getOrElse(index) { Reply("Unexpected replay", 500, "text/plain") }
                     val bytes = reply.body.toByteArray(Charsets.UTF_8)
                     val output = socket.getOutputStream()
@@ -304,8 +349,9 @@ private class StreamFixture(vararg replies: Reply) : java.io.Closeable {
         } catch (error: Throwable) { if (!server.isClosed) failure.set(error) }
     }
 
-    fun repository() = ChatRepository(
+    fun repository(credentialProvider: (suspend () -> ChatCredential?)? = null) = ChatRepository(
         baseUrl = "http://127.0.0.1:${server.localPort}", appToken = "", tokenProvider = { "local-unit-test" },
+        credentialProvider = credentialProvider,
     )
 
     override fun close() {

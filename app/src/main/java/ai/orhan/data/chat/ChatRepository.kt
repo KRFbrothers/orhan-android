@@ -1,6 +1,7 @@
 package ai.orhan.data.chat
 
 import ai.orhan.BuildConfig
+import ai.orhan.data.auth.AuthRepository
 import android.util.Base64
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +16,13 @@ import org.json.JSONTokener
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+
+/** Credentials and their rejection action belong to ONE request, never shared mutable last-token state. */
+class ChatCredential(val token: String, val onUnauthorized: suspend () -> Unit = {})
+
+internal suspend fun AuthRepository.chatCredential(): ChatCredential? = requestToken()?.let { request ->
+    ChatCredential(request.accessToken) { clearIfCurrent(request) }
+}
 
 /** One turn sent to the Dua engine. [role] is "user" or "model". */
 data class ChatTurn(val role: String, val text: String, val attachments: List<ChatAttachment> = emptyList())
@@ -51,6 +59,7 @@ class ChatRepository(
     private val tokenProvider: suspend () -> String? = { BuildConfig.DUA_DEV_JWT.ifBlank { null } },
     /** Called when the engine rejects the token (HTTP 401), e.g. to clear the session. */
     private val onUnauthorized: suspend () -> Unit = {},
+    private val credentialProvider: (suspend () -> ChatCredential?)? = null,
 ) {
     /** Thrown when streaming fails in a way a non-stream retry can't fix (e.g. 401). */
     class FatalChatException(message: String) : IOException(message)
@@ -91,9 +100,15 @@ class ChatRepository(
             }
     }
 
-    private suspend fun open(accept: String): HttpURLConnection {
+    private suspend fun credential(): ChatCredential {
+        if (credentialProvider != null) return credentialProvider.invoke()
+            ?: throw FatalChatException("Sign in required (no Supabase JWT)")
+        return ChatCredential(tokenProvider() ?: throw FatalChatException("Sign in required (no Supabase JWT)"), onUnauthorized)
+    }
+
+    private suspend fun open(accept: String): Pair<HttpURLConnection, ChatCredential> {
         require(baseUrl.isNotBlank()) { "DUA_ENGINE_URL is not set in local.properties" }
-        val jwt = tokenProvider() ?: throw FatalChatException("Sign in required (no Supabase JWT)")
+        val credential = credential()
         return (URL(baseUrl.trimEnd('/') + "/api/chat").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = 15_000
@@ -101,22 +116,22 @@ class ChatRepository(
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Accept", accept)
-            setRequestProperty("Authorization", "Bearer $jwt")
+            setRequestProperty("Authorization", "Bearer ${credential.token}")
             if (appToken.isNotBlank()) setRequestProperty("X-Dua-App-Token", appToken)
-        }
+        } to credential
     }
 
     /** Loads the authenticated service catalog; unavailable built-ins remain visible but disabled. */
     suspend fun agentToolCapabilities(): Result<List<AgentToolCapability>> = withContext(Dispatchers.IO) {
         runCatching {
             require(baseUrl.isNotBlank()) { "DUA_ENGINE_URL is not set in local.properties" }
-            val jwt = tokenProvider() ?: throw FatalChatException("Sign in required to load agent tools")
+            val credential = credential()
             val conn = (URL(baseUrl.trimEnd('/') + "/api/agent/capabilities").openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 15_000
                 readTimeout = 30_000
                 setRequestProperty("Accept", "application/json")
-                setRequestProperty("Authorization", "Bearer $jwt")
+                setRequestProperty("Authorization", "Bearer ${credential.token}")
                 if (appToken.isNotBlank()) setRequestProperty("X-Dua-App-Token", appToken)
             }
             try {
@@ -124,7 +139,7 @@ class ChatRepository(
                 val raw = (if (code in 200..299) conn.inputStream else conn.errorStream)
                     ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
                 if (code == 401) {
-                    onUnauthorized()
+                    credential.onUnauthorized()
                     throw FatalChatException("Session expired — please sign in again")
                 }
                 val json = runCatching { JSONObject(raw) }.getOrNull()
@@ -167,7 +182,7 @@ class ChatRepository(
     private suspend fun transcribeStoredAudio(attachment: ChatAttachment): String {
         val apiBase = BuildConfig.DUA_API_URL.trimEnd('/')
         require(apiBase.startsWith("https://")) { "DUA_API_URL must be configured with HTTPS for stored audio transcription." }
-        val jwt = tokenProvider() ?: throw FatalChatException("Sign in required to transcribe audio")
+        val credential = credential()
         val bytes = Base64.decode(attachment.base64, Base64.DEFAULT)
         if (bytes.isEmpty() || bytes.size.toLong() != attachment.sizeBytes || bytes.size > ChatAttachment.MAX_BYTES) {
             throw IOException("The saved audio attachment is incomplete or exceeds the supported size.")
@@ -176,7 +191,7 @@ class ChatRepository(
         var storedPath: String? = null
         val transcript: String
         try {
-            val sign = serviceJson(apiBase, "/api/files/sign", jwt,
+            val sign = serviceJson(apiBase, "/api/files/sign", credential,
                 JSONObject().put("name", attachment.name).put("mimeType", attachment.mimeType).put("size", bytes.size))
             if (sign.code !in 200..299) throw serviceError(sign)
             val upload = sign.json ?: throw IOException("File storage returned an invalid upload response.")
@@ -200,13 +215,13 @@ class ChatRepository(
                 if (code !in 200..299) throw IOException("Private audio upload failed (HTTP $code).")
             } finally { put.disconnect() }
 
-            val result = serviceJson(apiBase, "/api/files/transcribe", jwt,
+            val result = serviceJson(apiBase, "/api/files/transcribe", credential,
                 JSONObject().put("path", path).put("name", attachment.name).put("mimeType", attachment.mimeType).put("size", bytes.size))
             if (result.code !in 200..299) throw serviceError(result)
             transcript = result.json?.optString("transcript")?.trim()?.takeIf(String::isNotEmpty)
                 ?: throw IOException("The configured transcription provider returned no transcript.")
         } catch (failure: Throwable) {
-            val cleanupFailure = storedPath?.let { path -> runCatching { deleteStoredUpload(apiBase, jwt, path) }.exceptionOrNull() }
+            val cleanupFailure = storedPath?.let { path -> runCatching { deleteStoredUpload(apiBase, credential, path) }.exceptionOrNull() }
             if (cleanupFailure != null) {
                 failure.addSuppressed(cleanupFailure)
                 if (failure !is kotlinx.coroutines.CancellationException) {
@@ -216,7 +231,7 @@ class ChatRepository(
             throw failure
         }
         try {
-            deleteStoredUpload(apiBase, jwt, storedPath!!)
+            deleteStoredUpload(apiBase, credential, storedPath!!)
         } catch (failure: Throwable) {
             throw IOException("Transcription finished, but removal of its temporary private audio file was not confirmed. Check File storage before retrying.", failure)
         }
@@ -225,7 +240,7 @@ class ChatRepository(
 
     private data class ServiceResponse(val code: Int, val json: JSONObject?)
 
-    private suspend fun serviceJson(apiBase: String, path: String, jwt: String, body: JSONObject): ServiceResponse {
+    private suspend fun serviceJson(apiBase: String, path: String, credential: ChatCredential, body: JSONObject): ServiceResponse {
         val connection = (URL(apiBase + path).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = 15_000
@@ -233,7 +248,7 @@ class ChatRepository(
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("Authorization", "Bearer $jwt")
+            setRequestProperty("Authorization", "Bearer ${credential.token}")
             setRequestProperty("X-Dua-Native", "1")
         }
         return try {
@@ -241,7 +256,7 @@ class ChatRepository(
             val code = connection.responseCode
             val raw = (if (code in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            if (code == 401) onUnauthorized()
+            if (code == 401) credential.onUnauthorized()
             ServiceResponse(code, runCatching { JSONObject(raw) }.getOrNull())
         } finally { connection.disconnect() }
     }
@@ -250,8 +265,8 @@ class ChatRepository(
         response.json?.optString("error")?.takeIf(String::isNotBlank) ?: "File service request failed (HTTP ${response.code}).",
     )
 
-    private suspend fun deleteStoredUpload(apiBase: String, jwt: String, path: String) {
-        val deleted = serviceJson(apiBase, "/api/files/delete", jwt, JSONObject().put("paths", JSONArray().put(path)))
+    private suspend fun deleteStoredUpload(apiBase: String, credential: ChatCredential, path: String) {
+        val deleted = serviceJson(apiBase, "/api/files/delete", credential, JSONObject().put("paths", JSONArray().put(path)))
         if (deleted.code !in 200..299) throw serviceError(deleted)
         val json = deleted.json ?: throw IOException("File service returned an invalid cleanup response.")
         if (json.optInt("deleted") != 1) throw IOException("File service did not confirm removal of the temporary audio file.")
@@ -299,14 +314,14 @@ class ChatRepository(
         withContext(Dispatchers.IO) {
             runCatching {
                 requireEnforcedToolPolicy(allowedTools)
-                val conn = open("text/event-stream")
+                val (conn, credential) = open("text/event-stream")
                 // Blocking SSE reads ignore coroutine cancel; disconnect on cancel so Stop is immediate.
                 val watcher = launch { try { awaitCancellation() } finally { conn.disconnect() } }
                 try {
                     conn.outputStream.use { it.write(body(turns, true, systemInstruction, allowedTools, mode, resumeRunId).toString().toByteArray()) }
                     val code = conn.responseCode
                     if (code == 401) {
-                        onUnauthorized()
+                        credential.onUnauthorized()
                         throw FatalChatException("Session expired — please sign in again")
                     }
                     if (isFallbackStatus(code)) throw FallbackEligibleStreamException("HTTP $code")
@@ -390,7 +405,7 @@ class ChatRepository(
                      allowedTools: List<String>? = null): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             requireEnforcedToolPolicy(allowedTools)
-            val conn = open("application/json")
+            val (conn, credential) = open("application/json")
             val body = body(turns, false, systemInstruction, allowedTools)
             try {
                 conn.outputStream.use { it.write(body.toString().toByteArray()) }
@@ -399,7 +414,7 @@ class ChatRepository(
                     ?.bufferedReader()?.use { it.readText() }.orEmpty()
                 val json = runCatching { JSONObject(raw) }.getOrNull()
                 if (code == 401) {
-                    onUnauthorized()
+                    credential.onUnauthorized()
                     error("Session expired — please sign in again")
                 }
                 if (code !in 200..299) error(json?.optString("error")?.ifBlank { null } ?: "HTTP $code")

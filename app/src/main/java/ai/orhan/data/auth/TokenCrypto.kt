@@ -12,7 +12,7 @@ import javax.crypto.spec.GCMParameterSpec
 /**
  * Encrypts auth tokens at rest. Implementations return the stored form from [encrypt]
  * and the plaintext from [decrypt]. [decrypt] must return legacy (unprefixed) values as-is
- * and return null (never throw) when an encrypted value can't be decrypted.
+ * and return null (never throw) when an encrypted value can't be decrypted or its version is unknown.
  */
 interface TokenCrypto {
     fun encrypt(plain: String): String
@@ -44,7 +44,7 @@ object TokenFormat {
      * handed to [open]; any failure yields null.
      */
     inline fun decryptWith(stored: String, open: (iv: ByteArray, ct: ByteArray) -> ByteArray): String? {
-        if (!isEncrypted(stored)) return stored
+        if (!isEncrypted(stored)) return stored.takeUnless { it.startsWith("enc:") }
         val (iv, ct) = decode(stored) ?: return null
         return runCatching { String(open(iv, ct), Charsets.UTF_8) }.getOrNull()
     }

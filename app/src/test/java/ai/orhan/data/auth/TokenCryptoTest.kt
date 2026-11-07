@@ -57,7 +57,7 @@ class TokenCryptoTest {
         assertEquals(2, c.encryptCalls); assertEquals(2, c.decryptCalls)
     }
 
-    @Test fun legacySessionStillLoads() {
+    @Test fun legacySessionDecodesForMigration() {
         assertEquals(AuthSession("a", "r", 0L, null), sessionFromStored(FakeTokenCrypto(), "a", "r", null, null))
     }
 
@@ -67,7 +67,7 @@ class TokenCryptoTest {
         assertNull(sessionFromStored(FakeTokenCrypto(), "a", "enc:v1:junk", 1L, null))
     }
 
-    @Test fun encryptFailureFallsBackWithoutThrowing() {
-        assertEquals("tok", sealToken(FakeTokenCrypto(failEncrypt = true), "tok"))
+    @Test(expected = IllegalStateException::class) fun encryptFailureNeverReturnsPlaintext() {
+        sealToken(FakeTokenCrypto(failEncrypt = true), "tok")
     }
 }
